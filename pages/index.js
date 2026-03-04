@@ -22,27 +22,20 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    async function runBootstrap() {
+    async function runBootstrapAndRedirect() {
       if (!user) return;
-      setMsg("Bootstrapping categories/tags/templates...");
-      const { error } = await supabase.rpc("bootstrap_user_data");
-      setMsg(error ? `Bootstrap error: ${error.message}` : "Bootstrap OK. Ready.");
+      setMsg("Bootstrapping…");
+      await supabase.rpc("bootstrap_user_data");
+      window.location.href = "/today";
     }
-    runBootstrap();
+    runBootstrapAndRedirect();
   }, [user]);
-
-  async function signOut() {
-    await supabase.auth.signOut();
-    window.location.href = "/login";
-  }
 
   return (
     <div style={{ maxWidth: 720, margin: "40px auto", fontFamily: "system-ui" }}>
       <h1>Rise & Shine</h1>
       <p>{msg}</p>
-      <button onClick={signOut} style={{ padding: 10 }}>Sign out</button>
-      <hr />
-      <p>Next: add UI pages (Today / Backlog / Analytics) after migration.</p>
+      {!user && <p>Redirecting to login…</p>}
     </div>
   );
 }

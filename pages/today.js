@@ -135,13 +135,12 @@ function SectionCard({ title, subtitle, children }) {
 function OutcomeExplanation({ breakdown }) {
   if (!breakdown) return null;
   const rows = [
-    ["Category (base + mode)", `${breakdown.baseCategory} + ${breakdown.modeAdjustment} → ${breakdown.categoryComponent}`],
-    ["Priority", `${breakdown.priorityWeight} → ${breakdown.priorityComponent}`],
-    ["Quick win", breakdown.quickWinComponent || 0],
-    ["High leverage", breakdown.highLeverageComponent || 0],
-    ["Due soon", breakdown.dueBoost || 0],
-    ["Staleness", breakdown.stalenessComponent || 0],
-    ["Subtask bonus", breakdown.subtaskComponent || 0],
+    ["Priority score", breakdown.priorityScore],
+    ["Category (base+mode)×8", `${breakdown.baseCategory}+${breakdown.modeAdjustment} → ${breakdown.categoryComponent}`],
+    ["Tag boost", breakdown.tagBoost || 0],
+    ["Staleness", breakdown.stalenessComponent ?? 0],
+    ["Subtask boost", breakdown.subtaskComponent ?? 0],
+    ["Effort penalty", breakdown.effortPenalty ?? 0],
   ];
   return (
     <dl
