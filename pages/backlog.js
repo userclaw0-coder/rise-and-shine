@@ -104,7 +104,7 @@ export default function BacklogPage() {
         setError("");
 
         const [tasksRes, catsRes, tagsRes] = await Promise.all([
-          getBacklogTasks(user.id),
+          getBacklogTasks(user.id, { includeArchived: true }),
           getCategoriesWithSubcategories(user.id),
           getAllTags(user.id),
         ]);

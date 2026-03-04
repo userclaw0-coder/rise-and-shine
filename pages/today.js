@@ -32,7 +32,13 @@ function buildCompletionMap(events) {
 function buildLastCompletedMap(events) {
   const map = {};
   for (const ev of events || []) {
-    map[ev.task_id] = ev.created_at;
+    const existing = map[ev.task_id];
+    if (
+      !existing ||
+      new Date(ev.created_at).getTime() > new Date(existing).getTime()
+    ) {
+      map[ev.task_id] = ev.created_at;
+    }
   }
   return map;
 }
