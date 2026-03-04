@@ -1,0 +1,156 @@
+{
+  "2026-02-16": {
+    "mode": "Strategic Push",
+    "note": "",
+    "key_outcomes": [
+      {
+        "id": "t-f7df885321",
+        "parent_id": null,
+        "kotype": "Quick Win"
+      },
+      {
+        "id": "t-b1274a81da",
+        "parent_id": null,
+        "kotype": "High Leverage"
+      },
+      {
+        "id": "t-10092bf160",
+        "parent_id": null,
+        "kotype": "Progress"
+      }
+    ],
+    "custom_weights": null
+  },
+  "2026-02-17": {
+    "mode": "Strategic Push",
+    "note": "Section for WellWishes",
+    "key_outcomes": [
+      {
+        "id": "t-83fb74d5c6",
+        "parent_id": null,
+        "kotype": "Quick Win"
+      },
+      {
+        "id": "t-1f50289e80",
+        "parent_id": null,
+        "kotype": "High Leverage"
+      },
+      {
+        "id": "t-10092bf160",
+        "parent_id": null,
+        "kotype": "Progress"
+      }
+    ],
+    "custom_weights": null
+  },
+  "2026-02-18": {
+    "mode": "Strategic Push",
+    "note": "",
+    "key_outcomes": [
+      {
+        "id": "st-906b862af5",
+        "parent_id": "t-83fb74d5c6",
+        "kotype": "Quick Win"
+      },
+      {
+        "id": "t-83fb74d5c6",
+        "parent_id": null,
+        "kotype": "High Leverage"
+      },
+      {
+        "id": "t-10092bf160",
+        "parent_id": null,
+        "kotype": "Progress"
+      }
+    ],
+    "custom_weights": null
+  },
+  "2026-02-19": {
+    "mode": "Strategic Push",
+    "note": "",
+    "key_outcomes": [
+      {
+        "id": "st-906b862af5",
+        "parent_id": "t-83fb74d5c6",
+        "kotype": "Quick Win"
+      },
+      {
+        "id": "t-83fb74d5c6",
+        "parent_id": null,
+        "kotype": "High Leverage"
+      },
+      {
+        "id": "t-10092bf160",
+        "parent_id": null,
+        "kotype": "Progress"
+      }
+    ],
+    "custom_weights": null
+  },
+  "2026-02-20": {
+    "mode": "Strategic Push",
+    "note": "",
+    "key_outcomes": [
+      {
+        "id": "st-906b862af5",
+        "parent_id": "t-83fb74d5c6",
+        "kotype": "Quick Win"
+      },
+      {
+        "id": "t-b1809cf7d7",
+        "parent_id": null,
+        "kotype": "High Leverage"
+      },
+      {
+        "id": "t-10092bf160",
+        "parent_id": null,
+        "kotype": "Progress"
+      }
+    ],
+    "custom_weights": null
+  },
+  "2026-02-21": {
+    "mode": "Strategic Push",
+    "note": "",
+    "key_outcomes": [
+      {
+        "id": "st-906b862af5",
+        "parent_id": "t-83fb74d5c6",
+        "kotype": "Quick Win"
+      },
+      {
+        "id": "t-b1809cf7d7",
+        "parent_id": null,
+        "kotype": "High Leverage"
+      },
+      {
+        "id": "t-10092bf160",
+        "parent_id": null,
+        "kotype": "Progress"
+      }
+    ],
+    "custom_weights": null
+  },
+  "2026-03-03": {
+    "mode": "Strategic Push",
+    "note": "",
+    "key_outcomes": [
+      {
+        "id": "st-906b862af5",
+        "parent_id": "t-83fb74d5c6",
+        "kotype": "Quick Win"
+      },
+      {
+        "id": "t-b1809cf7d7",
+        "parent_id": null,
+        "kotype": "High Leverage"
+      },
+      {
+        "id": "t-10092bf160",
+        "parent_id": null,
+        "kotype": "Progress"
+      }
+    ],
+    "custom_weights": null
+  }
+}

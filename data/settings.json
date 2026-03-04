@@ -1,0 +1,71 @@
+{
+  "timezone": "America/New_York",
+  "base_weights": {
+    "Business": 5,
+    "Rental House": 4,
+    "Vehicles": 3,
+    "Home": 2,
+    "Boat": 1
+  },
+  "modes": {
+    "Strategic Push": {
+      "Business": 2,
+      "Rental House": 1
+    },
+    "Build & Physical": {
+      "Rental House": 1,
+      "Vehicles": 1,
+      "Boat": 1
+    },
+    "Deep Cognitive": {
+      "Business": 2
+    },
+    "Maintenance": {
+      "Vehicles": 2,
+      "Home": 1
+    },
+    "Light / Reset": {
+      "Home": 2
+    },
+    "Custom": {}
+  },
+  "workout_cycle_start": "2026-02-16",
+  "workout_pattern": [
+    "Strength",
+    "Recovery",
+    "Sprints",
+    "Recovery"
+  ],
+  "workout_tasks": {
+    "Strength": {
+      "id": "workout-strength",
+      "title": "Workout: Strength (5:00 AM)",
+      "priority": "High",
+      "tags": [
+        "workout",
+        "strength"
+      ]
+    },
+    "Sprints": {
+      "id": "workout-sprints",
+      "title": "Workout: Sprints (5:00 AM)",
+      "priority": "High",
+      "tags": [
+        "workout",
+        "sprints"
+      ]
+    },
+    "Recovery": {
+      "id": "workout-recovery",
+      "title": "Workout: Recovery / Mobility (5:00 AM)",
+      "priority": "Medium",
+      "tags": [
+        "workout",
+        "recovery"
+      ]
+    }
+  },
+  "selection": {
+    "daily_key_outcomes": 3
+  }
+}

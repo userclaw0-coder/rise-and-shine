@@ -1,0 +1,2205 @@
+[
+  {
+    "id": "t-6c2b07fbcd",
+    "title": "LEVOTHYROXIN TABLET + WATER",
+    "category": "Daily Repeat",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [
+      "routine"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-f9ecf41c53",
+    "title": "WATER WITH CREATINE + BCAA + K+",
+    "category": "Daily Repeat",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [
+      "routine"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-318eebb2b4",
+    "title": "PRIMING (Strong compelling future)",
+    "category": "Daily Repeat",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [
+      "routine"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-be8b06c072",
+    "title": "POSTURE BAND EXERCISES (20 REPS)",
+    "category": "Daily Repeat",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [
+      "routine"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-cdb525fa36",
+    "title": "WEIGHTS (HEAVY) - Some Lift/Kettlebell One Heavy Per Day",
+    "category": "Daily Repeat",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [
+      "routine"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-72514287c7",
+    "title": "SHOWER AND TEETH",
+    "category": "Daily Repeat",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [
+      "routine"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-f142f94508",
+    "title": "SUNSHINE + MORNING LIGHT",
+    "category": "Daily Repeat",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [
+      "routine"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-1955a005fa",
+    "title": "WATER WITH ACV",
+    "category": "Daily Repeat",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [
+      "routine"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-b79eac6fd4",
+    "title": "CYCLE LYMPH/REBOUNDING/SPRINTING WITH DOG ( MID DAY)",
+    "category": "Daily Repeat",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [
+      "routine"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-d5ecc7574e",
+    "title": "NO ALCOHOL/SUGAR/FLOUR",
+    "category": "Daily Repeat",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [
+      "routine"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-8811450315",
+    "title": "WATER WITH MAGNESIUM GLYCINATE, D, C, Probiotic, Zinc, Berberine",
+    "category": "Daily Repeat",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [
+      "routine"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-b19bd01d0d",
+    "title": "CLEAN DESK, BROWSER TABS, FOCUS ZOOM IN",
+    "category": "Daily Repeat",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [
+      "routine"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-bb047c2a05",
+    "title": "UPDATE PRIORITY TASKS IN SPREADSHEET (Create bite-size subtasks)",
+    "category": "Daily Repeat",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [
+      "routine"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-3e3753ca8b",
+    "title": "SLEEP 6-8 Hours",
+    "category": "Daily Repeat",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [
+      "routine"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-ffe5175a68",
+    "title": "Business: quick-win sized revenue/ops task (edit me)",
+    "category": "Business",
+    "priority": "High",
+    "status": "done",
+    "effort_hours": 1.0,
+    "due_date": null,
+    "tags": [
+      "quick-win"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-10092bf160",
+    "title": "Check-up on septic permit",
+    "category": "Rental House",
+    "priority": "Critical",
+    "status": "todo",
+    "effort_hours": 0.5,
+    "due_date": "2026-02-17",
+    "tags": [
+      "quick-win"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-fb8cb2c324",
+    "title": "Review info needed for processing existing build permit",
+    "category": "Rental House",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": 2.0,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-1b4fababfa",
+    "title": "Review plans with Joshua Shatkin",
+    "category": "Rental House",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": 1.0,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-324e8103b6",
+    "title": "Review structural plans with Carlos Ayala",
+    "category": "Rental House",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": 1.0,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-2afe3a4a0f",
+    "title": "Owner-Builder Affadavit",
+    "category": "Rental House",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": 1.0,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-88fe3b8ab4",
+    "title": "Clean Sketch-Up File w/ layers",
+    "category": "Rental House",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": 2.0,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-e89666e17c",
+    "title": "Architectural drawings - final",
+    "category": "Rental House",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": 6,
+    "due_date": null,
+    "tags": [
+      "deep"
+    ],
+    "subtasks": [
+      {
+        "id": "st-38294a5e7d",
+        "title": "Do basic sketch on paper to send to Joshua",
+        "status": "todo",
+        "tags": [
+          "easy-win",
+          "strategic",
+          "high-leverage"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "t-903c586fe8",
+    "title": "Civil engineering drawings - final",
+    "category": "Rental House",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-02b1db20a5",
+    "title": "HVAC Mechanical Load Calculations",
+    "category": "Rental House",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-2d0498b975",
+    "title": "Energy Calculations",
+    "category": "Rental House",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-7095ad2967",
+    "title": "Electric Plan and Solar sub-panel plus generator switch option?",
+    "category": "Rental House",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-033ff5b611",
+    "title": "Fire Sprinkler/Alarm Drawings",
+    "category": "Rental House",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-5ce2b815d8",
+    "title": "Excavation and fill plan and calculations",
+    "category": "Rental House",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-be7377da66",
+    "title": "Submit house permit plans",
+    "category": "Rental House",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-df08302755",
+    "title": "Create materials purchase list",
+    "category": "Rental House",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-ea4a295256",
+    "title": "purchase equipment, plumbing, electrical conduit, formwork, rebar etc..",
+    "category": "Rental House",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-03d7f8e778",
+    "title": "figure out panel sourcing",
+    "category": "Rental House",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-fe9f4ae3bd",
+    "title": "Apply for shipping container build permit",
+    "category": "Rental House",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-a904f2d5a4",
+    "title": "Finish removing stumps from Build site",
+    "category": "Rental House",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-11a94b189f",
+    "title": "Survey build and septic site",
+    "category": "Rental House",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-e856cfb616",
+    "title": "Clear and Level Lot",
+    "category": "Rental House",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-91570327a5",
+    "title": "String out floorplan",
+    "category": "Rental House",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-eaec2bf0ef",
+    "title": "Base material fill for foundation",
+    "category": "Rental House",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-87d2e795b8",
+    "title": "Receive all permits neccesary to begin construction",
+    "category": "Rental House",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-671defafb9",
+    "title": "Build house!",
+    "category": "Rental House",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-f6c488edf7",
+    "title": "PTC Heater research and replace Tesla",
+    "category": "Vehicles",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": 12.0,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-37c4ee8f12",
+    "title": "AC Compressor repair Tesla",
+    "category": "Vehicles",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": 12.0,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-1667187585",
+    "title": "Front Drive Unit repair Tesla",
+    "category": "Vehicles",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": 12.0,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-5c0798a873",
+    "title": "Rear driver-side door motor repair Tesla",
+    "category": "Vehicles",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": 4.0,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-27d0330552",
+    "title": "Replace Tesla passenger visor Tesla",
+    "category": "Vehicles",
+    "priority": "Low",
+    "status": "todo",
+    "effort_hours": 2.0,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-e7dba5aa28",
+    "title": "Repair drivers side support plastic Ram Truck",
+    "category": "Vehicles",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": 3.0,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-3f857bc49c",
+    "title": "Repair dashboard Ram Truck",
+    "category": "Vehicles",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": 3.0,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-45a6b444fa",
+    "title": "Fix front alignment Ram Truck",
+    "category": "Vehicles",
+    "priority": "Low",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-2d71529504",
+    "title": "Parking brake adjust and repair Ram Truck",
+    "category": "Vehicles",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": 4.0,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-869fd6cb65",
+    "title": "Rear window latch replace Ram Truck",
+    "category": "Vehicles",
+    "priority": "Low",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-2b4a1fa290",
+    "title": "Fix dent on tailgate - cover with vinyl Ram Truck",
+    "category": "Vehicles",
+    "priority": "Low",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-d5dcce0a15",
+    "title": "Fix dent on door - cover with vinyl wrap Ram Truck",
+    "category": "Vehicles",
+    "priority": "Low",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-aa6989dd15",
+    "title": "Wash and Wax Truck Ram Truck",
+    "category": "Vehicles",
+    "priority": "Low",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-59849834e1",
+    "title": "Glue down tile like I mean it Camper",
+    "category": "Vehicles",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-05207ab01a",
+    "title": "Fix tile that gets damaged Camper",
+    "category": "Vehicles",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-ccd7f97e54",
+    "title": "Design and Create Gravel Camper pad Camper",
+    "category": "Vehicles",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-c337910173",
+    "title": "Change out exterior plastic sealant strips Camper",
+    "category": "Vehicles",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-708df3a86a",
+    "title": "Put in trim Camper",
+    "category": "Vehicles",
+    "priority": "Low",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-2927c4cda0",
+    "title": "Repair seal on rear slide with adhesive caulk Camper",
+    "category": "Vehicles",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": 2.0,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-bd0b8bb433",
+    "title": "Fix Freshwater Drain Valve Camper",
+    "category": "Vehicles",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": 2.0,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-3494ecfb3e",
+    "title": "Check on charge controller voltages Camper",
+    "category": "Vehicles",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-ef35a5eecc",
+    "title": "Remove solar Camper",
+    "category": "Vehicles",
+    "priority": "Low",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-8c9e7fe5cf",
+    "title": "Repair roof wood structure and ceiling in places Camper",
+    "category": "Vehicles",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-09c601baed",
+    "title": "Reseal Roof with PolyUrea Camper",
+    "category": "Vehicles",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-d5696427a6",
+    "title": "Maybe install new hard solar on mounts above roof Camper",
+    "category": "Vehicles",
+    "priority": "Low",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-ae636c3df3",
+    "title": "Flotation and cubby hole covers ODay Daysailer",
+    "category": "Vehicles",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": 4.0,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-f4f4fcc042",
+    "title": "Border edge repair ODay Daysailer",
+    "category": "Vehicles",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": 4.0,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-02a9213922",
+    "title": "Spinnaker ODay Daysailer",
+    "category": "Vehicles",
+    "priority": "Low",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-6ea02111cb",
+    "title": "Coat of epoxy/paint on deck for repair? ODay Daysailer",
+    "category": "Vehicles",
+    "priority": "Low",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-f8b36583cb",
+    "title": "Trailer lights repair ODay Daysailer",
+    "category": "Vehicles",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": 2.0,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-c534d634b5",
+    "title": "Figure out how to clean carb Powered Paraglider",
+    "category": "Vehicles",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": 2.0,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-0bff9c0a9a",
+    "title": "Clean carb Powered Paraglider",
+    "category": "Vehicles",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": 4.0,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-81160debd4",
+    "title": "Get it started Powered Paraglider",
+    "category": "Vehicles",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": 2.0,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-5b90e1c076",
+    "title": "Install License plate Transport Trailer",
+    "category": "Vehicles",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-1ca5591848",
+    "title": "Finish Welding Reinforcement Transport Trailer",
+    "category": "Vehicles",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-2e04a9b1e9",
+    "title": "Paint with Epoxy Transport Trailer",
+    "category": "Vehicles",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-de9aa40ad3",
+    "title": "Replace tires Transport Trailer",
+    "category": "Vehicles",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-22f042636c",
+    "title": "Figure out how to grease hubs Transport Trailer",
+    "category": "Vehicles",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-b4d67d302c",
+    "title": "Install permanent lights Transport Trailer",
+    "category": "Vehicles",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-b403bef4f3",
+    "title": "Fix Boys bathroom door handle",
+    "category": "Home",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": 0.5,
+    "due_date": null,
+    "tags": [
+      "quick-win"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-aee6bc9aac",
+    "title": "Fix filter leak in laundry room",
+    "category": "Home",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": 1,
+    "due_date": "2025-08-01",
+    "tags": [
+      "feel good"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-6d3d79d06b",
+    "title": "Install reflective insulation in attic",
+    "category": "Home",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": 4,
+    "due_date": "2025-08-01",
+    "tags": [
+      "physical"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-46e1cf6011",
+    "title": "Floor trim edge dining room",
+    "category": "Home",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": 1.0,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-e61cc3421b",
+    "title": "Finish kitchen flooring install",
+    "category": "Home",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": 2,
+    "due_date": null,
+    "tags": [
+      "feel good"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-9eb528c9c8",
+    "title": "Fix deck access sliding glass door",
+    "category": "Home",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [
+      "quick-win"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-3ba4502973",
+    "title": "House Lot Layout and Design",
+    "category": "Home",
+    "priority": "Critical",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-d48d8e8f29",
+    "title": "Solar Charger for Lawnmower",
+    "category": "Home",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": 2.0,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-e810daf1cb",
+    "title": "Finish border office window",
+    "category": "Home",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": 1,
+    "due_date": null,
+    "tags": [
+      "low-energy",
+      "quick-win"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-6b7ba0cd6f",
+    "title": "Kitchen Counter gap repair",
+    "category": "Home",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-d0b81f3393",
+    "title": "Boys bathroom vent, fan, and double switch?",
+    "category": "Home",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": 4,
+    "due_date": null,
+    "tags": [
+      "physical"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-38fb197ad2",
+    "title": "Lawn mower oil change for new season",
+    "category": "Home",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": 2,
+    "due_date": null,
+    "tags": [
+      "physical"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-e960edc096",
+    "title": "Attic reflective barrier install",
+    "category": "Home",
+    "priority": "Low",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-6592600c8b",
+    "title": "Banister for stairs into Bodega",
+    "category": "Home",
+    "priority": "Low",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-2ee404a0df",
+    "title": "Insulate hot water plumbing and AC lines",
+    "category": "Home",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-8736ee2e16",
+    "title": "Repair roof rafter",
+    "category": "Home",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": 2,
+    "due_date": null,
+    "tags": [
+      "Physical"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-c5390d3911",
+    "title": "Level Crawlspace",
+    "category": "Home",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": 6,
+    "due_date": null,
+    "tags": [
+      "physical"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-a7470eafb1",
+    "title": "Rewire under house",
+    "category": "Home",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": 5,
+    "due_date": null,
+    "tags": [
+      "Physical"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-6aab3e8175",
+    "title": "termite stakes install well under house",
+    "category": "Home",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-433c9b9176",
+    "title": "Add heating wire and insulation wrap to kitchen plumbing",
+    "category": "Home",
+    "priority": "Low",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-6989e38ad8",
+    "title": "Add expandable foam under slab where animals dug out",
+    "category": "Home",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": [
+      {
+        "id": "st-d3898e6a72",
+        "title": "Research strategy to lift up slab and fill with foam in master bedroom",
+        "status": "todo",
+        "tags": [
+          "quick-win"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "t-43498bb288",
+    "title": "Insulate under crawlspace",
+    "category": "Home",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-33a972bfab",
+    "title": "Bamboo Accent wall in office",
+    "category": "Home",
+    "priority": "Low",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-01a58b14ef",
+    "title": "Solar Grid-Tie Carport and Battery Back-up",
+    "category": "Home",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-044a4d1e03",
+    "title": "Prepare Maintenance Calendar",
+    "category": "Home",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-4c132e9f68",
+    "title": "Dig-up and reset French Drain near Bodega Door",
+    "category": "Home",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": 2,
+    "due_date": null,
+    "tags": [
+      "physical"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-1d45abbd51",
+    "title": "Level Concrete",
+    "category": "Home",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-c7fc96b4ff",
+    "title": "Flashing over exposed roof sections",
+    "category": "Home",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-b913b6fb67",
+    "title": "Rat poison and traps in attic",
+    "category": "Home",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [
+      "easy-win"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-962c9f6641",
+    "title": "Change Kai vent cover with directional vent cover",
+    "category": "Home",
+    "priority": "Low",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-05bea22f0d",
+    "title": "Solar Shade Structure Design",
+    "category": "Home",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-923b197c82",
+    "title": "Add skirting for house",
+    "category": "Home",
+    "priority": "Low",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-ac23fe7d9b",
+    "title": "Move and level carport",
+    "category": "Home",
+    "priority": "Low",
+    "status": "todo",
+    "effort_hours": 5.5,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-31853d633b",
+    "title": "Solar panels on carport + batteries + car charger",
+    "category": "Home",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-1a4eea4b96",
+    "title": "Add thermostat controlled, solar, gable attic fans.",
+    "category": "Home",
+    "priority": "Low",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-f5dbbdfd5a",
+    "title": "Gravel carport and walkway to house",
+    "category": "Home",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-614f269ec7",
+    "title": "Solar Bubbler for pond",
+    "category": "Home",
+    "priority": "Low",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-227939cb9a",
+    "title": "Painting on fireplace secure hanger",
+    "category": "Home",
+    "priority": "Low",
+    "status": "todo",
+    "effort_hours": 1,
+    "due_date": null,
+    "tags": [
+      "easy-win"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-b398bff46c",
+    "title": "Green Pig for Septic",
+    "category": "Home",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-05a2ca2759",
+    "title": "Powerwash North Side",
+    "category": "Home",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-5bdf99999c",
+    "title": "Whole House Water Filter Replacement",
+    "category": "Home",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-601a5ff9c6",
+    "title": "AC filter and cleaning",
+    "category": "Home",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": 0.5,
+    "due_date": null,
+    "tags": [
+      "quick-win"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-6359f4ba18",
+    "title": "Change House Air filter - write down dimensions",
+    "category": "Home",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-f17d04ffc9",
+    "title": "Workshop for cars and garage",
+    "category": "Home",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": null,
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-9090b6262c",
+    "title": "Contact SiriusSolar on Youtube, greentecauto.com , and thunderstruck motors re: programming Valence U-BMS-HV",
+    "category": "Boat",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": 10.0,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-997d6d7786",
+    "title": "cogito44@me.com for U-BMS flash software",
+    "category": "Boat",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": 5.0,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-a1f6e59976",
+    "title": "pre-charge circuit for battery connection to inverter/motor",
+    "category": "Boat",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": 2.0,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-e2e2d2daaf",
+    "title": "96V system with BMS installed and working",
+    "category": "Boat",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": [
+      {
+        "id": "st-73b7625e3e",
+        "title": "Bring batteries inside",
+        "status": "todo",
+        "tags": [
+          "quick-win"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "t-72675d45f1",
+    "title": "Add Battery Monitor system",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-ac3a8a2351",
+    "title": "AC charge controllers setup and test",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-b6abd3b5d6",
+    "title": "Measure all sails and de-rust hanks",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-0fbf5d1d88",
+    "title": "SOLAR charge-controllers, Battery Monitor, Valence battery monitor",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-18fab5c44b",
+    "title": "Add Bluetooth dongle for SOC and parameter monitoring for engine bank?",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-f71ecdebad",
+    "title": "Get diesel generator working",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-977f70b327",
+    "title": "Motor cooling circuit and heat exchanger plan",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-f274f87c28",
+    "title": "Dinghy holds air and has all pieces and parts + mounts for dinghy",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-9edec76829",
+    "title": "Outboard motor",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-0d639216c9",
+    "title": "Dinghy Davits prep",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-cee486f2b6",
+    "title": "Water Maker",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-d897870673",
+    "title": "Boat Air Conditioner",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-3a83f0d50a",
+    "title": "Thunderstruck CAN Bus Translator + OBDII bluetooth Dongle + Torque app",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-f45aeb07f7",
+    "title": "Figure out Motor Mount",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-13b7270448",
+    "title": "Build battery box",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-92e4e2be2c",
+    "title": "Plan Cutlass Bearing Replacement and dripless shaft seal install",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-fdb1312584",
+    "title": "Install Motor Mount",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-ca919dd9b6",
+    "title": "Install Cutlass Bearing",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-142e3d2b92",
+    "title": "Final motor install",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-108ae37a2c",
+    "title": "Final rudder repairs and maintenance",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-eaaede0621",
+    "title": "Rebuild winch base Port side",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-9e5b095872",
+    "title": "Bow Sprit Repair and Rebuild",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-ac5b085fcf",
+    "title": "Finish fiberglass repairs under cockpit and in bilge",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-aff1c44676",
+    "title": "Check all through-hulls",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-73207429b6",
+    "title": "Cycle water tank + bleach",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-e6325cd759",
+    "title": "Fix/reinforce passageway stairs",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-394f2ef49e",
+    "title": "Firmly attach all deck supports",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-37b2d32762",
+    "title": "Repair deck and support over nav station",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-e86e2afe8f",
+    "title": "Hard dodger finalize",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-f83c4a603d",
+    "title": "4 panel solar charging adequate voltage? Install on boat.",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-29eef88f04",
+    "title": "Filter Diesel tank and add additive",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-1042c3324c",
+    "title": "Epoxy hard coat/fair all new deck fiberglass Boat \u2013 In Work Yard",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-c5f18df422",
+    "title": "Paint topsides Boat \u2013 In Work Yard",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-7c66122a83",
+    "title": "Final keel fiberglass and paint Boat \u2013 In Work Yard",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-2dd9bf85af",
+    "title": "Gunwale and stripe sanding grinding, glass and fair Boat \u2013 In Work Yard",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-0733f34786",
+    "title": "Paint deck Boat \u2013 In Work Yard",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-7d7cee3966",
+    "title": "Install all zincs Boat \u2013 In Work Yard",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-8f7447ea6c",
+    "title": "Sand and prep masts and booms Boat \u2013 On the Water",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-494961acfe",
+    "title": "Paint masts Boat \u2013 On the Water",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-cf8fc117fe",
+    "title": "Figure out nav, bedroom lamps, and spreader lights bulb types - buy LED. Boat \u2013 On the Water",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-8e4b60a341",
+    "title": "Complete mast base sealing with epoxy Boat \u2013 On the Water",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-aebbf209a2",
+    "title": "Interior marine paint Boat \u2013 On the Water",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-c86f0ca0cd",
+    "title": "Garmin GPS nav plus depth finder/sonar Boat \u2013 On the Water",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-b3625e8f82",
+    "title": "Repair all chainplate areas and glass correctly with superblend Boat \u2013 On the Water",
+    "category": "Boat",
+    "priority": "Medium",
+    "status": "todo",
+    "effort_hours": null,
+    "due_date": "2025-12-01",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-b1274a81da",
+    "title": "Call Joel to follow-up - Feedback Strategies",
+    "category": "Business",
+    "priority": "High",
+    "status": "done",
+    "effort_hours": 1,
+    "due_date": "2026-02-19",
+    "tags": [
+      "high-leverage"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-f7df885321",
+    "title": "Send files to James and his Friend re Feedback Strategies",
+    "category": "Business",
+    "priority": "Critical",
+    "status": "done",
+    "effort_hours": 0.1,
+    "due_date": "2026-02-16",
+    "tags": [
+      "quick-win",
+      "high leverage"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-0bf4d83666",
+    "title": "Store Foritifed Panels Samples",
+    "category": "Home",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": 0.5,
+    "due_date": "2026-02-20",
+    "tags": [
+      "quick-win"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-67538c046e",
+    "title": "Organize inflateables + pumps",
+    "category": "Home",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": 0.5,
+    "due_date": "2026-02-20",
+    "tags": [
+      "quick-win"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-cb5809bf2c",
+    "title": "Tom Haircut",
+    "category": "Home",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": 1,
+    "due_date": "2026-02-18",
+    "tags": [
+      "quick-win"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-eac5f0aa19",
+    "title": "Coffee time in morning",
+    "category": "Daily Repeat",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": 0.5,
+    "due_date": null,
+    "tags": [
+      "high-leverage"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-74245ba9ef",
+    "title": "Create Vision Board based on outcomes and family photo",
+    "category": "Home",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": 0.5,
+    "due_date": "2026-02-18",
+    "tags": [
+      "quick-win",
+      "high-leverage"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-c348c8f9d7",
+    "title": "Groom Dog",
+    "category": "Home",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": 2,
+    "due_date": "2026-02-17",
+    "tags": [],
+    "subtasks": []
+  },
+  {
+    "id": "t-83fb74d5c6",
+    "title": "Create New Website for Feedback Strategies via Codex",
+    "category": "Business",
+    "priority": "Critical",
+    "status": "todo",
+    "effort_hours": 0.5,
+    "due_date": "2026-02-18",
+    "tags": [
+      "high-leverage"
+    ],
+    "subtasks": [
+      {
+        "id": "st-c0e679d72d",
+        "title": "create strategy",
+        "status": "done",
+        "tags": [
+          "high leverage",
+          "quick-win"
+        ]
+      },
+      {
+        "id": "st-906b862af5",
+        "title": "Update and remove \"Subscribe\" from exisitng bubble.io site",
+        "status": "todo",
+        "tags": [
+          "quick-win"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "t-1f50289e80",
+    "title": "Respond to AFPV - Re-mediation",
+    "category": "Business",
+    "priority": "Critical",
+    "status": "done",
+    "effort_hours": 0.5,
+    "due_date": "2026-02-17",
+    "tags": [
+      "hig-leverage"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-3a44a4b400",
+    "title": "Make Progress on Wishing well",
+    "category": "Daily Repeat",
+    "priority": "Critical",
+    "status": "todo",
+    "effort_hours": 1,
+    "due_date": null,
+    "tags": [
+      "quick-win",
+      "high leverage"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-8c083cb325",
+    "title": "Fix ceiling light in my office",
+    "category": "Home",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": 0.5,
+    "due_date": null,
+    "tags": [
+      "quick-win"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-f3d9ccdf62",
+    "title": "ipostal review and unsubscribe",
+    "category": "Business",
+    "priority": "High",
+    "status": "todo",
+    "effort_hours": 0.5,
+    "due_date": "2026-02-19",
+    "tags": [
+      "quick-win"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-b1809cf7d7",
+    "title": "Load Ensenada Docs and Emails into Grok 4.2 Folder",
+    "category": "Business",
+    "priority": "Critical",
+    "status": "todo",
+    "effort_hours": 1.5,
+    "due_date": "2026-02-20",
+    "tags": [
+      "quick-win",
+      "high-leverage"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-c45a4b849d",
+    "title": "Tom/Lynn Haircut",
+    "category": "Home",
+    "priority": "Critical",
+    "status": "todo",
+    "effort_hours": 1,
+    "due_date": "2026-02-21",
+    "tags": [
+      "quick-win"
+    ],
+    "subtasks": []
+  },
+  {
+    "id": "t-cf12f34dcf",
+    "title": "Make OpenClaw work on machine as intended",
+    "category": "Business",
+    "priority": "Critical",
+    "status": "todo",
+    "effort_hours": 6,
+    "due_date": "2026-02-28",
+    "tags": [
+      "high-leverage"
+    ],
+    "subtasks": []
+  }
+]
