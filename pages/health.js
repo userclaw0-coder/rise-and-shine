@@ -7,6 +7,7 @@ import {
   getLiftingSessions,
   createLiftingSession,
   getLiftingSets,
+  getLiftingSetsWithSession,
   addLiftingSet,
 } from "../lib/db";
 import {
@@ -17,6 +18,7 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Legend,
 } from "recharts";
 
 function todayStr() {
@@ -32,6 +34,7 @@ export default function HealthPage() {
   const [weightDate, setWeightDate] = useState(todayStr());
   const [weightKg, setWeightKg] = useState("");
   const [sessions, setSessions] = useState([]);
+  const [setsWithSession, setSetsWithSession] = useState([]);
   const [expandedSessionId, setExpandedSessionId] = useState(null);
   const [setsBySession, setSetsBySession] = useState({});
   const [newSessionDate, setNewSessionDate] = useState(todayStr());
@@ -50,14 +53,16 @@ export default function HealthPage() {
     setLoading(true);
     setError("");
     try {
-      const [wRes, sRes] = await Promise.all([
+      const [wRes, sRes, setsRes] = await Promise.all([
         getBodyWeightLogs(user.id),
         getLiftingSessions(user.id),
+        getLiftingSetsWithSession(user.id),
       ]);
       if (wRes.error) setError(wRes.error.message);
       else setWeightLogs(wRes.data || []);
       if (sRes.error) setError(sRes.error.message);
       else setSessions(sRes.data || []);
+      if (!setsRes.error) setSetsWithSession(setsRes.data || []);
     } finally {
       setLoading(false);
     }
@@ -118,6 +123,37 @@ export default function HealthPage() {
   const weightChartData = [...(weightLogs || [])]
     .reverse()
     .map((r) => ({ date: (r.measured_at || "").slice(0, 10), weight: r.weight }));
+
+  // Build exercise progress: max weight per exercise per session date (for Occam's exercise plots)
+  const exerciseChartData = (() => {
+    const rows = setsWithSession || [];
+    const byDate = new Map(); // date -> { date, "Exercise Name": maxWeight, ... }
+    const exerciseColors = [
+      "#111827", "#059669", "#2563eb", "#dc2626", "#7c3aed",
+      "#ea580c", "#0d9488", "#4f46e5",
+    ];
+    for (const row of rows) {
+      const session = row.session;
+      const sessionDate = session?.session_date ?? (Array.isArray(session) ? session[0]?.session_date : null);
+      if (!sessionDate) continue;
+      const exercise = (row.exercise || "").trim() || "Unknown";
+      const w = row.weight != null ? Number(row.weight) : null;
+      if (w == null) continue;
+      let entry = byDate.get(sessionDate);
+      if (!entry) {
+        entry = { date: sessionDate };
+        byDate.set(sessionDate, entry);
+      }
+      const prev = entry[exercise];
+      entry[exercise] = prev == null ? w : Math.max(prev, w);
+    }
+    const dates = [...byDate.keys()].sort();
+    const data = dates.map((d) => byDate.get(d));
+    const exerciseNames = [...new Set(data.flatMap((d) => Object.keys(d).filter((k) => k !== "date")))]
+      .filter(Boolean)
+      .sort();
+    return { data, exerciseNames, exerciseColors };
+  })();
 
   if (loading) {
     return (
@@ -205,12 +241,53 @@ export default function HealthPage() {
                   <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                   <YAxis domain={["auto", "auto"]} tick={{ fontSize: 11 }} />
                   <Tooltip />
-                  <Line type="monotone" dataKey="weight" stroke="#111827" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="weight" stroke="#111827" strokeWidth={2} dot={{ r: 3 }} name="Weight (lb)" />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           )}
         </section>
+
+        {exerciseChartData.data.length > 0 && exerciseChartData.exerciseNames.length > 0 && (
+          <section
+            style={{
+              marginTop: 24,
+              padding: 16,
+              background: "#fff",
+              borderRadius: 16,
+              border: "1px solid #e5e7eb",
+            }}
+          >
+            <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
+              Exercise progress (max weight per session)
+            </h2>
+            <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 12px" }}>
+              Weight over time by exercise. One line per exercise.
+            </p>
+            <div style={{ height: 260 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={exerciseChartData.data}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Legend />
+                  {exerciseChartData.exerciseNames.map((name, i) => (
+                    <Line
+                      key={name}
+                      type="monotone"
+                      dataKey={name}
+                      stroke={exerciseChartData.exerciseColors[i % exerciseChartData.exerciseColors.length]}
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                      connectNulls
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </section>
+        )}
 
         <section
           style={{
