@@ -1,0 +1,85 @@
+table_name,column_name,data_type,udt_name,is_nullable,column_default
+body_weight_logs,id,uuid,uuid,NO,gen_random_uuid()
+body_weight_logs,user_id,uuid,uuid,NO,null
+body_weight_logs,weight,numeric,numeric,NO,null
+body_weight_logs,unit,text,text,NO,'lb'::text
+body_weight_logs,measured_at,timestamp with time zone,timestamptz,NO,now()
+body_weight_logs,note,text,text,YES,null
+categories,id,uuid,uuid,NO,gen_random_uuid()
+categories,user_id,uuid,uuid,NO,null
+categories,name,text,text,NO,null
+categories,sort_order,integer,int4,NO,0
+categories,is_active,boolean,bool,NO,true
+categories,created_at,timestamp with time zone,timestamptz,NO,now()
+daily_notes,id,uuid,uuid,NO,gen_random_uuid()
+daily_notes,user_id,uuid,uuid,NO,null
+daily_notes,date,date,date,NO,null
+daily_notes,note,text,text,NO,''::text
+daily_notes,created_at,timestamp with time zone,timestamptz,NO,now()
+daily_notes,updated_at,timestamp with time zone,timestamptz,NO,now()
+daily_template_items,id,uuid,uuid,NO,gen_random_uuid()
+daily_template_items,user_id,uuid,uuid,NO,null
+daily_template_items,template_id,uuid,uuid,NO,null
+daily_template_items,task_id,uuid,uuid,NO,null
+daily_template_items,sort_order,integer,int4,NO,0
+daily_template_items,created_at,timestamp with time zone,timestamptz,NO,now()
+daily_templates,id,uuid,uuid,NO,gen_random_uuid()
+daily_templates,user_id,uuid,uuid,NO,null
+daily_templates,name,text,text,NO,null
+daily_templates,is_default,boolean,bool,NO,false
+daily_templates,created_at,timestamp with time zone,timestamptz,NO,now()
+ideas,id,uuid,uuid,NO,gen_random_uuid()
+ideas,user_id,uuid,uuid,NO,null
+ideas,title,text,text,NO,null
+ideas,details,text,text,YES,null
+ideas,status,USER-DEFINED,idea_status,NO,'new'::idea_status
+ideas,created_at,timestamp with time zone,timestamptz,NO,now()
+ideas,updated_at,timestamp with time zone,timestamptz,NO,now()
+lifting_sessions,id,uuid,uuid,NO,gen_random_uuid()
+lifting_sessions,user_id,uuid,uuid,NO,null
+lifting_sessions,session_date,date,date,NO,CURRENT_DATE
+lifting_sessions,note,text,text,YES,null
+lifting_sessions,created_at,timestamp with time zone,timestamptz,NO,now()
+lifting_sets,id,uuid,uuid,NO,gen_random_uuid()
+lifting_sets,user_id,uuid,uuid,NO,null
+lifting_sets,session_id,uuid,uuid,NO,null
+lifting_sets,exercise,text,text,NO,null
+lifting_sets,weight,numeric,numeric,YES,null
+lifting_sets,reps,integer,int4,YES,null
+lifting_sets,set_number,integer,int4,YES,null
+lifting_sets,created_at,timestamp with time zone,timestamptz,NO,now()
+subcategories,id,uuid,uuid,NO,gen_random_uuid()
+subcategories,user_id,uuid,uuid,NO,null
+subcategories,category_id,uuid,uuid,NO,null
+subcategories,name,text,text,NO,null
+subcategories,sort_order,integer,int4,NO,0
+subcategories,is_active,boolean,bool,NO,true
+subcategories,created_at,timestamp with time zone,timestamptz,NO,now()
+tags,id,uuid,uuid,NO,gen_random_uuid()
+tags,user_id,uuid,uuid,NO,null
+tags,name,text,text,NO,null
+tags,color,text,text,YES,null
+tags,created_at,timestamp with time zone,timestamptz,NO,now()
+task_events,id,uuid,uuid,NO,gen_random_uuid()
+task_events,user_id,uuid,uuid,NO,null
+task_events,task_id,uuid,uuid,NO,null
+task_events,event_type,USER-DEFINED,task_event_type,NO,null
+task_events,value,jsonb,jsonb,YES,null
+task_events,created_at,timestamp with time zone,timestamptz,NO,now()
+task_tags,task_id,uuid,uuid,NO,null
+task_tags,tag_id,uuid,uuid,NO,null
+task_tags,user_id,uuid,uuid,NO,null
+task_tags,created_at,timestamp with time zone,timestamptz,NO,now()
+tasks,id,uuid,uuid,NO,gen_random_uuid()
+tasks,user_id,uuid,uuid,NO,null
+tasks,title,text,text,NO,null
+tasks,category_id,uuid,uuid,NO,null
+tasks,subcategory_id,uuid,uuid,YES,null
+tasks,priority,USER-DEFINED,task_priority,NO,'Medium'::task_priority
+tasks,effort_hours,numeric,numeric,YES,null
+tasks,due_date,date,date,YES,null
+tasks,status,USER-DEFINED,task_status,NO,'todo'::task_status
+tasks,parent_task_id,uuid,uuid,YES,null
+tasks,created_at,timestamp with time zone,timestamptz,NO,now()
+tasks,updated_at,timestamp with time zone,timestamptz,NO,now()
+tasks,archived_at,timestamp with time zone,timestamptz,YES,null
