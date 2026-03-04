@@ -29,10 +29,6 @@ function readJsonl(p) {
     .map(JSON.parse);
 }
 
-function uniq(arr) {
-  return [...new Set(arr)];
-}
-
 async function main() {
   const tasks = readJson(TASKS_PATH);
   const logs = readJsonl(LOGS_PATH);

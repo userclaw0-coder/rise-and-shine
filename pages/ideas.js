@@ -1,15 +1,14 @@
 import { useEffect, useState } from "react";
-import { supabase } from "../lib/supabaseClient";
 import DashboardLayout from "../components/DashboardLayout";
+import { useAuth } from "../hooks/useAuth";
 import {
   getIdeas,
   createIdea,
-  updateIdea,
   promoteIdeaToTask,
 } from "../lib/db";
 
 export default function IdeasPage() {
-  const [user, setUser] = useState(null);
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [ideas, setIdeas] = useState([]);
@@ -18,36 +17,24 @@ export default function IdeasPage() {
   const [promotingId, setPromotingId] = useState(null);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      const u = data?.user || null;
-      if (!u) window.location.href = "/login";
-      setUser(u);
-    });
-
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      const u = session?.user || null;
-      if (!u) window.location.href = "/login";
-      setUser(u);
-    });
-
-    return () => {
-      sub.subscription.unsubscribe();
-    };
-  }, []);
-
-  useEffect(() => {
     if (!user) return;
-    loadIdeas();
+    let cancelled = false;
+    const run = () => {
+      setLoading(true);
+      setError("");
+      getIdeas(user.id).then((res) => {
+        if (cancelled) return;
+        if (res.error) setError(res.error.message);
+        else setIdeas(res.data || []);
+        setLoading(false);
+      });
+    };
+    const id = setTimeout(run, 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(id);
+    };
   }, [user]);
-
-  async function loadIdeas() {
-    setLoading(true);
-    setError("");
-    const res = await getIdeas(user.id);
-    if (res.error) setError(res.error.message);
-    else setIdeas(res.data || []);
-    setLoading(false);
-  }
 
   async function handleCreate() {
     if (!user || !newTitle.trim()) return;
@@ -78,7 +65,7 @@ export default function IdeasPage() {
     setPromotingId(null);
   }
 
-  if (loading && !user) {
+  if (loading) {
     return (
       <DashboardLayout>
         <p style={{ fontSize: 14, color: "#6b7280" }}>Loading...</p>

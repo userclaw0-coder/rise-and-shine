@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "../lib/supabaseClient";
 import DashboardLayout from "../components/DashboardLayout";
+import { useAuth } from "../hooks/useAuth";
 import {
   getBacklogTasks,
   updateTaskStatusWithEvent,
@@ -61,7 +61,7 @@ function parseTagText(text) {
 }
 
 export default function BacklogPage() {
-  const [user, setUser] = useState(null);
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -76,24 +76,6 @@ export default function BacklogPage() {
   const [tagFilter, setTagFilter] = useState("");
 
   const [newTaskTitle, setNewTaskTitle] = useState("");
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      const u = data?.user || null;
-      if (!u) window.location.href = "/login";
-      setUser(u);
-    });
-
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      const u = session?.user || null;
-      if (!u) window.location.href = "/login";
-      setUser(u);
-    });
-
-    return () => {
-      sub.subscription.unsubscribe();
-    };
-  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -136,14 +118,6 @@ export default function BacklogPage() {
 
     load();
   }, [user]);
-
-  const tasksById = useMemo(() => {
-    const m = new Map();
-    for (const t of tasks || []) {
-      m.set(t.id, t);
-    }
-    return m;
-  }, [tasks]);
 
   const childrenByParent = useMemo(() => {
     const m = new Map();
@@ -573,7 +547,7 @@ export default function BacklogPage() {
     );
   }
 
-  if (loading && !user) {
+  if (!user || loading) {
     return (
       <DashboardLayout>
         <p style={{ fontSize: 14, color: "#6b7280" }}>Loading...</p>

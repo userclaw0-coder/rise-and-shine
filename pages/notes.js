@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { supabase } from "../lib/supabaseClient";
 import DashboardLayout from "../components/DashboardLayout";
+import { useAuth } from "../hooks/useAuth";
 import {
   getDailyNotes,
   getDailyNoteForDate,
@@ -12,7 +12,7 @@ function todayDateStr() {
 }
 
 export default function NotesPage() {
-  const [user, setUser] = useState(null);
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notes, setNotes] = useState([]);
@@ -20,24 +20,6 @@ export default function NotesPage() {
   const [todayDirty, setTodayDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const todayStr = todayDateStr();
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      const u = data?.user || null;
-      if (!u) window.location.href = "/login";
-      setUser(u);
-    });
-
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      const u = session?.user || null;
-      if (!u) window.location.href = "/login";
-      setUser(u);
-    });
-
-    return () => {
-      sub.subscription.unsubscribe();
-    };
-  }, []);
 
   useEffect(() => {
     if (!user) return;

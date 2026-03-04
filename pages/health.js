@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { supabase } from "../lib/supabaseClient";
 import DashboardLayout from "../components/DashboardLayout";
+import { useAuth } from "../hooks/useAuth";
 import {
   getBodyWeightLogs,
   insertBodyWeightLog,
@@ -24,7 +24,7 @@ function todayStr() {
 }
 
 export default function HealthPage() {
-  const [user, setUser] = useState(null);
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -41,26 +41,9 @@ export default function HealthPage() {
   const [newSetNumber, setNewSetNumber] = useState("");
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      const u = data?.user || null;
-      if (!u) window.location.href = "/login";
-      setUser(u);
-    });
-
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      const u = session?.user || null;
-      if (!u) window.location.href = "/login";
-      setUser(u);
-    });
-
-    return () => {
-      sub.subscription.unsubscribe();
-    };
-  }, []);
-
-  useEffect(() => {
     if (!user) return;
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load runs once when user is set
   }, [user]);
 
   async function load() {
@@ -136,7 +119,7 @@ export default function HealthPage() {
     .reverse()
     .map((r) => ({ date: (r.measured_at || "").slice(0, 10), weight: r.weight }));
 
-  if (loading && !user) {
+  if (loading) {
     return (
       <DashboardLayout>
         <p style={{ fontSize: 14, color: "#6b7280" }}>Loading...</p>

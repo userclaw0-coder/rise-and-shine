@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "../lib/supabaseClient";
 import DashboardLayout from "../components/DashboardLayout";
+import SectionCard from "../components/SectionCard";
+import OutcomeExplanation from "../components/OutcomeExplanation";
+import { useAuth } from "../hooks/useAuth";
 import {
   getTemplates,
   getTemplateItems,
@@ -89,99 +91,13 @@ function clearStoredPlan(dateStr) {
   }
 }
 
-function SectionCard({ title, subtitle, children }) {
-  return (
-    <section
-      style={{
-        marginBottom: 20,
-        padding: 16,
-        background: "#ffffff",
-        borderRadius: 16,
-        border: "1px solid #e5e7eb",
-      }}
-    >
-      <div
-        style={{
-          marginBottom: 10,
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "baseline",
-          gap: 12,
-        }}
-      >
-        <div>
-          <h2
-            style={{
-              fontSize: 16,
-              fontWeight: 600,
-              letterSpacing: "-0.01em",
-              margin: 0,
-            }}
-          >
-            {title}
-          </h2>
-          {subtitle && (
-            <p
-              style={{
-                margin: "4px 0 0",
-                fontSize: 13,
-                color: "#6b7280",
-              }}
-            >
-              {subtitle}
-            </p>
-          )}
-        </div>
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function OutcomeExplanation({ breakdown }) {
-  if (!breakdown) return null;
-  const rows = [
-    ["Priority score", breakdown.priorityScore],
-    ["Category (base+mode)×8", `${breakdown.baseCategory}+${breakdown.modeAdjustment} → ${breakdown.categoryComponent}`],
-    ["Tag boost", breakdown.tagBoost || 0],
-    ["Staleness", breakdown.stalenessComponent ?? 0],
-    ["Subtask boost", breakdown.subtaskComponent ?? 0],
-    ["Effort penalty", breakdown.effortPenalty ?? 0],
-  ];
-  return (
-    <dl
-      style={{
-        marginTop: 6,
-        fontSize: 12,
-        color: "#6b7280",
-        display: "grid",
-        gridTemplateColumns: "minmax(0, 1fr) auto",
-        rowGap: 2,
-        columnGap: 12,
-      }}
-    >
-      {rows.map(([label, value]) => (
-        <FragmentRow key={label} label={label} value={value} />
-      ))}
-    </dl>
-  );
-}
-
-function FragmentRow({ label, value }) {
-  return (
-    <>
-      <dt>{label}</dt>
-      <dd style={{ margin: 0, textAlign: "right" }}>{value}</dd>
-    </>
-  );
-}
-
 export default function TodayPage() {
-  const [user, setUser] = useState(null);
+  const { user, isCheckingAuth } = useAuth();
   const [mode, setMode] = useState("Strategic Push");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- set in load(); activeTemplate/items drive UI
   const [templates, setTemplates] = useState([]);
   const [activeTemplate, setActiveTemplate] = useState(null);
   const [items, setItems] = useState([]);
@@ -199,24 +115,6 @@ export default function TodayPage() {
   const [refreshToken, setRefreshToken] = useState(0);
 
   const todayStr = useMemo(() => getTodayDateStr(), []);
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      const u = data?.user || null;
-      if (!u) window.location.href = "/login";
-      setUser(u);
-    });
-
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      const u = session?.user || null;
-      if (!u) window.location.href = "/login";
-      setUser(u);
-    });
-
-    return () => {
-      sub.subscription.unsubscribe();
-    };
-  }, []);
 
   const dailyTemplateTaskIds = useMemo(() => {
     const ids = [];
@@ -312,7 +210,6 @@ export default function TodayPage() {
     }
 
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, todayStr]);
 
   useEffect(() => {
@@ -401,7 +298,8 @@ export default function TodayPage() {
     setRefreshToken((x) => x + 1);
   }
 
-  if (loading && !user) {
+  // Show loading when: still checking auth, no user (redirecting), or data loading
+  if (isCheckingAuth || !user || loading) {
     return (
       <DashboardLayout>
         <p style={{ fontSize: 14, color: "#6b7280" }}>Loading...</p>

@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "../lib/supabaseClient";
 import {
   getTemplates,
   setDefaultTemplate,
@@ -10,6 +9,7 @@ import {
   removeTemplateItem,
 } from "../lib/db";
 import DashboardLayout from "../components/DashboardLayout";
+import { useAuth } from "../hooks/useAuth";
 
 import {
   DndContext,
@@ -74,21 +74,13 @@ function SortableRow({ item, onRemove }) {
 }
 
 export default function TemplatesPage() {
-  const [user, setUser] = useState(null);
+  const { user } = useAuth();
   const [templates, setTemplates] = useState([]);
   const [activeTemplateId, setActiveTemplateId] = useState(null);
   const [items, setItems] = useState([]);
   const [addableTasks, setAddableTasks] = useState([]);
   const [addTaskId, setAddTaskId] = useState("");
   const [msg, setMsg] = useState("");
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      const u = data?.user || null;
-      if (!u) window.location.href = "/login";
-      setUser(u);
-    });
-  }, []);
 
   async function load() {
     setMsg("Loading...");
@@ -114,7 +106,9 @@ export default function TemplatesPage() {
 
   useEffect(() => {
     if (!user) return;
-    load();
+    const id = setTimeout(() => load(), 0);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load depends on user, run once when user is set
   }, [user]);
 
   useEffect(() => {

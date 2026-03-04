@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { supabase } from "../lib/supabaseClient";
 import DashboardLayout from "../components/DashboardLayout";
+import { useAuth } from "../hooks/useAuth";
 import {
   getCompletedEventsInRange,
   getLastCompletedEventsWithTasks,
@@ -26,31 +26,13 @@ function addDays(d, n) {
 }
 
 export default function AnalyticsPage() {
-  const [user, setUser] = useState(null);
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [sevenDayData, setSevenDayData] = useState([]);
   const [thirtyDayData, setThirtyDayData] = useState([]);
   const [hourHistogram, setHourHistogram] = useState([]);
   const [lastCompleted, setLastCompleted] = useState([]);
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      const u = data?.user || null;
-      if (!u) window.location.href = "/login";
-      setUser(u);
-    });
-
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      const u = session?.user || null;
-      if (!u) window.location.href = "/login";
-      setUser(u);
-    });
-
-    return () => {
-      sub.subscription.unsubscribe();
-    };
-  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -125,7 +107,7 @@ export default function AnalyticsPage() {
     load();
   }, [user]);
 
-  if (loading && !user) {
+  if (loading) {
     return (
       <DashboardLayout>
         <p style={{ fontSize: 14, color: "#6b7280" }}>Loading...</p>
