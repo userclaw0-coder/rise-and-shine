@@ -1,0 +1,16 @@
+| table_name           |
+| -------------------- |
+| categories           |
+| subcategories        |
+| tags                 |
+| tasks                |
+| task_tags            |
+| task_events          |
+| daily_templates      |
+| daily_template_items |
+| daily_notes          |
+| ideas                |
+| body_weight_logs     |
+| lifting_sessions     |
+| lifting_sets         |
+| daily_plans          |
