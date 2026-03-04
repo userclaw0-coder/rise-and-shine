@@ -93,7 +93,7 @@ export default function HealthPage() {
   async function handleAddWeight() {
     if (!user || !weightKg.trim()) return;
     setError("");
-    const res = await insertBodyWeightLog(user.id, weightDate, parseFloat(weightKg));
+    const res = await insertBodyWeightLog(user.id, weightDate, parseFloat(weightKg), "lb");
     if (res.error) setError(res.error.message);
     else {
       setWeightLogs((prev) => [res.data, ...prev]);
@@ -116,7 +116,7 @@ export default function HealthPage() {
   async function handleAddSet(sessionId) {
     if (!newSetExercise.trim()) return;
     setError("");
-    const res = await addLiftingSet(sessionId, {
+    const res = await addLiftingSet(user.id, sessionId, {
       exercise_name: newSetExercise.trim(),
       weight_kg: newSetWeight ? parseFloat(newSetWeight) : null,
       reps: newSetReps ? parseInt(newSetReps, 10) : null,
@@ -134,7 +134,7 @@ export default function HealthPage() {
 
   const weightChartData = [...(weightLogs || [])]
     .reverse()
-    .map((r) => ({ date: r.log_date, weight: r.weight_kg }));
+    .map((r) => ({ date: (r.measured_at || "").slice(0, 10), weight: r.weight }));
 
   if (loading && !user) {
     return (
@@ -193,7 +193,7 @@ export default function HealthPage() {
             <input
               type="number"
               step="0.1"
-              placeholder="kg"
+              placeholder="lb"
               value={weightKg}
               onChange={(e) => setWeightKg(e.target.value)}
               style={{ padding: "6px 8px", width: 80, borderRadius: 6, border: "1px solid #e5e7eb" }}
@@ -354,8 +354,8 @@ export default function HealthPage() {
                         <tbody>
                           {(setsBySession[s.id] || []).map((set) => (
                             <tr key={set.id}>
-                              <td style={{ padding: "4px 8px" }}>{set.exercise_name}</td>
-                              <td style={{ textAlign: "right", padding: "4px 8px" }}>{set.weight_kg ?? "—"}</td>
+                              <td style={{ padding: "4px 8px" }}>{set.exercise}</td>
+                              <td style={{ textAlign: "right", padding: "4px 8px" }}>{set.weight ?? "—"}</td>
                               <td style={{ textAlign: "right", padding: "4px 8px" }}>{set.reps ?? "—"}</td>
                               <td style={{ textAlign: "right", padding: "4px 8px" }}>{set.set_number ?? "—"}</td>
                             </tr>

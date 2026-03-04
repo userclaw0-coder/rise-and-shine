@@ -8,6 +8,7 @@ import {
   getTaskEventsForTasksOnDate,
   getLastCompletedEventsForUser,
   logTaskEvent,
+  getOrCreateWorkoutTaskId,
 } from "../lib/db";
 import {
   MODES,
@@ -21,10 +22,15 @@ function getTodayDateStr() {
   return now.toISOString().slice(0, 10);
 }
 
-function buildCompletionMap(events) {
+function buildCompletionMap(events, workoutTaskId = null) {
   const byTask = {};
   for (const ev of events || []) {
-    byTask[ev.task_id] = ev.event_type === "completed";
+    const completed = ev.event_type === "completed";
+    if (workoutTaskId && ev.task_id === workoutTaskId && ev.value?.date) {
+      byTask[`workout-${ev.value.date}`] = completed;
+    } else {
+      byTask[ev.task_id] = completed;
+    }
   }
   return byTask;
 }
@@ -188,6 +194,7 @@ export default function TodayPage() {
   const [isComputingOutcomes, setIsComputingOutcomes] = useState(false);
 
   const [workoutPlan, setWorkoutPlan] = useState(null);
+  const [workoutTaskId, setWorkoutTaskId] = useState(null);
 
   const [refreshToken, setRefreshToken] = useState(0);
 
@@ -262,7 +269,13 @@ export default function TodayPage() {
         const itemTaskIds = loadedItems
           .map((it) => it.task && it.task.id)
           .filter(Boolean);
-        const allIds = [...itemTaskIds, ...(wp ? [wp.id] : [])];
+        let workoutId = null;
+        if (wp) {
+          const wRes = await getOrCreateWorkoutTaskId(user.id);
+          if (!wRes.error) workoutId = wRes.data;
+          setWorkoutTaskId(workoutId);
+        }
+        const allIds = [...itemTaskIds, ...(workoutId ? [workoutId] : [])];
 
         if (user && allIds.length > 0) {
           const evRes = await getTaskEventsForTasksOnDate(
@@ -271,7 +284,7 @@ export default function TodayPage() {
             todayStr
           );
           if (!evRes.error) {
-            setCompletionMap(buildCompletionMap(evRes.data || []));
+            setCompletionMap(buildCompletionMap(evRes.data || [], workoutId));
           }
         } else {
           setCompletionMap({});
@@ -370,7 +383,11 @@ export default function TodayPage() {
     if (!user || !taskId) return;
     const isCompleted = !!completionMap[taskId];
     const nextType = isCompleted ? "uncompleted" : "completed";
-    const res = await logTaskEvent(user.id, taskId, nextType);
+    const isWorkoutSynthetic = typeof taskId === "string" && taskId.startsWith("workout-");
+    const effectiveTaskId = isWorkoutSynthetic ? workoutTaskId : taskId;
+    const value = isWorkoutSynthetic ? { date: taskId.replace("workout-", "") } : null;
+    if (!effectiveTaskId) return;
+    const res = await logTaskEvent(user.id, effectiveTaskId, nextType, value);
     if (!res.error) {
       setCompletionMap((prev) => ({
         ...prev,
@@ -579,27 +596,37 @@ export default function TodayPage() {
       {workoutPlan && (
         <SectionCard
           title="Workout"
-          subtitle={`Cycle: ${workoutPlan.phase}`}
+          subtitle={
+            workoutTaskId
+              ? `Cycle: ${workoutPlan.phase}`
+              : "Workout tracking unavailable. Add a Daily Repeat category (e.g. in Backlog) to enable."
+          }
         >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={!!completionMap[workoutPlan.id]}
-              onChange={() => toggleTaskCompletion(workoutPlan.id)}
-            />
-            <div>
-              <div style={{ fontSize: 14 }}>{workoutPlan.title}</div>
-              <div style={{ fontSize: 12, color: "#9ca3af" }}>
-                Tap when you complete today&apos;s workout.
+          {workoutTaskId ? (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={!!completionMap[workoutPlan.id]}
+                onChange={() => toggleTaskCompletion(workoutPlan.id)}
+              />
+              <div>
+                <div style={{ fontSize: 14 }}>{workoutPlan.title}</div>
+                <div style={{ fontSize: 12, color: "#9ca3af" }}>
+                  Tap when you complete today&apos;s workout.
+                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
+              {workoutPlan.title}
+            </p>
+          )}
         </SectionCard>
       )}
     </DashboardLayout>

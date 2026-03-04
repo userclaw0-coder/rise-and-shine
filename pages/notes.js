@@ -16,7 +16,7 @@ export default function NotesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notes, setNotes] = useState([]);
-  const [todayNote, setTodayNote] = useState({ content: "" });
+  const [todayNote, setTodayNote] = useState("");
   const [todayDirty, setTodayDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const todayStr = todayDateStr();
@@ -53,9 +53,9 @@ export default function NotesPage() {
         if (listRes.error) setError(listRes.error.message);
         else setNotes(listRes.data || []);
         if (!todayRes.error && todayRes.data) {
-          setTodayNote({ content: todayRes.data.content || "" });
+          setTodayNote(todayRes.data.note || "");
         } else {
-          setTodayNote({ content: "" });
+          setTodayNote("");
         }
       } catch (e) {
         setError(e.message || "Failed to load notes.");
@@ -70,13 +70,13 @@ export default function NotesPage() {
     if (!user || !todayDirty) return;
     setSaving(true);
     setError("");
-    const res = await upsertDailyNote(user.id, todayStr, todayNote.content);
+    const res = await upsertDailyNote(user.id, todayStr, todayNote);
     if (res.error) setError(res.error.message);
     else {
       setTodayDirty(false);
       setNotes((prev) => {
-        const without = prev.filter((n) => n.note_date !== todayStr);
-        return [{ ...res.data, note_date: todayStr }, ...without];
+        const without = prev.filter((n) => n.date !== todayStr);
+        return [{ ...res.data, date: todayStr }, ...without];
       });
     }
     setSaving(false);
@@ -130,9 +130,9 @@ export default function NotesPage() {
             Note for today ({todayStr})
           </h2>
           <textarea
-            value={todayNote.content}
+            value={todayNote}
             onChange={(e) => {
-              setTodayNote({ content: e.target.value });
+              setTodayNote(e.target.value);
               setTodayDirty(true);
             }}
             placeholder="What's on your mind?"
@@ -185,15 +185,15 @@ export default function NotesPage() {
             <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
               {notes.map((n) => (
                 <li
-                  key={n.id || n.note_date}
+                  key={n.id || n.date}
                   style={{
                     padding: "10px 0",
                     borderBottom: "1px solid #f3f4f6",
                     fontSize: 13,
                   }}
                 >
-                  <strong>{n.note_date}</strong>
-                  {n.content ? (
+                  <strong>{n.date}</strong>
+                  {n.note ? (
                     <div
                       style={{
                         marginTop: 4,
@@ -201,8 +201,8 @@ export default function NotesPage() {
                         whiteSpace: "pre-wrap",
                       }}
                     >
-                      {n.content.slice(0, 200)}
-                      {n.content.length > 200 ? "…" : ""}
+                      {n.note.slice(0, 200)}
+                      {n.note.length > 200 ? "…" : ""}
                     </div>
                   ) : (
                     <span style={{ color: "#9ca3af", marginLeft: 6 }}>—</span>

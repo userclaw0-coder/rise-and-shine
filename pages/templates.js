@@ -127,7 +127,7 @@ export default function TemplatesPage() {
   async function handleAddTask() {
     if (!addTaskId || !activeTemplateId) return;
     setMsg("Adding…");
-    const res = await addTemplateItem(activeTemplateId, addTaskId);
+    const res = await addTemplateItem(user.id, activeTemplateId, addTaskId);
     if (res.error) setMsg(res.error.message);
     else {
       setAddTaskId("");
