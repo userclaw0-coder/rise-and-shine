@@ -6,6 +6,7 @@ import {
   getTemplateItems,
   updateTemplateOrder,
 } from "../lib/db";
+import DashboardLayout from "../components/DashboardLayout";
 
 import {
   DndContext,
@@ -125,55 +126,87 @@ export default function TemplatesPage() {
   }
 
   return (
-    <div style={{ maxWidth: 900, margin: "40px auto", fontFamily: "system-ui" }}>
-      <h1>Daily Templates</h1>
-      {msg && <p style={{ color: "#666" }}>{msg}</p>}
+    <DashboardLayout>
+      <div>
+        <h1
+          style={{
+            fontSize: 22,
+            fontWeight: 600,
+            margin: 0,
+            letterSpacing: "-0.02em",
+          }}
+        >
+          Daily Templates
+        </h1>
+        {msg && (
+          <p style={{ color: "#6b7280", fontSize: 13, marginTop: 6 }}>{msg}</p>
+        )}
 
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        {templates.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => switchTemplate(t.id)}
-            style={{
-              padding: "8px 12px",
-              borderRadius: 12,
-              border: "1px solid #ddd",
-              background: t.id === activeTemplateId ? "#111" : "white",
-              color: t.id === activeTemplateId ? "white" : "#111",
-              cursor: "pointer",
-            }}
-          >
-            {t.name} {t.is_default ? "⭐" : ""}
-          </button>
-        ))}
-      </div>
-
-      {activeTemplateId && (
-        <div style={{ marginTop: 14 }}>
-          <button
-            onClick={() => makeDefault(activeTemplateId)}
-            style={{
-              padding: "8px 12px",
-              borderRadius: 12,
-              border: "1px solid #111",
-              background: "white",
-              cursor: "pointer",
-            }}
-          >
-            Set active as default
-          </button>
-        </div>
-      )}
-
-      <h2 style={{ marginTop: 20 }}>Items (drag to reorder)</h2>
-
-      <DndContext collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-        <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-          {items.map((item) => (
-            <SortableRow key={item.id} item={item} />
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            flexWrap: "wrap",
+            marginTop: 16,
+            marginBottom: 8,
+          }}
+        >
+          {templates.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => switchTemplate(t.id)}
+              style={{
+                padding: "8px 12px",
+                borderRadius: 999,
+                border: "1px solid #e5e7eb",
+                background: t.id === activeTemplateId ? "#111827" : "white",
+                color: t.id === activeTemplateId ? "white" : "#111827",
+                cursor: "pointer",
+                fontSize: 13,
+              }}
+            >
+              {t.name} {t.is_default ? "⭐" : ""}
+            </button>
           ))}
-        </SortableContext>
-      </DndContext>
-    </div>
+        </div>
+
+        {activeTemplateId && (
+          <div style={{ marginTop: 4, marginBottom: 16 }}>
+            <button
+              onClick={() => makeDefault(activeTemplateId)}
+              style={{
+                padding: "8px 12px",
+                borderRadius: 999,
+                border: "1px solid #111827",
+                background: "white",
+                cursor: "pointer",
+                fontSize: 13,
+              }}
+            >
+              Set active as default
+            </button>
+          </div>
+        )}
+
+        <h2
+          style={{
+            marginTop: 8,
+            marginBottom: 10,
+            fontSize: 15,
+            fontWeight: 500,
+          }}
+        >
+          Items (drag to reorder)
+        </h2>
+
+        <DndContext collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+            {items.map((item) => (
+              <SortableRow key={item.id} item={item} />
+            ))}
+          </SortableContext>
+        </DndContext>
+      </div>
+    </DashboardLayout>
   );
 }
