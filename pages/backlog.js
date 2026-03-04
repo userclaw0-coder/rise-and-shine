@@ -12,7 +12,7 @@ import {
 } from "../lib/db";
 
 const STATUS_FILTERS = [
-  { value: "active", label: "Active (todo/doing/done)" },
+  { value: "todo_doing", label: "Todo & Doing" },
   { value: "todo", label: "Todo only" },
   { value: "doing", label: "Doing only" },
   { value: "done", label: "Done only" },
@@ -70,7 +70,7 @@ export default function BacklogPage() {
   const [tags, setTags] = useState([]);
 
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("active");
+  const [statusFilter, setStatusFilter] = useState("todo_doing");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [subcategoryFilter, setSubcategoryFilter] = useState("");
   const [tagFilter, setTagFilter] = useState("");
@@ -143,9 +143,8 @@ export default function BacklogPage() {
       const titleMatch = !q || normalize(t.title).includes(q);
 
       let statusOk = true;
-      if (statusFilter === "active") {
-        statusOk =
-          t.status === "todo" || t.status === "doing" || t.status === "done";
+      if (statusFilter === "todo_doing") {
+        statusOk = t.status === "todo" || t.status === "doing";
       } else if (statusFilter !== "all") {
         statusOk = t.status === statusFilter;
       }
@@ -600,6 +599,123 @@ export default function BacklogPage() {
           style={{
             display: "flex",
             flexWrap: "wrap",
+            gap: 6,
+            marginBottom: 10,
+            alignItems: "center",
+          }}
+        >
+          <span style={{ fontSize: 12, color: "#6b7280", marginRight: 4 }}>
+            Show:
+          </span>
+          <button
+            type="button"
+            onClick={() => setStatusFilter("todo_doing")}
+            style={{
+              fontSize: 12,
+              padding: "5px 10px",
+              borderRadius: 999,
+              border: "1px solid",
+              borderColor: statusFilter === "todo_doing" ? "#111827" : "#e5e7eb",
+              background: statusFilter === "todo_doing" ? "#111827" : "#ffffff",
+              color: statusFilter === "todo_doing" ? "#ffffff" : "#111827",
+              cursor: "pointer",
+            }}
+          >
+            Todo & Doing
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter("done")}
+            style={{
+              fontSize: 12,
+              padding: "5px 10px",
+              borderRadius: 999,
+              border: "1px solid",
+              borderColor: statusFilter === "done" ? "#059669" : "#e5e7eb",
+              background: statusFilter === "done" ? "#059669" : "#ffffff",
+              color: statusFilter === "done" ? "#ffffff" : "#059669",
+              cursor: "pointer",
+            }}
+          >
+            Completed
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter("archived")}
+            style={{
+              fontSize: 12,
+              padding: "5px 10px",
+              borderRadius: 999,
+              border: "1px solid",
+              borderColor: statusFilter === "archived" ? "#6b7280" : "#e5e7eb",
+              background: statusFilter === "archived" ? "#6b7280" : "#ffffff",
+              color: statusFilter === "archived" ? "#ffffff" : "#6b7280",
+              cursor: "pointer",
+            }}
+          >
+            Archived
+          </button>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 6,
+            marginBottom: 10,
+            alignItems: "center",
+          }}
+        >
+          <span style={{ fontSize: 12, color: "#6b7280", marginRight: 4 }}>
+            Category:
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setCategoryFilter("");
+              setSubcategoryFilter("");
+            }}
+            style={{
+              fontSize: 12,
+              padding: "5px 10px",
+              borderRadius: 999,
+              border: "1px solid",
+              borderColor: !categoryFilter ? "#111827" : "#e5e7eb",
+              background: !categoryFilter ? "#111827" : "#ffffff",
+              color: !categoryFilter ? "#ffffff" : "#111827",
+              cursor: "pointer",
+            }}
+          >
+            All
+          </button>
+          {categories.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => {
+                setCategoryFilter(c.id);
+                setSubcategoryFilter("");
+              }}
+              style={{
+                fontSize: 12,
+                padding: "5px 10px",
+                borderRadius: 999,
+                border: "1px solid",
+                borderColor: categoryFilter === c.id ? "#111827" : "#e5e7eb",
+                background: categoryFilter === c.id ? "#111827" : "#ffffff",
+                color: categoryFilter === c.id ? "#ffffff" : "#111827",
+                cursor: "pointer",
+              }}
+            >
+              {c.name}
+            </button>
+          ))}
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
             gap: 8,
             marginBottom: 10,
           }}
@@ -622,13 +738,14 @@ export default function BacklogPage() {
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             style={{
-              flex: "0 0 180px",
+              flex: "0 0 160px",
               fontSize: 13,
               padding: "6px 8px",
               borderRadius: 999,
               border: "1px solid #e5e7eb",
               background: "#ffffff",
             }}
+            title="Fine-grained status"
           >
             {STATUS_FILTERS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -643,13 +760,14 @@ export default function BacklogPage() {
               setSubcategoryFilter("");
             }}
             style={{
-              flex: "0 0 180px",
+              flex: "0 0 160px",
               fontSize: 13,
               padding: "6px 8px",
               borderRadius: 999,
               border: "1px solid #e5e7eb",
               background: "#ffffff",
             }}
+            title="Category dropdown"
           >
             <option value="">All categories</option>
             {categories.map((c) => (

@@ -276,6 +276,17 @@ export default function TodayPage() {
     refreshToken,
   ]);
 
+  // Fetch completion state for key outcome task IDs so checkboxes reflect DB
+  useEffect(() => {
+    if (!user || !keyOutcomes.length || !todayStr) return;
+    const ids = keyOutcomes.map((e) => e.task.id);
+    getTaskEventsForTasksOnDate(user.id, ids, todayStr).then((res) => {
+      if (res.error) return;
+      const map = buildCompletionMap(res.data || [], null);
+      setCompletionMap((prev) => ({ ...prev, ...map }));
+    });
+  }, [user, todayStr, keyOutcomes]);
+
   async function toggleTaskCompletion(taskId) {
     if (!user || !taskId) return;
     const isCompleted = !!completionMap[taskId];
@@ -416,33 +427,50 @@ export default function TodayPage() {
               <div
                 style={{
                   display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "baseline",
+                  alignItems: "flex-start",
                   gap: 8,
                 }}
               >
-                <div>
-                  <div style={{ fontWeight: 500 }}>{entry.task.title}</div>
+                <input
+                  type="checkbox"
+                  checked={!!completionMap[entry.task.id]}
+                  onChange={() => toggleTaskCompletion(entry.task.id)}
+                  aria-label={`Mark "${entry.task.title}" complete`}
+                  style={{ marginTop: 4, flexShrink: 0 }}
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <div
                     style={{
-                      fontSize: 12,
-                      color: "#6b7280",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "baseline",
+                      gap: 8,
                     }}
                   >
-                    Score: {Math.round(entry.score)} • Priority{" "}
-                    {entry.task.priority || "n/a"}
+                    <div>
+                      <div style={{ fontWeight: 500 }}>{entry.task.title}</div>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: "#6b7280",
+                        }}
+                      >
+                        Score: {Math.round(entry.score)} • Priority{" "}
+                        {entry.task.priority || "n/a"}
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: "#6b7280",
+                      }}
+                    >
+                      #{idx + 1}
+                    </div>
                   </div>
-                </div>
-                <div
-                  style={{
-                    fontSize: 12,
-                    color: "#6b7280",
-                  }}
-                >
-                  #{idx + 1}
+                  <OutcomeExplanation breakdown={entry.breakdown} />
                 </div>
               </div>
-              <OutcomeExplanation breakdown={entry.breakdown} />
             </li>
           ))}
         </ol>
