@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../components/DashboardLayout";
 import SectionCard from "../components/SectionCard";
-import OutcomeExplanation from "../components/OutcomeExplanation";
 import { useAuth } from "../hooks/useAuth";
 import {
   getTemplates,
@@ -11,6 +10,9 @@ import {
   getLastCompletedEventsForUser,
   logTaskEvent,
   getOrCreateWorkoutTaskId,
+  getOrCreateDailyPlan,
+  getDailyPlan,
+  updateDailyPlan,
 } from "../lib/db";
 import {
   MODES,
@@ -51,44 +53,14 @@ function buildLastCompletedMap(events) {
   return map;
 }
 
-const LOCAL_PLAN_KEY_PREFIX = "rs-daily-plan-";
-
-function readStoredPlan(dateStr, mode) {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(
-      `${LOCAL_PLAN_KEY_PREFIX}${dateStr}`
-    );
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || parsed.mode !== mode || !Array.isArray(parsed.taskIds)) {
-      return null;
-    }
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function writeStoredPlan(dateStr, mode, taskIds) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(
-      `${LOCAL_PLAN_KEY_PREFIX}${dateStr}`,
-      JSON.stringify({ mode, taskIds })
-    );
-  } catch {
-    // ignore
-  }
-}
-
-function clearStoredPlan(dateStr) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.removeItem(`${LOCAL_PLAN_KEY_PREFIX}${dateStr}`);
-  } catch {
-    // ignore
-  }
+/** Build queue payload for daily_plans from chosen outcomes (slot/type/task_id). */
+function buildQueueFromChosen(chosen) {
+  const types = ["Quick Win", "High Leverage", "Progress"];
+  return (chosen || []).slice(0, 3).map((entry, idx) => ({
+    slot: idx + 1,
+    type: types[idx] || "Progress",
+    task_id: entry.task.id,
+  }));
 }
 
 export default function TodayPage() {
@@ -106,13 +78,12 @@ export default function TodayPage() {
   const [backlogTasks, setBacklogTasks] = useState([]);
   const [lastCompletedMap, setLastCompletedMap] = useState({});
 
-  const [keyOutcomes, setKeyOutcomes] = useState([]);
-  const [isComputingOutcomes, setIsComputingOutcomes] = useState(false);
+  const [dailyPlan, setDailyPlan] = useState(null);
+  const [queueEntries, setQueueEntries] = useState([]);
+  const [isRefilling, setIsRefilling] = useState(false);
 
   const [workoutPlan, setWorkoutPlan] = useState(null);
   const [workoutTaskId, setWorkoutTaskId] = useState(null);
-
-  const [refreshToken, setRefreshToken] = useState(0);
 
   const todayStr = useMemo(() => getTodayDateStr(), []);
 
@@ -188,9 +159,10 @@ export default function TodayPage() {
           setCompletionMap({});
         }
 
-        const [tasksRes, lastRes] = await Promise.all([
+        const [tasksRes, lastRes, planRes] = await Promise.all([
           getBacklogTasks(user.id),
           getLastCompletedEventsForUser(user.id),
+          getOrCreateDailyPlan(user.id, todayStr, mode),
         ]);
 
         if (tasksRes.error) {
@@ -202,6 +174,63 @@ export default function TodayPage() {
         if (!lastRes.error) {
           setLastCompletedMap(buildLastCompletedMap(lastRes.data || []));
         }
+
+        const plan = planRes.error ? null : planRes.data;
+        setDailyPlan(plan);
+
+        const tasks = tasksRes.data || [];
+        const dailySet = new Set(
+          (loadedItems || []).map((it) => it.task?.id).filter(Boolean)
+        );
+        const candidates = tasks.filter((t) => {
+          const catName =
+            typeof t.category === "string"
+              ? t.category
+              : t.category?.name ?? null;
+          if (catName === "Daily Repeat") return false;
+          if (dailySet.has(t.id)) return false;
+          return t.status === "todo" || t.status === "doing";
+        });
+        const tasksById = new Map(candidates.map((t) => [t.id, t]));
+
+        const queue = (plan?.queue && Array.isArray(plan.queue)) ? plan.queue : [];
+        const resolved = queue
+          .map((slot) => {
+            const task = slot.task_id ? tasksById.get(slot.task_id) : null;
+            if (!task) return null;
+            return { task, slotType: slot.type || "Progress", task_id: slot.task_id };
+          })
+          .filter(Boolean);
+
+        const needsRefill = plan && resolved.length < 3 && candidates.length > 0;
+        if (needsRefill) {
+          const chosen = chooseKeyOutcomes(candidates, {
+            mode,
+            todayStr,
+            lastCompletedMap: buildLastCompletedMap(lastRes.data || []),
+          });
+          const newQueue = buildQueueFromChosen(chosen);
+          const nextCount = (plan.refilled_count || 0) + 1;
+          const up = await updateDailyPlan(plan.id, {
+            queue: newQueue,
+            refilled_count: nextCount,
+            last_refilled_at: new Date().toISOString(),
+          });
+          if (!up.error && up.data) {
+            setDailyPlan(up.data);
+            setQueueEntries(
+              chosen.map((entry, idx) => ({
+                task: entry.task,
+                slotType: ["Quick Win", "High Leverage", "Progress"][idx] || "Progress",
+                task_id: entry.task.id,
+              }))
+            );
+          } else {
+            setQueueEntries(resolved);
+          }
+        } else {
+          setQueueEntries(resolved);
+        }
       } catch (e) {
         setError(e.message || "Failed to load today view.");
       } finally {
@@ -210,82 +239,60 @@ export default function TodayPage() {
     }
 
     load();
-  }, [user, todayStr]);
+  }, [user, todayStr, mode]);
 
+  // Fetch completion state for queue task IDs so checkboxes reflect DB
+  const queueTaskIds = useMemo(
+    () => queueEntries.map((e) => e.task_id || e.task?.id).filter(Boolean),
+    [queueEntries]
+  );
   useEffect(() => {
-    if (!backlogTasks || backlogTasks.length === 0) {
-      setKeyOutcomes([]);
-      return;
-    }
-    setIsComputingOutcomes(true);
-
-    const dailySet = new Set(dailyTemplateTaskIds);
-    const candidates = backlogTasks.filter((t) => {
-      const catName =
-        typeof t.category === "string"
-          ? t.category
-          : t.category && t.category.name
-          ? t.category.name
-          : null;
-      if (catName === "Daily Repeat") return false;
-      if (dailySet.has(t.id)) return false;
-      return t.status === "todo" || t.status === "doing";
-    });
-
-    const stored = readStoredPlan(todayStr, mode);
-    let selected;
-
-    if (stored) {
-      const byId = new Map(candidates.map((t) => [t.id, t]));
-      const picked = [];
-      for (const id of stored.taskIds) {
-        const task = byId.get(id);
-        if (task) picked.push(task);
-      }
-      if (picked.length === DAILY_KEY_OUTCOMES_COUNT) {
-        selected = chooseKeyOutcomes(picked, {
-          mode,
-          todayStr,
-          lastCompletedMap,
-        });
-      }
-    }
-
-    if (!selected) {
-      const chosen = chooseKeyOutcomes(candidates, {
-        mode,
-        todayStr,
-        lastCompletedMap,
-      });
-      selected = chosen;
-      writeStoredPlan(
-        todayStr,
-        mode,
-        chosen.map((c) => c.task.id)
-      );
-    }
-
-    setKeyOutcomes(selected);
-    setIsComputingOutcomes(false);
-  }, [
-    backlogTasks,
-    lastCompletedMap,
-    mode,
-    todayStr,
-    dailyTemplateTaskIds,
-    refreshToken,
-  ]);
-
-  // Fetch completion state for key outcome task IDs so checkboxes reflect DB
-  useEffect(() => {
-    if (!user || !keyOutcomes.length || !todayStr) return;
-    const ids = keyOutcomes.map((e) => e.task.id);
-    getTaskEventsForTasksOnDate(user.id, ids, todayStr).then((res) => {
+    if (!user || queueTaskIds.length === 0 || !todayStr) return;
+    getTaskEventsForTasksOnDate(user.id, queueTaskIds, todayStr).then((res) => {
       if (res.error) return;
       const map = buildCompletionMap(res.data || [], null);
       setCompletionMap((prev) => ({ ...prev, ...map }));
     });
-  }, [user, todayStr, keyOutcomes]);
+  }, [user, todayStr, queueTaskIds.join(",")]);
+
+  async function refillQueue() {
+    if (!user || !dailyPlan || isRefilling) return;
+    const dailySet = new Set(dailyTemplateTaskIds);
+    const candidates = (backlogTasks || []).filter((t) => {
+      const catName = typeof t.category === "string" ? t.category : t.category?.name ?? null;
+      if (catName === "Daily Repeat") return false;
+      if (dailySet.has(t.id)) return false;
+      return t.status === "todo" || t.status === "doing";
+    });
+    if (candidates.length === 0) {
+      setQueueEntries([]);
+      return;
+    }
+    setIsRefilling(true);
+    const chosen = chooseKeyOutcomes(candidates, {
+      mode,
+      todayStr,
+      lastCompletedMap,
+    });
+    const newQueue = buildQueueFromChosen(chosen);
+    const nextCount = (dailyPlan.refilled_count || 0) + 1;
+    const up = await updateDailyPlan(dailyPlan.id, {
+      queue: newQueue,
+      refilled_count: nextCount,
+      last_refilled_at: new Date().toISOString(),
+    });
+    if (!up.error && up.data) {
+      setDailyPlan(up.data);
+      setQueueEntries(
+        chosen.map((entry, idx) => ({
+          task: entry.task,
+          slotType: ["Quick Win", "High Leverage", "Progress"][idx] || "Progress",
+          task_id: entry.task.id,
+        }))
+      );
+    }
+    setIsRefilling(false);
+  }
 
   async function toggleTaskCompletion(taskId) {
     if (!user || !taskId) return;
@@ -297,16 +304,20 @@ export default function TodayPage() {
     if (!effectiveTaskId) return;
     const res = await logTaskEvent(user.id, effectiveTaskId, nextType, value);
     if (!res.error) {
-      setCompletionMap((prev) => ({
-        ...prev,
-        [taskId]: !isCompleted,
-      }));
+      setCompletionMap((prev) => ({ ...prev, [taskId]: !isCompleted }));
+      if (
+        !isCompleted &&
+        queueTaskIds.length === 3 &&
+        queueTaskIds.includes(taskId) &&
+        queueTaskIds.every((id) => id === taskId || !!completionMap[id])
+      ) {
+        await refillQueue();
+      }
     }
   }
 
-  function handleRefreshOutcomes() {
-    clearStoredPlan(todayStr);
-    setRefreshToken((x) => x + 1);
+  function handleRefreshQueue() {
+    refillQueue();
   }
 
   // Show loading when: still checking auth, no user (redirecting), or data loading
@@ -387,17 +398,18 @@ export default function TodayPage() {
             </select>
           </label>
           <button
-            onClick={handleRefreshOutcomes}
+            onClick={handleRefreshQueue}
+            disabled={isRefilling}
             style={{
               fontSize: 13,
               padding: "4px 10px",
               borderRadius: 999,
               border: "1px solid #d1d5db",
               background: "#ffffff",
-              cursor: "pointer",
+              cursor: isRefilling ? "wait" : "pointer",
             }}
           >
-            Refresh outcomes
+            {isRefilling ? "Refilling…" : "Refresh queue"}
           </button>
         </div>
       </div>
@@ -409,20 +421,20 @@ export default function TodayPage() {
       )}
 
       <SectionCard
-        title="Key outcomes (3 for today)"
+        title="Next 3 Actions"
         subtitle={
-          isComputingOutcomes
-            ? "Computing scores..."
-            : "Scored by category, mode, tags, and staleness."
+          dailyPlan != null
+            ? `Queue does not refill until all 3 are completed. Refilled ${dailyPlan.refilled_count ?? 0} time(s) today.`
+            : "Load or create your daily plan to see the queue."
         }
       >
-        {keyOutcomes.length === 0 && (
+        {queueEntries.length === 0 && (
           <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
-            No candidates found. Add some non-daily backlog tasks first.
+            No candidates found. Add some non-daily backlog tasks first, or refresh the queue.
           </p>
         )}
         <ol style={{ paddingLeft: 18, margin: 0, fontSize: 14 }}>
-          {keyOutcomes.map((entry, idx) => (
+          {queueEntries.map((entry, idx) => (
             <li key={entry.task.id} style={{ marginBottom: 10 }}>
               <div
                 style={{
@@ -455,7 +467,7 @@ export default function TodayPage() {
                           color: "#6b7280",
                         }}
                       >
-                        Score: {Math.round(entry.score)} • Priority{" "}
+                        {entry.slotType || `#${idx + 1}`} • Priority{" "}
                         {entry.task.priority || "n/a"}
                       </div>
                     </div>
@@ -468,7 +480,6 @@ export default function TodayPage() {
                       #{idx + 1}
                     </div>
                   </div>
-                  <OutcomeExplanation breakdown={entry.breakdown} />
                 </div>
               </div>
             </li>
