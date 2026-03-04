@@ -9,6 +9,7 @@ import {
   setTaskTags,
   getCategoriesWithSubcategories,
   getAllTags,
+  createCategory,
 } from "../lib/db";
 
 const STATUS_FILTERS = [
@@ -74,8 +75,9 @@ export default function BacklogPage() {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [subcategoryFilter, setSubcategoryFilter] = useState("");
   const [tagFilter, setTagFilter] = useState("");
-
   const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [addingCategory, setAddingCategory] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -264,6 +266,22 @@ export default function BacklogPage() {
       ...prev,
       [parent.id]: false,
     }));
+  }
+
+  async function handleAddCategory() {
+    if (!user || !newCategoryName.trim()) return;
+    setAddingCategory(true);
+    setError("");
+    const res = await createCategory(user.id, newCategoryName.trim());
+    if (res.error) {
+      setError(res.error.message);
+      setAddingCategory(false);
+      return;
+    }
+    const listRes = await getCategoriesWithSubcategories(user.id);
+    if (!listRes.error) setCategories(listRes.data || []);
+    setNewCategoryName("");
+    setAddingCategory(false);
   }
 
   function renderTaskRow(task, depth) {
@@ -718,6 +736,142 @@ export default function BacklogPage() {
             flexWrap: "wrap",
             gap: 8,
             marginBottom: 10,
+            alignItems: "center",
+          }}
+        >
+          <span style={{ fontSize: 12, color: "#6b7280", marginRight: 4 }}>
+            Filter by:
+          </span>
+          <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <span style={{ fontSize: 12, color: "#6b7280" }}>Category</span>
+            <select
+              value={categoryFilter}
+              onChange={(e) => {
+                setCategoryFilter(e.target.value || "");
+                setSubcategoryFilter("");
+              }}
+              style={{
+                fontSize: 13,
+                padding: "6px 8px",
+                borderRadius: 999,
+                border: "1px solid #e5e7eb",
+                background: "#ffffff",
+                minWidth: 140,
+              }}
+            >
+              <option value="">All categories</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <span style={{ fontSize: 12, color: "#6b7280" }}>Subcategory</span>
+            <select
+              value={subcategoryFilter}
+              onChange={(e) => setSubcategoryFilter(e.target.value || "")}
+              style={{
+                fontSize: 13,
+                padding: "6px 8px",
+                borderRadius: 999,
+                border: "1px solid #e5e7eb",
+                background: "#ffffff",
+                minWidth: 140,
+              }}
+            >
+              <option value="">All subcategories</option>
+              {categories
+                .find((c) => c.id === categoryFilter)
+                ?.subcategories?.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <span style={{ fontSize: 12, color: "#6b7280" }}>Tag</span>
+            <select
+              value={tagFilter}
+              onChange={(e) => setTagFilter(e.target.value || "")}
+              style={{
+                fontSize: 13,
+                padding: "6px 8px",
+                borderRadius: 999,
+                border: "1px solid #e5e7eb",
+                background: "#ffffff",
+                minWidth: 140,
+              }}
+            >
+              <option value="">Any tag</option>
+              {STANDARD_TAGS.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+              {tags.map((t) => (
+                <option key={t.id} value={t.name}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 8,
+            marginBottom: 10,
+            alignItems: "center",
+          }}
+        >
+          <span style={{ fontSize: 12, color: "#6b7280", marginRight: 4 }}>
+            Add category:
+          </span>
+          <input
+            type="text"
+            placeholder="New category name"
+            value={newCategoryName}
+            onChange={(e) => setNewCategoryName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleAddCategory()}
+            style={{
+              fontSize: 13,
+              padding: "6px 8px",
+              width: 180,
+              borderRadius: 999,
+              border: "1px solid #e5e7eb",
+              background: "#ffffff",
+            }}
+          />
+          <button
+            type="button"
+            onClick={handleAddCategory}
+            disabled={!newCategoryName.trim() || addingCategory}
+            style={{
+              fontSize: 13,
+              padding: "6px 12px",
+              borderRadius: 999,
+              border: "1px solid #059669",
+              background: "#059669",
+              color: "#ffffff",
+              cursor: newCategoryName.trim() && !addingCategory ? "pointer" : "not-allowed",
+              opacity: newCategoryName.trim() && !addingCategory ? 1 : 0.6,
+            }}
+          >
+            {addingCategory ? "Adding…" : "Add category"}
+          </button>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 8,
+            marginBottom: 10,
           }}
         >
           <input
@@ -750,74 +904,6 @@ export default function BacklogPage() {
             {STATUS_FILTERS.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
-              </option>
-            ))}
-          </select>
-          <select
-            value={categoryFilter}
-            onChange={(e) => {
-              setCategoryFilter(e.target.value || "");
-              setSubcategoryFilter("");
-            }}
-            style={{
-              flex: "0 0 160px",
-              fontSize: 13,
-              padding: "6px 8px",
-              borderRadius: 999,
-              border: "1px solid #e5e7eb",
-              background: "#ffffff",
-            }}
-            title="Category dropdown"
-          >
-            <option value="">All categories</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-          <select
-            value={subcategoryFilter}
-            onChange={(e) => setSubcategoryFilter(e.target.value || "")}
-            style={{
-              flex: "0 0 180px",
-              fontSize: 13,
-              padding: "6px 8px",
-              borderRadius: 999,
-              border: "1px solid #e5e7eb",
-              background: "#ffffff",
-            }}
-          >
-            <option value="">All subcategories</option>
-            {categories
-              .find((c) => c.id === categoryFilter)
-              ?.subcategories?.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-          </select>
-          <select
-            value={tagFilter}
-            onChange={(e) => setTagFilter(e.target.value || "")}
-            style={{
-              flex: "0 0 180px",
-              fontSize: 13,
-              padding: "6px 8px",
-              borderRadius: 999,
-              border: "1px solid #e5e7eb",
-              background: "#ffffff",
-            }}
-          >
-            <option value="">Any tag</option>
-            {STANDARD_TAGS.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-            {tags.map((t) => (
-              <option key={t.id} value={t.name}>
-                {t.name}
               </option>
             ))}
           </select>
