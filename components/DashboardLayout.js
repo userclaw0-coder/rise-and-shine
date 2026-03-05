@@ -13,6 +13,7 @@ export default function DashboardLayout({ children }) {
     { href: "/notes", label: "Notes" },
     { href: "/ideas", label: "Ideas" },
     { href: "/health", label: "Health" },
+    { href: "/weekly-review", label: "Weekly review" },
   ];
 
   async function handleSignOut() {
