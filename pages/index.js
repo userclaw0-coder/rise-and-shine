@@ -26,7 +26,26 @@ export default function Home() {
       if (!user) return;
       setMsg("Bootstrapping…");
       await supabase.rpc("bootstrap_user_data");
-      window.location.href = "/today";
+      const laterKey = "rs-onboarding-later";
+      const later =
+        typeof window !== "undefined"
+          ? window.localStorage.getItem(laterKey)
+          : null;
+      const { data: profileRow } = await supabase
+        .from("user_profile")
+        .select("profile")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      const hasIdentity =
+        profileRow &&
+        profileRow.profile &&
+        Array.isArray(profileRow.profile.identity_attributes) &&
+        profileRow.profile.identity_attributes.length > 0;
+      if (!later && !hasIdentity) {
+        window.location.href = "/onboarding";
+      } else {
+        window.location.href = "/today";
+      }
     }
     runBootstrapAndRedirect();
   }, [user]);
