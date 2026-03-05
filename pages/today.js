@@ -13,6 +13,8 @@ import {
   getOrCreateDailyPlan,
   getDailyPlan,
   updateDailyPlan,
+  createTask,
+  setTaskTags,
 } from "../lib/db";
 import {
   MODES,
@@ -84,6 +86,12 @@ export default function TodayPage() {
 
   const [workoutPlan, setWorkoutPlan] = useState(null);
   const [workoutTaskId, setWorkoutTaskId] = useState(null);
+
+  const [aiSuggestions, setAiSuggestions] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
+  const [aiCached, setAiCached] = useState(false);
+  const [appliedMessage, setAppliedMessage] = useState("");
 
   const todayStr = useMemo(() => getTodayDateStr(), []);
 
@@ -320,6 +328,110 @@ export default function TodayPage() {
     refillQueue();
   }
 
+  async function handleRefineWithAi() {
+    if (!user || aiLoading) return;
+    setAiLoading(true);
+    setAiError("");
+    setAiSuggestions(null);
+    try {
+      const res = await fetch("/api/planner/ai-refine", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: user.id, date: todayStr }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg = data.error || (data.raw ? "AI returned non-JSON output. Try again." : "AI suggestions unavailable. Please try again.");
+        setAiError(msg);
+        setAiSuggestions(null);
+        return;
+      }
+      const ai = data.ai;
+      if (!ai || typeof ai !== "object") {
+        setAiError("AI suggestions unavailable. Please try again.");
+        setAiSuggestions(null);
+        return;
+      }
+      setAiCached(!!data.cached);
+      setAiSuggestions({
+        task_refinements: Array.isArray(ai.task_refinements) ? ai.task_refinements : [],
+        suggested_subtasks_to_create: Array.isArray(ai.suggested_subtasks_to_create) ? ai.suggested_subtasks_to_create : [],
+        automation_opportunities: Array.isArray(ai.automation_opportunities) ? ai.automation_opportunities : [],
+      });
+    } catch (e) {
+      setAiError("AI suggestions unavailable. Please try again.");
+      setAiSuggestions(null);
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  function dismissRefinement(index) {
+    setAiSuggestions((prev) => ({
+      ...prev,
+      task_refinements: (prev?.task_refinements || []).filter((_, i) => i !== index),
+    }));
+  }
+
+  function handleApproveRefinement(item, index) {
+    const payload = { task_id: item.task_id, suggested_title: item.suggested_title, suggested_tags_add: item.suggested_tags_add, suggested_effort_minutes: item.suggested_effort_minutes };
+    console.log("Apply refinement (placeholder): POST /api/planner/apply", payload);
+    setAppliedMessage("Applied.");
+    setTimeout(() => setAppliedMessage(""), 2000);
+    dismissRefinement(index);
+  }
+
+  function dismissSubtask(index) {
+    setAiSuggestions((prev) => ({
+      ...prev,
+      suggested_subtasks_to_create: (prev?.suggested_subtasks_to_create || []).filter((_, i) => i !== index),
+    }));
+  }
+
+  async function handleCreateSubtask(item, index) {
+    if (!user) return;
+    const title = item.title || "New subtask";
+    const effortHours = item.estimated_minutes != null ? item.estimated_minutes / 60 : null;
+    const res = await createTask(user.id, {
+      title,
+      parent_task_id: item.parent_task_id,
+      status: "todo",
+      effort_hours: effortHours ?? undefined,
+    });
+    if (res.error) {
+      setError(res.error.message || "Failed to create subtask");
+      return;
+    }
+    const tagNames = Array.isArray(item.tags) ? item.tags : [];
+    if (tagNames.length > 0 && res.data?.id) {
+      const tagRes = await setTaskTags(user.id, res.data.id, tagNames);
+      if (tagRes?.error) {
+        setError(tagRes.error.message || "Subtask created but tags could not be applied.");
+        return;
+      }
+    }
+    dismissSubtask(index);
+  }
+
+  function dismissAutomation(index) {
+    setAiSuggestions((prev) => ({
+      ...prev,
+      automation_opportunities: (prev?.automation_opportunities || []).filter((_, i) => i !== index),
+    }));
+  }
+
+  function handleExploreAutomation(index) {
+    const item = (aiSuggestions?.automation_opportunities || [])[index];
+    if (item) console.log("Explore automation (placeholder):", item);
+    dismissAutomation(index);
+  }
+
+  const taskTitleById = useMemo(() => {
+    const m = new Map();
+    for (const e of queueEntries) m.set(e.task?.id, e.task?.title);
+    return m;
+  }, [queueEntries]);
+
   // Show loading when: still checking auth, no user (redirecting), or data loading
   if (isCheckingAuth || !user || loading) {
     return (
@@ -485,6 +597,274 @@ export default function TodayPage() {
             </li>
           ))}
         </ol>
+      </SectionCard>
+
+      <SectionCard
+        title="AI Planner"
+        subtitle="Suggestions require your approval. Nothing is applied automatically."
+      >
+        <div style={{ marginBottom: 12 }}>
+          <button
+            type="button"
+            onClick={handleRefineWithAi}
+            disabled={aiLoading || queueEntries.length !== 3}
+            style={{
+              fontSize: 13,
+              padding: "8px 14px",
+              borderRadius: 999,
+              border: "1px solid #111827",
+              background: "#111827",
+              color: "#fff",
+              cursor: aiLoading || queueEntries.length !== 3 ? "not-allowed" : "pointer",
+              opacity: aiLoading || queueEntries.length !== 3 ? 0.7 : 1,
+            }}
+          >
+            {aiLoading ? "Refining…" : "Refine these 3 with AI"}
+          </button>
+          {queueEntries.length !== 3 && (
+            <span style={{ marginLeft: 8, fontSize: 12, color: "#6b7280" }}>
+              Queue must have 3 tasks to refine.
+            </span>
+          )}
+        </div>
+        {appliedMessage && (
+          <p style={{ fontSize: 13, color: "#059669", margin: "0 0 10px", fontWeight: 500 }}>
+            {appliedMessage}
+          </p>
+        )}
+        {aiCached && aiSuggestions && (
+          <p style={{ fontSize: 12, color: "#059669", margin: "0 0 10px" }}>
+            AI suggestions loaded from cache
+          </p>
+        )}
+        {aiError && (
+          <p style={{ fontSize: 13, color: "#b91c1c", margin: "0 0 10px" }}>
+            {aiError}
+          </p>
+        )}
+        {aiSuggestions && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {aiSuggestions.task_refinements && aiSuggestions.task_refinements.length > 0 && (
+              <div>
+                <h3 style={{ fontSize: 14, fontWeight: 600, margin: "0 0 8px", color: "#374151" }}>
+                  Task refinements
+                </h3>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {(aiSuggestions.task_refinements || []).map((item, idx) => (
+                    <div
+                      key={`ref-${item.task_id}-${idx}`}
+                      style={{
+                        padding: 12,
+                        borderRadius: 12,
+                        border: "1px solid #e5e7eb",
+                        background: "#f9fafb",
+                      }}
+                    >
+                      <div style={{ fontSize: 13, marginBottom: 4 }}>
+                        <strong>Title:</strong> {item.suggested_title ?? "—"}
+                      </div>
+                      {(item.suggested_tags_add?.length > 0) && (
+                        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>
+                          Tags to add: {item.suggested_tags_add.join(", ")}
+                        </div>
+                      )}
+                      {item.suggested_effort_minutes != null && (
+                        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>
+                          Effort: {item.suggested_effort_minutes} min
+                        </div>
+                      )}
+                      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                        <button
+                          type="button"
+                          onClick={() => handleApproveRefinement(item, idx)}
+                          style={{
+                            fontSize: 12,
+                            padding: "4px 10px",
+                            borderRadius: 999,
+                            border: "1px solid #059669",
+                            background: "#ecfdf5",
+                            color: "#059669",
+                            cursor: "pointer",
+                          }}
+                        >
+                          Approve
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => dismissRefinement(idx)}
+                          style={{
+                            fontSize: 12,
+                            padding: "4px 10px",
+                            borderRadius: 999,
+                            border: "1px solid #e5e7eb",
+                            background: "#fff",
+                            color: "#6b7280",
+                            cursor: "pointer",
+                          }}
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {aiSuggestions.suggested_subtasks_to_create && aiSuggestions.suggested_subtasks_to_create.length > 0 && (
+              <div>
+                <h3 style={{ fontSize: 14, fontWeight: 600, margin: "0 0 8px", color: "#374151" }}>
+                  Suggested subtasks
+                </h3>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {(aiSuggestions.suggested_subtasks_to_create || []).map((item, idx) => (
+                    <div
+                      key={`sub-${item.parent_task_id}-${idx}`}
+                      style={{
+                        padding: 12,
+                        borderRadius: 12,
+                        border: "1px solid #e5e7eb",
+                        background: "#f9fafb",
+                      }}
+                    >
+                      <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>
+                        Parent: {taskTitleById.get(item.parent_task_id) ?? item.parent_task_id}
+                      </div>
+                      <div style={{ fontSize: 13, marginBottom: 4 }}>
+                        <strong>{item.title ?? "Untitled subtask"}</strong>
+                      </div>
+                      {item.estimated_minutes != null && (
+                        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>
+                          Estimated: {item.estimated_minutes} min
+                        </div>
+                      )}
+                      {(item.tags?.length > 0) && (
+                        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>
+                          Tags: {item.tags.join(", ")}
+                        </div>
+                      )}
+                      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                        <button
+                          type="button"
+                          onClick={() => handleCreateSubtask(item, idx)}
+                          style={{
+                            fontSize: 12,
+                            padding: "4px 10px",
+                            borderRadius: 999,
+                            border: "1px solid #059669",
+                            background: "#ecfdf5",
+                            color: "#059669",
+                            cursor: "pointer",
+                          }}
+                        >
+                          Create subtask
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => dismissSubtask(idx)}
+                          style={{
+                            fontSize: 12,
+                            padding: "4px 10px",
+                            borderRadius: 999,
+                            border: "1px solid #e5e7eb",
+                            background: "#fff",
+                            color: "#6b7280",
+                            cursor: "pointer",
+                          }}
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {aiSuggestions.automation_opportunities && aiSuggestions.automation_opportunities.length > 0 && (
+              <div>
+                <h3 style={{ fontSize: 14, fontWeight: 600, margin: "0 0 8px", color: "#374151" }}>
+                  Automation opportunities
+                </h3>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {(aiSuggestions.automation_opportunities || []).map((item, idx) => (
+                    <div
+                      key={`auto-${idx}`}
+                      style={{
+                        padding: 12,
+                        borderRadius: 12,
+                        border: "1px solid #e5e7eb",
+                        background: "#f9fafb",
+                      }}
+                    >
+                      <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
+                        {item.title ?? "Automation"}
+                      </div>
+                      {item.what_it_does && (
+                        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>
+                          {item.what_it_does}
+                        </div>
+                      )}
+                      {item.benefit && (
+                        <div style={{ fontSize: 12, color: "#059669", marginBottom: 4 }}>
+                          Benefit: {item.benefit}
+                        </div>
+                      )}
+                      {(item.recommended_tooling?.length > 0) && (
+                        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>
+                          Tools: {item.recommended_tooling.join(", ")}
+                        </div>
+                      )}
+                      {(item.permissions_needed?.length > 0) && (
+                        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>
+                          Permissions: {item.permissions_needed.join(", ")}
+                        </div>
+                      )}
+                      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                        <button
+                          type="button"
+                          onClick={() => handleExploreAutomation(idx)}
+                          style={{
+                            fontSize: 12,
+                            padding: "4px 10px",
+                            borderRadius: 999,
+                            border: "1px solid #2563eb",
+                            background: "#eff6ff",
+                            color: "#2563eb",
+                            cursor: "pointer",
+                          }}
+                        >
+                          Explore automation
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => dismissAutomation(idx)}
+                          style={{
+                            fontSize: 12,
+                            padding: "4px 10px",
+                            borderRadius: 999,
+                            border: "1px solid #e5e7eb",
+                            background: "#fff",
+                            color: "#6b7280",
+                            cursor: "pointer",
+                          }}
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {aiSuggestions &&
+              ((aiSuggestions.task_refinements?.length || 0) +
+                (aiSuggestions.suggested_subtasks_to_create?.length || 0) +
+                (aiSuggestions.automation_opportunities?.length || 0)) === 0 ? (
+                <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
+                  No suggestions this time. Try refining again later.
+                </p>
+              ) : null}
+          </div>
+        )}
       </SectionCard>
 
       <SectionCard
