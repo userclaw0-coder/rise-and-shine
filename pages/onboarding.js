@@ -152,6 +152,25 @@ export default function OnboardingPage() {
     }
   }
 
+  async function handleCompleteOnboarding() {
+    setSaving(true);
+    setError("");
+    try {
+      const profile = buildProfile();
+      const res = await upsertUserProfile(user.id, profile);
+      if (res.error) {
+        setError(res.error.message || "Failed to save profile.");
+        return;
+      }
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem("rs-onboarding-later");
+        window.location.href = "/vision";
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function handleSkipForNow() {
     if (typeof window !== "undefined") {
       window.localStorage.setItem("rs-onboarding-later", "1");
@@ -620,6 +639,24 @@ export default function OnboardingPage() {
               }}
             >
               {saving ? "Saving…" : "Save profile"}
+            </button>
+            <button
+              type="button"
+              onClick={handleCompleteOnboarding}
+              disabled={saving || step !== STEPS.length - 1}
+              style={{
+                fontSize: 13,
+                padding: "6px 14px",
+                borderRadius: 999,
+                border: "1px solid #059669",
+                background:
+                  step === STEPS.length - 1 ? "#059669" : "#f9fafb",
+                color: step === STEPS.length - 1 ? "#ffffff" : "#6b7280",
+                cursor:
+                  saving || step !== STEPS.length - 1 ? "default" : "pointer",
+              }}
+            >
+              Complete onboarding
             </button>
           </div>
         </div>

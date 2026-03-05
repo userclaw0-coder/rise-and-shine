@@ -204,7 +204,7 @@ export default function VisionPage() {
               color: "#6b7280",
             }}
           >
-            Edit your identity, domains, outcomes, and strategic focus.
+            Edit your identity, domains, outcomes, and strategic focus. Your Vision board can be edited and modified at any time.
           </p>
         </div>
         <div style={{ fontSize: 12 }}>
