@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../components/DashboardLayout";
 import { useAuth } from "../hooks/useAuth";
+import {
+  getWeeklyReview,
+  upsertWeeklyReview,
+  listWeeklyReviews,
+} from "../lib/db";
 
 function getWeekRange(date = new Date()) {
   const d = new Date(date);
@@ -31,16 +36,83 @@ export default function WeeklyReviewPage() {
   const [theme, setTheme] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
-  const [savedJson, setSavedJson] = useState(null);
+  const [loadError, setLoadError] = useState("");
+  const [saveMessage, setSaveMessage] = useState("");
+  const [currentWeekStart, setCurrentWeekStart] = useState(
+    getWeekRange(new Date()).start
+  );
+  const [pastReviews, setPastReviews] = useState([]);
 
-  const { start, end } = useMemo(() => getWeekRange(new Date()), []);
+  const { start, end } = useMemo(
+    () => getWeekRange(new Date(currentWeekStart)),
+    [currentWeekStart]
+  );
 
   useEffect(() => {
-    if (savedJson) {
-      // eslint-disable-next-line no-console
-      console.log("Weekly review payload (placeholder submit):", savedJson);
+    if (!user) return;
+
+    async function loadCurrent() {
+      setLoadError("");
+      try {
+        const res = await getWeeklyReview(user.id, currentWeekStart);
+        if (!res.error && res.data) {
+          const row = res.data;
+          const parsed =
+            typeof row.notes === "string"
+              ? (() => {
+                  try {
+                    return JSON.parse(row.notes);
+                  } catch {
+                    return {};
+                  }
+                })()
+              : row.notes || {};
+          setWins(parsed.wins || "");
+          setFriction(parsed.friction || "");
+          setReality(parsed.reality_check || "");
+          setNeeds(row.scores || needs);
+          setLowestNeedAction(
+            (parsed.lowest_need_focus && parsed.lowest_need_focus.action) || ""
+          );
+          setTopLeverage(
+            (parsed.weekly_theme && parsed.weekly_theme.why) || ""
+          );
+          setTheme((parsed.weekly_theme && parsed.weekly_theme.theme) || "");
+          setNotes(parsed.week_summary || "");
+        } else {
+          // No existing review; clear fields for this week
+          setWins("");
+          setFriction("");
+          setReality("");
+          setNeeds({
+            certainty: 5,
+            variety: 5,
+            significance: 5,
+            connection: 5,
+            growth: 5,
+            contribution: 5,
+          });
+          setLowestNeedAction("");
+          setTopLeverage("");
+          setTheme("");
+          setNotes("");
+        }
+      } catch (e) {
+        setLoadError(e.message || "Failed to load weekly review.");
+      }
     }
-  }, [savedJson]);
+
+    async function loadList() {
+      const res = await listWeeklyReviews(user.id, 20);
+      if (!res.error) {
+        setPastReviews(res.data || []);
+      }
+    }
+
+    loadCurrent();
+    loadList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, currentWeekStart]);
 
   if (isCheckingAuth || !user) {
     return (
@@ -63,10 +135,9 @@ export default function WeeklyReviewPage() {
   function handleSubmit(e) {
     e.preventDefault();
     setSaving(true);
+    setSaveMessage("");
     const payload = {
       week_summary: notes || "",
-      week_start: start,
-      week_end: end,
       wins,
       friction,
       reality_check: reality,
@@ -79,11 +150,18 @@ export default function WeeklyReviewPage() {
         theme: theme || "",
         why: topLeverage || "",
       },
-      promote_tasks: [],
-      automation_suggestions: [],
     };
-    setSavedJson(payload);
-    setSaving(false);
+    upsertWeeklyReview(user.id, start, payload)
+      .then((res) => {
+        if (res.error) {
+          setLoadError(res.error.message || "Failed to save weekly review.");
+        } else {
+          setSaveMessage("Saved. You can come back and edit anytime.");
+        }
+      })
+      .finally(() => {
+        setSaving(false);
+      });
   }
 
   return (
@@ -126,9 +204,15 @@ export default function WeeklyReviewPage() {
           borderRadius: 16,
           border: "1px solid #e5e7eb",
           background: "#ffffff",
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 3fr) minmax(0, 1.5fr)",
+          gap: 16,
         }}
       >
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {loadError && (
+            <p style={{ fontSize: 13, color: "#b91c1c", margin: 0 }}>{loadError}</p>
+          )}
           <div>
             <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 6px" }}>Wins</h2>
             <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 6px" }}>
@@ -313,13 +397,86 @@ export default function WeeklyReviewPage() {
             >
               {saving ? "Saving…" : "Save weekly review (placeholder)"}
             </button>
-            {savedJson && (
+            {saveMessage && (
               <span style={{ fontSize: 12, color: "#059669" }}>
-                Captured. Check console for payload.
+                {saveMessage}
               </span>
             )}
           </div>
         </form>
+        <div
+          style={{
+            borderLeft: "1px solid #f3f4f6",
+            paddingLeft: 12,
+            fontSize: 13,
+          }}
+        >
+          <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 8px" }}>
+            Past reviews
+          </h2>
+          {pastReviews.length === 0 ? (
+            <p style={{ fontSize: 12, color: "#6b7280", margin: 0 }}>
+              No reviews yet. Save this week&apos;s review to start your history.
+            </p>
+          ) : (
+            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+              {pastReviews.map((row) => {
+                const parsed =
+                  typeof row.notes === "string"
+                    ? (() => {
+                        try {
+                          return JSON.parse(row.notes);
+                        } catch {
+                          return {};
+                        }
+                      })()
+                    : row.notes || {};
+                const labelTheme =
+                  (parsed.weekly_theme && parsed.weekly_theme.theme) || "";
+                const active = row.week_start === start;
+                return (
+                  <li key={row.week_start} style={{ marginBottom: 6 }}>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentWeekStart(row.week_start)}
+                      style={{
+                        width: "100%",
+                        textAlign: "left",
+                        fontSize: 12,
+                        padding: "6px 8px",
+                        borderRadius: 999,
+                        border: "1px solid",
+                        borderColor: active ? "#111827" : "#e5e7eb",
+                        background: active ? "#111827" : "#ffffff",
+                        color: active ? "#ffffff" : "#111827",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Week of {row.week_start}
+                      {labelTheme ? ` – ${labelTheme}` : ""}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <button
+            type="button"
+            onClick={() => setCurrentWeekStart(getWeekRange(new Date()).start)}
+            style={{
+              marginTop: 10,
+              fontSize: 12,
+              padding: "4px 10px",
+              borderRadius: 999,
+              border: "1px solid #e5e7eb",
+              background: "#f9fafb",
+              color: "#374151",
+              cursor: "pointer",
+            }}
+          >
+            Jump to current week
+          </button>
+        </div>
       </section>
     </DashboardLayout>
   );

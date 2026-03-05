@@ -4,6 +4,7 @@ import { useAuth } from "../hooks/useAuth";
 import {
   getCompletedEventsInRange,
   getLastCompletedEventsWithTasks,
+  getWeeklyReviewWeeks,
 } from "../lib/db";
 import {
   BarChart,
@@ -33,6 +34,7 @@ export default function AnalyticsPage() {
   const [thirtyDayData, setThirtyDayData] = useState([]);
   const [hourHistogram, setHourHistogram] = useState([]);
   const [lastCompleted, setLastCompleted] = useState([]);
+  const [weeklyStreak, setWeeklyStreak] = useState(0);
 
   useEffect(() => {
     if (!user) return;
@@ -45,10 +47,11 @@ export default function AnalyticsPage() {
       const start30 = addDays(today, -30);
 
       try {
-        const [range7, range30, last] = await Promise.all([
+        const [range7, range30, last, weeks] = await Promise.all([
           getCompletedEventsInRange(user.id, dateStr(start7), dateStr(today)),
           getCompletedEventsInRange(user.id, dateStr(start30), dateStr(today)),
           getLastCompletedEventsWithTasks(user.id, 50),
+          getWeeklyReviewWeeks(user.id, 52),
         ]);
 
         if (range7.error) setError(range7.error.message);
@@ -97,6 +100,26 @@ export default function AnalyticsPage() {
 
         if (last.error) setError(last.error.message);
         else setLastCompleted(last.data || []);
+
+        if (!weeks.error && weeks.data) {
+          const dates = (weeks.data || [])
+            .map((w) => w.week_start)
+            .filter(Boolean)
+            .sort()
+            .reverse();
+          const seen = new Set(dates);
+          let streak = 0;
+          const todayStrVal = dateStr(today);
+          const todayDate = new Date(todayStrVal);
+          for (let i = 0; i < 104; i++) {
+            const d = new Date(todayDate);
+            d.setUTCDate(d.getUTCDate() - i * 7);
+            const weekStartIso = d.toISOString().slice(0, 10);
+            if (seen.has(weekStartIso)) streak += 1;
+            else break;
+          }
+          setWeeklyStreak(streak);
+        }
       } catch (e) {
         setError(e.message || "Failed to load analytics.");
       } finally {
@@ -135,8 +158,19 @@ export default function AnalyticsPage() {
             color: "#6b7280",
           }}
         >
-          Completion momentum, time-of-day, and recent activity.
+          Completion momentum, time-of-day, weekly reviews, and recent activity.
         </p>
+        {weeklyStreak > 0 && (
+          <p
+            style={{
+              margin: "4px 0 0",
+              fontSize: 12,
+              color: "#059669",
+            }}
+          >
+            Weekly review streak: {weeklyStreak} week{weeklyStreak === 1 ? "" : "s"}.
+          </p>
+        )}
 
         {error && (
           <p style={{ color: "#b91c1c", fontSize: 13, marginTop: 8 }}>{error}</p>
