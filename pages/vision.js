@@ -74,6 +74,47 @@ export default function VisionPage() {
     loadVersions();
   }, [user]);
 
+  // Autosave vision a short time after edits
+  useEffect(() => {
+    if (!user || !loadedOnce) return;
+    let timeoutId = null;
+    setAutoSaving(true);
+    timeoutId = setTimeout(async () => {
+      try {
+        const existingRes = await getUserProfile(user.id);
+        const existing =
+          !existingRes.error && existingRes.data
+            ? existingRes.data.profile || {}
+            : {};
+        const profile = buildProfile(existing);
+        const res = await upsertUserProfile(user.id, profile);
+        if (res.error) {
+          // Keep it silent to avoid noisy errors; explicit save shows errors.
+          // eslint-disable-next-line no-console
+          console.warn("Autosave vision failed:", res.error);
+        } else {
+          setSavedMsg("Autosaved.");
+          setTimeout(() => setSavedMsg(""), 2000);
+        }
+      } finally {
+        setAutoSaving(false);
+      }
+    }, 2000);
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    user,
+    identityAttributes,
+    lifeDomains,
+    desiredOutcomes,
+    leverageFocus,
+    quarterFocus,
+    immediateStep,
+    loadedOnce,
+  ]);
+
   if (isCheckingAuth || !user || loading) {
     return (
       <DashboardLayout>
@@ -133,47 +174,6 @@ export default function VisionPage() {
       setSaving(false);
     }
   }
-
-  // Autosave vision a short time after edits
-  useEffect(() => {
-    if (!user || !loadedOnce) return;
-    let timeoutId = null;
-    setAutoSaving(true);
-    timeoutId = setTimeout(async () => {
-      try {
-        const existingRes = await getUserProfile(user.id);
-        const existing =
-          !existingRes.error && existingRes.data
-            ? existingRes.data.profile || {}
-            : {};
-        const profile = buildProfile(existing);
-        const res = await upsertUserProfile(user.id, profile);
-        if (res.error) {
-          // Keep it silent to avoid noisy errors; explicit save shows errors.
-          // eslint-disable-next-line no-console
-          console.warn("Autosave vision failed:", res.error);
-        } else {
-          setSavedMsg("Autosaved.");
-          setTimeout(() => setSavedMsg(""), 2000);
-        }
-      } finally {
-        setAutoSaving(false);
-      }
-    }, 2000);
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    user,
-    identityAttributes,
-    lifeDomains,
-    desiredOutcomes,
-    leverageFocus,
-    quarterFocus,
-    immediateStep,
-    loadedOnce,
-  ]);
 
   return (
     <DashboardLayout>

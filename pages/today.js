@@ -15,6 +15,7 @@ import {
   updateDailyPlan,
   createTask,
   setTaskTags,
+  getUserProfile,
 } from "../lib/db";
 import {
   MODES,
@@ -93,6 +94,8 @@ export default function TodayPage() {
   const [aiCached, setAiCached] = useState(false);
   const [appliedMessage, setAppliedMessage] = useState("");
 
+  const [profilePrefs, setProfilePrefs] = useState(null);
+
   const todayStr = useMemo(() => getTodayDateStr(), []);
 
   const dailyTemplateTaskIds = useMemo(() => {
@@ -102,6 +105,26 @@ export default function TodayPage() {
     }
     return ids;
   }, [items]);
+
+  // Load user preferences (category weights, quick-win minutes, default mode)
+  useEffect(() => {
+    if (!user) return;
+    getUserProfile(user.id).then((res) => {
+      if (!res.error && res.data && res.data.profile) {
+        const p = res.data.profile;
+        const prefs = p.preferences || null;
+        setProfilePrefs(prefs);
+        if (
+          prefs &&
+          typeof prefs.default_mode === "string" &&
+          MODES.includes(prefs.default_mode) &&
+          prefs.default_mode !== mode
+        ) {
+          setMode(prefs.default_mode);
+        }
+      }
+    });
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -216,6 +239,8 @@ export default function TodayPage() {
             mode,
             todayStr,
             lastCompletedMap: buildLastCompletedMap(lastRes.data || []),
+            baseCategoryWeights: profilePrefs?.base_category_weights,
+            quickWinMinutes: profilePrefs?.quick_win_definition_minutes,
           });
           const newQueue = buildQueueFromChosen(chosen);
           const nextCount = (plan.refilled_count || 0) + 1;
@@ -281,6 +306,8 @@ export default function TodayPage() {
       mode,
       todayStr,
       lastCompletedMap,
+      baseCategoryWeights: profilePrefs?.base_category_weights,
+      quickWinMinutes: profilePrefs?.quick_win_definition_minutes,
     });
     const newQueue = buildQueueFromChosen(chosen);
     const nextCount = (dailyPlan.refilled_count || 0) + 1;
