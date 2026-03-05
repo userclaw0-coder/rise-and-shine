@@ -1,0 +1,81 @@
+/* Mobile-first base and layout */
+html {
+  box-sizing: border-box;
+  -webkit-text-size-adjust: 100%;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: inherit;
+}
+
+body {
+  margin: 0;
+  overflow-x: hidden;
+}
+
+/* Touch-friendly nav in dashboard */
+.dashboard-header-inner {
+  flex-wrap: wrap;
+  padding: 12px 12px;
+  gap: 10px;
+}
+
+@media (min-width: 640px) {
+  .dashboard-header-inner {
+    padding: 16px 20px;
+    gap: 16px;
+  }
+}
+
+.dashboard-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.dashboard-nav button {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 10px 14px;
+}
+
+@media (min-width: 640px) {
+  .dashboard-nav button {
+    min-height: auto;
+    min-width: auto;
+    padding: 6px 12px;
+  }
+}
+
+.main-content {
+  padding: 16px 12px 32px;
+}
+
+@media (min-width: 640px) {
+  .main-content {
+    padding: 24px 20px 40px;
+  }
+}
+
+/* Backlog: horizontal scroll for task table on small screens */
+.backlog-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 -12px;
+  padding: 0 12px;
+}
+
+@media (min-width: 900px) {
+  .backlog-table-wrap {
+    margin: 0;
+    padding: 0;
+  }
+}
+
+.backlog-table-inner {
+  min-width: 680px;
+}

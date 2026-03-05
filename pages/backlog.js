@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../components/DashboardLayout";
+import Modal from "../components/Modal";
 import { useAuth } from "../hooks/useAuth";
 import {
   getBacklogTasks,
@@ -75,9 +76,15 @@ export default function BacklogPage() {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [subcategoryFilter, setSubcategoryFilter] = useState("");
   const [tagFilter, setTagFilter] = useState("");
-  const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newCategoryName, setNewCategoryName] = useState("");
   const [addingCategory, setAddingCategory] = useState(false);
+
+  const [addTaskOpen, setAddTaskOpen] = useState(false);
+  const [modalTitle, setModalTitle] = useState("");
+  const [modalCategoryId, setModalCategoryId] = useState("");
+  const [modalSubcategoryId, setModalSubcategoryId] = useState("");
+  const [modalTagsText, setModalTagsText] = useState("");
+  const [addingTask, setAddingTask] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -231,19 +238,45 @@ export default function BacklogPage() {
     });
   }
 
-  async function handleAddTask() {
-    if (!user || !newTaskTitle.trim()) return;
+  function openAddTaskModal() {
+    setModalTitle("");
+    setModalCategoryId(categories[0]?.id ?? "");
+    setModalSubcategoryId("");
+    setModalTagsText("");
+    setError("");
+    setAddTaskOpen(true);
+  }
+
+  async function handleAddTaskFromModal() {
+    if (!user || !modalTitle.trim()) return;
+    const categoryId = modalCategoryId || categories[0]?.id;
+    if (!categoryId) {
+      setError("Create a category first (e.g. under Filter by).");
+      return;
+    }
+    setAddingTask(true);
+    setError("");
     const res = await createTask(user.id, {
-      title: newTaskTitle.trim(),
+      title: modalTitle.trim(),
       status: "todo",
+      category_id: categoryId,
+      subcategory_id: modalSubcategoryId || null,
     });
     if (res.error) {
       setError(res.error.message);
+      setAddingTask(false);
       return;
     }
-    const created = { ...res.data, _tagsText: "" };
+    const created = { ...res.data, _tagsText: modalTagsText };
+    if (parseTagText(modalTagsText).length > 0) {
+      const tagRes = await setTaskTags(user.id, res.data.id, parseTagText(modalTagsText));
+      if (!tagRes.error) {
+        created.tags = parseTagText(modalTagsText).map((name) => ({ name }));
+      }
+    }
     setTasks((prev) => [created, ...prev]);
-    setNewTaskTitle("");
+    setAddTaskOpen(false);
+    setAddingTask(false);
   }
 
   async function handleAddSubtask(parent) {
@@ -917,85 +950,199 @@ export default function BacklogPage() {
             alignItems: "center",
           }}
         >
-          <input
-            type="text"
-            placeholder="Add new task…"
-            value={newTaskTitle}
-            onChange={(e) => setNewTaskTitle(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                handleAddTask();
-              }
-            }}
-            style={{
-              flex: 1,
-              fontSize: 13,
-              padding: "6px 8px",
-              borderRadius: 999,
-              border: "1px solid #e5e7eb",
-              background: "#ffffff",
-            }}
-          />
           <button
-            onClick={handleAddTask}
+            type="button"
+            onClick={openAddTaskModal}
             style={{
-              fontSize: 13,
-              padding: "6px 10px",
+              fontSize: 14,
+              padding: "10px 18px",
+              minHeight: 44,
               borderRadius: 999,
               border: "1px solid #111827",
               background: "#111827",
               color: "#ffffff",
               cursor: "pointer",
+              fontWeight: 500,
             }}
           >
-            Add task
+            + Add task
           </button>
         </div>
 
-        <div
-          style={{
-            marginTop: 6,
-            borderRadius: 16,
-            border: "1px solid #e5e7eb",
-            background: "#ffffff",
-            padding: "8px 10px",
-          }}
+        <Modal
+          title="Add task"
+          open={addTaskOpen}
+          onClose={() => !addingTask && setAddTaskOpen(false)}
         >
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns:
-                "minmax(0, 3fr) minmax(0, 1.5fr) minmax(0, 1.1fr) 80px 120px 120px",
-              gap: 8,
-              fontSize: 11,
-              fontWeight: 500,
-              color: "#6b7280",
-              paddingBottom: 4,
-              borderBottom: "1px solid #f3f4f6",
-            }}
-          >
-            <div>Title / hierarchy</div>
-            <div>Category / subcategory</div>
-            <div>Priority / effort</div>
-            <div>Due</div>
-            <div>Status / actions</div>
-            <div>Tags</div>
-          </div>
-
-          <div>
-            {filteredRootTasks.length === 0 ? (
-              <p
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}>Title</span>
+              <input
+                type="text"
+                placeholder="What needs to be done?"
+                value={modalTitle}
+                onChange={(e) => setModalTitle(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAddTaskFromModal()}
+                autoFocus
                 style={{
-                  fontSize: 13,
-                  color: "#6b7280",
-                  margin: "8px 0 4px",
+                  fontSize: 15,
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                  background: "#ffffff",
+                }}
+              />
+            </label>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}>Category</span>
+              <select
+                value={modalCategoryId}
+                onChange={(e) => {
+                  setModalCategoryId(e.target.value || "");
+                  setModalSubcategoryId("");
+                }}
+                style={{
+                  fontSize: 14,
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                  background: "#ffffff",
                 }}
               >
-                No tasks match your filters.
-              </p>
-            ) : (
-              filteredRootTasks.map((t) => renderTaskRow(t, 0))
+                <option value="">Select category…</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}>Subcategory (optional)</span>
+              <select
+                value={modalSubcategoryId}
+                onChange={(e) => setModalSubcategoryId(e.target.value || "")}
+                style={{
+                  fontSize: 14,
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                  background: "#ffffff",
+                }}
+              >
+                <option value="">None</option>
+                {(categories.find((c) => c.id === modalCategoryId)?.subcategories || []).map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}>Tags (optional, comma-separated)</span>
+              <input
+                type="text"
+                placeholder="e.g. quick-win, urgent"
+                value={modalTagsText}
+                onChange={(e) => setModalTagsText(e.target.value)}
+                style={{
+                  fontSize: 14,
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                  background: "#ffffff",
+                }}
+              />
+            </label>
+            {error && (
+              <p style={{ fontSize: 13, color: "#dc2626", margin: 0 }}>{error}</p>
             )}
+            <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+              <button
+                type="button"
+                onClick={handleAddTaskFromModal}
+                disabled={!modalTitle.trim() || addingTask}
+                style={{
+                  fontSize: 14,
+                  padding: "10px 18px",
+                  minHeight: 44,
+                  borderRadius: 8,
+                  border: "none",
+                  background: "#111827",
+                  color: "#ffffff",
+                  cursor: modalTitle.trim() && !addingTask ? "pointer" : "not-allowed",
+                  opacity: modalTitle.trim() && !addingTask ? 1 : 0.6,
+                }}
+              >
+                {addingTask ? "Adding…" : "Add task"}
+              </button>
+              <button
+                type="button"
+                onClick={() => !addingTask && setAddTaskOpen(false)}
+                style={{
+                  fontSize: 14,
+                  padding: "10px 18px",
+                  minHeight: 44,
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                  background: "#ffffff",
+                  color: "#374151",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </Modal>
+
+        <div className="backlog-table-wrap">
+          <div
+            className="backlog-table-inner"
+            style={{
+              marginTop: 6,
+              borderRadius: 16,
+              border: "1px solid #e5e7eb",
+              background: "#ffffff",
+              padding: "8px 10px",
+            }}
+          >
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns:
+                  "minmax(0, 3fr) minmax(0, 1.5fr) minmax(0, 1.1fr) 80px 120px 120px",
+                gap: 8,
+                fontSize: 11,
+                fontWeight: 500,
+                color: "#6b7280",
+                paddingBottom: 4,
+                borderBottom: "1px solid #f3f4f6",
+              }}
+            >
+              <div>Title / hierarchy</div>
+              <div>Category / subcategory</div>
+              <div>Priority / effort</div>
+              <div>Due</div>
+              <div>Status / actions</div>
+              <div>Tags</div>
+            </div>
+
+            <div>
+              {filteredRootTasks.length === 0 ? (
+                <p
+                  style={{
+                    fontSize: 13,
+                    color: "#6b7280",
+                    margin: "8px 0 4px",
+                  }}
+                >
+                  No tasks match your filters.
+                </p>
+              ) : (
+                filteredRootTasks.map((t) => renderTaskRow(t, 0))
+              )}
+            </div>
           </div>
         </div>
       </div>

@@ -39,14 +39,13 @@ export default function DashboardLayout({ children }) {
         }}
       >
         <div
+          className="dashboard-header-inner"
           style={{
             maxWidth: 1100,
             margin: "0 auto",
-            padding: "16px 20px",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: 16,
           }}
         >
           <div
@@ -92,26 +91,18 @@ export default function DashboardLayout({ children }) {
               )}
             </div>
           </div>
-          <nav
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 6,
-              alignItems: "center",
-              justifyContent: "flex-end",
-            }}
-          >
+          <nav className="dashboard-nav">
             {links.map((link) => {
               const isActive = path === link.href;
               return (
                 <button
                   key={link.href}
+                  type="button"
                   onClick={() => router.push(link.href)}
                   style={{
                     borderRadius: 999,
                     border: "1px solid",
                     borderColor: isActive ? "#111827" : "#e5e7eb",
-                    padding: "6px 12px",
                     fontSize: 13,
                     background: isActive ? "#111827" : "#ffffff",
                     color: isActive ? "#ffffff" : "#111827",
@@ -123,12 +114,12 @@ export default function DashboardLayout({ children }) {
               );
             })}
             <button
+              type="button"
               onClick={handleSignOut}
               style={{
                 marginLeft: 4,
                 borderRadius: 999,
                 border: "1px solid #e5e7eb",
-                padding: "6px 12px",
                 fontSize: 13,
                 background: "#f9fafb",
                 color: "#374151",
@@ -141,10 +132,10 @@ export default function DashboardLayout({ children }) {
         </div>
       </header>
       <main
+        className="main-content"
         style={{
           maxWidth: 1100,
           margin: "0 auto",
-          padding: "24px 20px 40px",
         }}
       >
         {children}

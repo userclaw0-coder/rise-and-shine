@@ -1,0 +1,267 @@
+{
+  "name": "RiseAndShine - Drive Inbox to Supabase Proposals (v1)",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "watch",
+        "useQueryString": true,
+        "queryString": "'FOLDER_ID_INBOX' in parents and trashed = false"
+      },
+      "name": "Google Drive Trigger (Inbox Folder)",
+      "type": "n8n-nodes-base.googleDriveTrigger",
+      "typeVersion": 1,
+      "position": [300, 200],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "name": "Google Drive OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": "={{$json[\"id\"]}}"
+      },
+      "name": "Download File",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 1,
+      "position": [520, 200],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "name": "Google Drive OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const name = $json.name || 'file';\nconst mime = $json.mimeType || '';\n\n// For Google Docs, Drive download may return exported content depending on node config.\n// We assume binary data contains text or doc export.\nreturn [{\n  json: {\n    file_name: name,\n    mime_type: mime,\n    drive_file_id: $json.id,\n  },\n  binary: $binary\n}];"
+      },
+      "name": "Normalize Metadata",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [740, 200]
+    },
+    {
+      "parameters": {
+        "operation": "extract",
+        "binaryPropertyName": "data",
+        "options": {
+          "encoding": "utf8"
+        }
+      },
+      "name": "Extract Text (binary->text)",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [960, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://api.openai.com/v1/responses",
+        "method": "POST",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer {{$credentials.apiKey}}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-4.1-mini\",\n  \"instructions\": \"You are a calm operator assistant. Summarize the document and propose up to 7 tasks. Return ONLY valid JSON with keys: summary (string), key_points (array of strings), proposed_tasks (array of objects: title, priority, effort_hours, due_date, tags).\",\n  \"input\": $json.text\n}"
+      },
+      "name": "OpenAI Summarize + Propose Tasks",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1180, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "OpenAI API Key Header"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const outText = $json.output_text || $json.body?.output_text || '';\nlet parsed;\ntry { parsed = JSON.parse(outText); } catch (e) {\n  // fallback: try body if already JSON\n  parsed = $json.body;\n}\n\nreturn [{\n  json: {\n    summary: parsed.summary || '',\n    key_points: parsed.key_points || [],\n    proposed_tasks: parsed.proposed_tasks || [],\n  }\n}];"
+      },
+      "name": "Parse AI JSON",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [1400, 200]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/category_documents",
+        "method": "POST",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_SERVICE_ROLE_KEY}}" },
+            { "name": "Authorization", "value": "Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=representation" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"user_id\": \"YOUR_USER_UUID\",\n  \"category_id\": \"YOUR_CATEGORY_UUID\",\n  \"source\": \"google_drive\",\n  \"status\": \"processed\",\n  \"drive_file_id\": \"{{$node['Normalize Metadata'].json.drive_file_id}}\",\n  \"file_name\": \"{{$node['Normalize Metadata'].json.file_name}}\",\n  \"drive_mime_type\": \"{{$node['Normalize Metadata'].json.mime_type}}\",\n  \"summary\": \"{{$json.summary}}\",\n  \"key_points\": \"{{$json.key_points}}\",\n  \"processed_at\": \"={{new Date().toISOString()}}\"\n}"
+      },
+      "name": "Insert category_documents",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1620, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "const docRow = $json[0];\nconst docId = docRow?.id;\nconst tasks = $node['Parse AI JSON'].json.proposed_tasks || [];\n\nreturn tasks.map(t => ({\n  json: {\n    document_id: docId,\n    proposed_title: t.title,\n    proposed_priority: t.priority || 'Medium',\n    proposed_effort_hours: t.effort_hours ?? null,\n    proposed_due_date: t.due_date ?? null,\n    proposed_tags: t.tags || [],\n    proposed_notes: 'Generated from Google Drive document ingestion',\n    status: 'proposed'\n  }\n}));"
+      },
+      "name": "Explode Proposed Tasks",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [1840, 200]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/proposed_tasks",
+        "method": "POST",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_SERVICE_ROLE_KEY}}" },
+            { "name": "Authorization", "value": "Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"user_id\": \"YOUR_USER_UUID\",\n  \"category_id\": \"YOUR_CATEGORY_UUID\",\n  \"document_id\": \"{{$json.document_id}}\",\n  \"status\": \"{{$json.status}}\",\n  \"proposed_title\": \"{{$json.proposed_title}}\",\n  \"proposed_notes\": \"{{$json.proposed_notes}}\",\n  \"proposed_priority\": \"{{$json.proposed_priority}}\",\n  \"proposed_effort_hours\": {{$json.proposed_effort_hours}},\n  \"proposed_due_date\": {{$json.proposed_due_date ? '\"'+$json.proposed_due_date+'\"' : null}},\n  \"proposed_tags\": {{$json.proposed_tags}}\n}"
+      },
+      "name": "Insert proposed_tasks",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2060, 200]
+    },
+    {
+      "parameters": {
+        "operation": "move",
+        "fileId": "={{$node['Normalize Metadata'].json.drive_file_id}}",
+        "folderId": "FOLDER_ID_PROCESSED"
+      },
+      "name": "Move File to Processed",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 1,
+      "position": [2280, 200],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "name": "Google Drive OAuth2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Google Drive Trigger (Inbox Folder)": {
+      "main": [
+        [
+          {
+            "node": "Download File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download File": {
+      "main": [
+        [
+          {
+            "node": "Normalize Metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Metadata": {
+      "main": [
+        [
+          {
+            "node": "Extract Text (binary->text)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Text (binary->text)": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Summarize + Propose Tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Summarize + Propose Tasks": {
+      "main": [
+        [
+          {
+            "node": "Parse AI JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI JSON": {
+      "main": [
+        [
+          {
+            "node": "Insert category_documents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert category_documents": {
+      "main": [
+        [
+          {
+            "node": "Explode Proposed Tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Explode Proposed Tasks": {
+      "main": [
+        [
+          {
+            "node": "Insert proposed_tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert proposed_tasks": {
+      "main": [
+        [
+          {
+            "node": "Move File to Processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

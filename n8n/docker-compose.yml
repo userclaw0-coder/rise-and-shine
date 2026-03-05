@@ -1,0 +1,16 @@
+version: "3.8"
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - NODE_ENV=production
+      - TZ=America/New_York
+      - N8N_ENCRYPTION_KEY=3a1f47f60e690f38b324fec067f3d217c18e9643d40392784e91b5187445299b
+    volumes:
+      - ~/rise-and-shine/n8n_data:/home/node/.n8n
+    restart: unless-stopped
