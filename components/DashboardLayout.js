@@ -1,9 +1,11 @@
 import { useRouter } from "next/router";
 import { supabase } from "../lib/supabaseClient";
+import { useAuth } from "../hooks/useAuth";
 
 export default function DashboardLayout({ children }) {
   const router = useRouter();
   const path = router.pathname;
+  const { user } = useAuth();
 
   const links = [
     { href: "/today", label: "Today" },
@@ -83,6 +85,11 @@ export default function DashboardLayout({ children }) {
               <div style={{ fontSize: 12, color: "#6b7280" }}>
                 Intentional daily planning
               </div>
+              {user && (
+                <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>
+                  Signed in as {user.email}
+                </div>
+              )}
             </div>
           </div>
           <nav
