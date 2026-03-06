@@ -616,3 +616,37 @@ Date: 2026-03-06 13:28 EST
 
 ### User impact
 - Planner refinement analytics now has deterministic regression coverage with legacy-compatible event counting, reducing risk of silent accepted/applied/dismissed metric drift.
+
+Date: 2026-03-06 13:40 EST
+
+## Iteration update (release gate pack consolidation)
+
+### Task executed
+- Continued highest-priority manager flow (P2 release validation/evidence) with a small hardening change: added a single command to run the full required quality-gate set deterministically.
+
+### Files changed
+- `package.json`
+
+### What changed
+- Added `npm run verify:release` script to enforce the complete release gate sequence in one command:
+  - `verify:scoring`
+  - `verify:queue`
+  - `verify:planner`
+  - `verify:refinement-events`
+  - `lint`
+  - `build`
+
+### Checks run + results
+- `npm run verify:release` ✅ passed
+  - `verify:scoring` ✅
+  - `verify:queue` ✅
+  - `verify:planner` ✅
+  - `verify:refinement-events` ✅
+  - `lint` ✅
+  - `build` ✅
+
+### Completion proof
+- Pending commit/push on `main` for `package.json` update in this iteration.
+
+### User impact
+- Release confidence checks are now one-command repeatable, reducing the chance of missed validation steps before shipping.
