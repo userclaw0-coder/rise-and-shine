@@ -626,7 +626,7 @@ export default function OnboardingPage() {
             Brain dump (raw)
             <textarea value={brainDumpRaw} onChange={(e) => setBrainDumpRaw(e.target.value)} rows={4} placeholder="Everything swirling in your head: obligations, worries, ideas, errands, open loops…" style={{ fontSize: 13, padding: 8, borderRadius: 8, border: "1px solid #e5e7eb" }} />
           </label>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 8, marginBottom: 8 }}>
             <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
               Structured tasks (one per line)
               <textarea value={brainDumpTasks} onChange={(e) => setBrainDumpTasks(e.target.value)} rows={4} placeholder="Call dentist&#10;Submit March invoices" style={{ fontSize: 13, padding: 8, borderRadius: 8, border: "1px solid #e5e7eb" }} />
@@ -711,80 +711,83 @@ export default function OnboardingPage() {
             }}
           >
             Be realistic, not aspirational. Planner quality improves when this reflects your normal week.
+            Example: if you usually get 8 focused hours, enter 8 (not your ideal 20).
           </div>
-          <label
-            style={{
-              fontSize: 12,
-              color: "#4b5563",
-              display: "flex",
-              flexDirection: "column",
-              gap: 4,
-              marginBottom: 8,
-            }}
-          >
-            Available hours per week
-            <input
-              type="number"
-              min={0}
-              value={availableHours}
-              onChange={(e) => setAvailableHours(e.target.value)}
-              placeholder="12"
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 8 }}>
+            <label
               style={{
-                fontSize: 13,
-                padding: 6,
-                borderRadius: 6,
-                border: "1px solid #e5e7eb",
-                maxWidth: 120,
+                fontSize: 12,
+                color: "#4b5563",
+                display: "flex",
+                flexDirection: "column",
+                gap: 4,
+                marginBottom: 8,
               }}
-            />
-          </label>
-          <label
-            style={{
-              fontSize: 12,
-              color: "#4b5563",
-              display: "flex",
-              flexDirection: "column",
-              gap: 4,
-              marginBottom: 8,
-            }}
-          >
-            Best time of day for deep work
-            <input
-              type="text"
-              value={bestTimeOfDay}
-              onChange={(e) => setBestTimeOfDay(e.target.value)}
-              placeholder="e.g. 5–7am"
+            >
+              Available hours per week
+              <input
+                type="number"
+                min={0}
+                value={availableHours}
+                onChange={(e) => setAvailableHours(e.target.value)}
+                placeholder="12"
+                style={{
+                  fontSize: 13,
+                  padding: 6,
+                  borderRadius: 6,
+                  border: "1px solid #e5e7eb",
+                  maxWidth: 120,
+                }}
+              />
+            </label>
+            <label
               style={{
-                fontSize: 13,
-                padding: 6,
-                borderRadius: 6,
-                border: "1px solid #e5e7eb",
+                fontSize: 12,
+                color: "#4b5563",
+                display: "flex",
+                flexDirection: "column",
+                gap: 4,
+                marginBottom: 8,
               }}
-            />
-          </label>
-          <label
-            style={{
-              fontSize: 12,
-              color: "#4b5563",
-              display: "flex",
-              flexDirection: "column",
-              gap: 4,
-            }}
-          >
-            Low-energy times (comma separated)
-            <input
-              type="text"
-              value={lowEnergyTimes}
-              onChange={(e) => setLowEnergyTimes(e.target.value)}
-              placeholder="e.g. late evening, mid-afternoon"
+            >
+              Best time of day for deep work
+              <input
+                type="text"
+                value={bestTimeOfDay}
+                onChange={(e) => setBestTimeOfDay(e.target.value)}
+                placeholder="e.g. 5–7am"
+                style={{
+                  fontSize: 13,
+                  padding: 6,
+                  borderRadius: 6,
+                  border: "1px solid #e5e7eb",
+                }}
+              />
+            </label>
+            <label
               style={{
-                fontSize: 13,
-                padding: 6,
-                borderRadius: 6,
-                border: "1px solid #e5e7eb",
+                fontSize: 12,
+                color: "#4b5563",
+                display: "flex",
+                flexDirection: "column",
+                gap: 4,
               }}
-            />
-          </label>
+            >
+              Low-energy times (comma separated)
+              <input
+                type="text"
+                value={lowEnergyTimes}
+                onChange={(e) => setLowEnergyTimes(e.target.value)}
+                placeholder="e.g. late evening, mid-afternoon"
+                style={{
+                  fontSize: 13,
+                  padding: 6,
+                  borderRadius: 6,
+                  border: "1px solid #e5e7eb",
+                }}
+              />
+            </label>
+          </div>
         </>
       );
     }
@@ -808,7 +811,7 @@ export default function OnboardingPage() {
             marginBottom: 10,
           }}
         >
-          Pick leverage points where a small effort compounds (systems, recurring assets, delegation).
+          Pick leverage points where a small effort compounds (systems, recurring assets, delegation). Example: &quot;Build one reusable sales script&quot; beats &quot;work harder.&quot;
         </div>
         <label
           style={{
@@ -932,6 +935,8 @@ export default function OnboardingPage() {
             justifyContent: "space-between",
             alignItems: "center",
             marginBottom: 12,
+            gap: 8,
+            flexWrap: "wrap",
           }}
         >
           <div style={{ fontSize: 12, color: "#6b7280" }}>

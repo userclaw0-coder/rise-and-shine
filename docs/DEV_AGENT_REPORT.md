@@ -310,3 +310,30 @@ Date: 2026-03-06 09:27 EST
 
 ### Next step
 - Continue onboarding polish with optional microcopy for Steps 1/2/5/6 and compact mobile layout tuning for Step 3 cards.
+
+Date: 2026-03-06 09:56 EST
+
+## Iteration update (onboarding microcopy polish + responsive tuning)
+
+### What changed
+- Updated `pages/onboarding.js` with additional step helper copy to improve input quality:
+  - Step 5 (Time & energy) now includes explicit realism guidance with a concrete example.
+  - Step 6 (Strategic focus) now includes a leverage example to encourage compounding actions.
+- Improved responsive layout behavior for onboarding form sections:
+  - Step 4 structured brain-dump columns now use `repeat(auto-fit, minmax(220px, 1fr))` for mobile-safe wrapping.
+  - Step 5 time/energy inputs now render in an auto-fit responsive grid.
+  - Step header row now wraps on narrow screens to avoid overflow around status text.
+
+### Verification results
+- `npm run lint` ✅ passed
+- `npm run build` ✅ passed
+- Production browser checks via OpenClaw:
+  - `/onboarding` loads with 6-step flow and expected helper copy ✅
+  - `/analytics` loads and planner refinement analytics panel present ✅
+  - Browser console: onboarding had no console messages; analytics continues to show known chart container-size warnings (pre-existing, non-blocking) ⚠️
+
+### Completion proof
+- commit hash/branch: ee2e21c on `main` (pushed to `origin/main` after commit).
+
+### Next step
+- Address recurring analytics chart container-size warnings by hardening chart container sizing/min-width behavior.
