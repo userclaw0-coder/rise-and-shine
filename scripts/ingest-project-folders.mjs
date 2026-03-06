@@ -3,6 +3,7 @@ import fs from "fs/promises";
 import path from "path";
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
+import { ingestProjectFolders } from "../lib/projectIngestion.js";
 
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
 
@@ -36,159 +37,16 @@ if (!TARGET_USER_ID) {
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
-const categoryNameFromFolder = (folder) => {
-  const map = {
-    RentalHouse: "Rental House",
-    MomandDad: "Mom and Dad",
-  };
-  return map[folder] || folder;
-};
-
-function extractTasksFromText(text) {
-  const lines = text.split(/\r?\n/);
-  const out = [];
-
-  for (const line of lines) {
-    const checkbox = line.match(/^\s*[-*]\s*\[\s\]\s+(.+?)\s*$/);
-    if (checkbox) {
-      out.push(checkbox[1].trim());
-      continue;
-    }
-    const bullet = line.match(/^\s*[-*]\s+(.+?)\s*$/);
-    if (bullet && bullet[1].length > 6) {
-      out.push(bullet[1].trim());
-    }
-  }
-
-  return Array.from(new Set(out)).filter((t) => t.length >= 4);
-}
-
-async function ensureCategory(userId, categoryName) {
-  const { data: existing, error: findErr } = await supabase
-    .from("categories")
-    .select("id,name")
-    .eq("user_id", userId)
-    .ilike("name", categoryName)
-    .limit(1)
-    .maybeSingle();
-
-  if (findErr) throw findErr;
-  if (existing?.id) return existing.id;
-
-  if (DRY_RUN) return null;
-
-  const { data: inserted, error: insErr } = await supabase
-    .from("categories")
-    .insert({ user_id: userId, name: categoryName })
-    .select("id")
-    .single();
-  if (insErr) throw insErr;
-  return inserted.id;
-}
-
-async function taskExists(userId, categoryId, title) {
-  let query = supabase
-    .from("tasks")
-    .select("id,title,status")
-    .eq("user_id", userId)
-    .ilike("title", title)
-    .neq("status", "archived")
-    .limit(1);
-
-  if (categoryId) query = query.eq("category_id", categoryId);
-
-  const { data, error } = await query.maybeSingle();
-  if (error) throw error;
-  return !!data;
-}
-
-async function createTask(userId, categoryId, title, sourceFile) {
-  if (DRY_RUN) return { id: null };
-  const { data, error } = await supabase
-    .from("tasks")
-    .insert({
-      user_id: userId,
-      title,
-      status: "todo",
-      priority: "Medium",
-      category_id: categoryId,
-    })
-    .select("id")
-    .single();
-
-  if (error) throw error;
-
-  await supabase.from("task_events").insert({
-    user_id: userId,
-    task_id: data.id,
-    event_type: "created",
-    value: { source: "project-folder-ingestion", file: sourceFile },
+async function main() {
+  const result = await ingestProjectFolders({
+    supabase,
+    userId: TARGET_USER_ID,
+    root: ROOT,
+    dryRun: DRY_RUN,
+    moveProcessed: true,
   });
 
-  return data;
-}
-
-async function ingestFile(userId, categoryFolder, filePath) {
-  const categoryName = categoryNameFromFolder(categoryFolder);
-  const categoryId = await ensureCategory(userId, categoryName);
-
-  const text = await fs.readFile(filePath, "utf8");
-  const tasks = extractTasksFromText(text);
-
-  let created = 0;
-  let skipped = 0;
-
-  for (const title of tasks) {
-    const exists = await taskExists(userId, categoryId, title);
-    if (exists) {
-      skipped += 1;
-      continue;
-    }
-    await createTask(userId, categoryId, title, path.basename(filePath));
-    created += 1;
-  }
-
-  return { created, skipped, discovered: tasks.length };
-}
-
-async function moveToProcessed(filePath, processedDir) {
-  if (DRY_RUN) return;
-  await fs.mkdir(processedDir, { recursive: true });
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const dest = path.join(processedDir, `${stamp}-${path.basename(filePath)}`);
-  await fs.rename(filePath, dest);
-}
-
-async function main() {
-  const entries = await fs.readdir(ROOT, { withFileTypes: true });
-  const categoryDirs = entries.filter((d) => d.isDirectory()).map((d) => d.name);
-
-  const summary = [];
-
-  for (const categoryFolder of categoryDirs) {
-    const inboxDir = path.join(ROOT, categoryFolder, "inbox");
-    const processedDir = path.join(ROOT, categoryFolder, "processed");
-
-    let inboxFiles = [];
-    try {
-      const files = await fs.readdir(inboxDir, { withFileTypes: true });
-      inboxFiles = files
-        .filter((f) => f.isFile())
-        .map((f) => f.name)
-        .filter((name) => /\.(md|txt)$/i.test(name));
-    } catch {
-      continue;
-    }
-
-    for (const file of inboxFiles) {
-      const fullPath = path.join(inboxDir, file);
-      const result = await ingestFile(TARGET_USER_ID, categoryFolder, fullPath);
-      summary.push({ categoryFolder, file, ...result });
-      await moveToProcessed(fullPath, processedDir);
-    }
-  }
-
-  console.log(JSON.stringify({ dryRun: DRY_RUN, root: ROOT, summary }, null, 2));
+  console.log(JSON.stringify(result, null, 2));
 }
 
 main().catch((err) => {

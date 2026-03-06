@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "ingest:projects": "node scripts/ingest-project-folders.mjs",
-    "ingest:projects:dry": "node scripts/ingest-project-folders.mjs --dry-run"
+    "ingest:projects:dry": "node scripts/ingest-project-folders.mjs --dry-run",
+    "ingest:projects:webhook:test": "curl -s -X POST http://localhost:3000/api/ingest/projects -H 'Content-Type: application/json' -d '{\"dry_run\":true}' | jq"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

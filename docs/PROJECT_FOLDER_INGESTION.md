@@ -26,6 +26,25 @@ npm run ingest:projects:dry
 npm run ingest:projects
 ```
 
+## n8n-ready webhook trigger path
+
+API route: `POST /api/ingest/projects`
+
+- Optional auth: set `RISE_INGEST_TOKEN` in `.env.local`
+- Send either `Authorization: Bearer <token>` or `x-rise-ingest-token: <token>`
+- Body: `{ "dry_run": true|false }` (optional)
+
+Example:
+
+```bash
+curl -X POST http://localhost:3000/api/ingest/projects \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $RISE_INGEST_TOKEN" \
+  -d '{"dry_run":false}'
+```
+
+This is designed for n8n Cron/Webhook/HTTP nodes to trigger inbox ingestion safely.
+
 ## Task format examples
 
 These lines are ingested as task titles:
