@@ -679,3 +679,9 @@ Date: 2026-03-06 13:41 EST
 
 ### User impact
 - Analytics page no longer requests invalid enum event types, preventing the planner-refinement error state in production.
+
+### Post-push production verification
+- Commit `9d36d62` pushed to `main`.
+- Checked `https://rise-and-shine-hazel.vercel.app/analytics?ts=9d36d62` immediately after push.
+- Production still shows prior enum error text (`planner_refinement_accepted`) during this immediate check, indicating deployment propagation lag or stale chunk serving at verification time.
+- Follow-up required next loop: re-verify `/analytics` after deployment propagation; if error persists on new deployment, perform targeted hotfix.
