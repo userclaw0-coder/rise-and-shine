@@ -21,6 +21,15 @@ const NEED_LABELS = {
   contribution: "Contribution",
 };
 
+const LIFE_DOMAIN_EXAMPLES = {
+  business: "Grow MRR to $15k with one clear offer",
+  finances: "Build a 6-month cash buffer and automate bills",
+  health: "Lift 3x/week and sleep 7.5h average",
+  relationships: "Weekly date night + protected family evenings",
+  lifestyle: "Fewer context switches, more calm mornings",
+  growth: "Ship one learning project per month",
+};
+
 const NEED_EXAMPLES = {
   certainty: {
     strategy: "Daily planning block + fixed AM routine",
@@ -406,6 +415,19 @@ export default function OnboardingPage() {
             Imagine yourself three years from now. What kind of person are you?
             Use short identity phrases separated by commas.
           </p>
+          <div
+            style={{
+              fontSize: 12,
+              color: "#374151",
+              background: "#f9fafb",
+              border: "1px solid #e5e7eb",
+              borderRadius: 8,
+              padding: 8,
+              marginBottom: 10,
+            }}
+          >
+            Tip: pick identity words that drive behavior today (&quot;I close loops&quot;, &quot;I protect focus&quot;).
+          </div>
           <textarea
             value={identityAttributes}
             onChange={(e) => setIdentityAttributes(e.target.value)}
@@ -434,8 +456,21 @@ export default function OnboardingPage() {
           </p>
           <div
             style={{
+              fontSize: 12,
+              color: "#374151",
+              background: "#f9fafb",
+              border: "1px solid #e5e7eb",
+              borderRadius: 8,
+              padding: 8,
+              marginBottom: 10,
+            }}
+          >
+            Keep domain notes outcome-based (where you want to be), and outcomes execution-based (what you will ship).
+          </div>
+          <div
+            style={{
               display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
               gap: 8,
               marginBottom: 10,
             }}
@@ -455,6 +490,7 @@ export default function OnboardingPage() {
                     }))
                   }
                   rows={2}
+                  placeholder={LIFE_DOMAIN_EXAMPLES[key] || ""}
                   style={{
                     fontSize: 13,
                     padding: 6,
@@ -518,43 +554,45 @@ export default function OnboardingPage() {
             {NEED_KEYS.map((key) => (
               <div key={key} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 10 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{NEED_LABELS[key]}</div>
-                <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4, marginBottom: 6 }}>
-                  Score (1-10)
-                  <input
-                    type="number"
-                    min={1}
-                    max={10}
-                    value={humanNeedsScores[key]}
-                    onChange={(e) =>
-                      setHumanNeedsScores((prev) => ({ ...prev, [key]: e.target.value }))
-                    }
-                    style={{ fontSize: 13, padding: 6, borderRadius: 6, border: "1px solid #e5e7eb", maxWidth: 90 }}
-                  />
-                </label>
-                <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4, marginBottom: 6 }}>
-                  Current strategy
-                  <input
-                    type="text"
-                    value={humanNeedsStrategies[key]}
-                    onChange={(e) =>
-                      setHumanNeedsStrategies((prev) => ({ ...prev, [key]: e.target.value }))
-                    }
-                    placeholder={NEED_EXAMPLES[key].strategy}
-                    style={{ fontSize: 13, padding: 6, borderRadius: 6, border: "1px solid #e5e7eb" }}
-                  />
-                </label>
-                <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
-                  Unhelpful pattern (optional)
-                  <input
-                    type="text"
-                    value={needsRiskPatterns[key]}
-                    onChange={(e) =>
-                      setNeedsRiskPatterns((prev) => ({ ...prev, [key]: e.target.value }))
-                    }
-                    placeholder={NEED_EXAMPLES[key].risk}
-                    style={{ fontSize: 13, padding: 6, borderRadius: 6, border: "1px solid #e5e7eb" }}
-                  />
-                </label>
+                <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
+                  <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
+                    Score (1-10)
+                    <input
+                      type="number"
+                      min={1}
+                      max={10}
+                      value={humanNeedsScores[key]}
+                      onChange={(e) =>
+                        setHumanNeedsScores((prev) => ({ ...prev, [key]: e.target.value }))
+                      }
+                      style={{ fontSize: 13, padding: 6, borderRadius: 6, border: "1px solid #e5e7eb", maxWidth: 90 }}
+                    />
+                  </label>
+                  <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
+                    Current strategy
+                    <input
+                      type="text"
+                      value={humanNeedsStrategies[key]}
+                      onChange={(e) =>
+                        setHumanNeedsStrategies((prev) => ({ ...prev, [key]: e.target.value }))
+                      }
+                      placeholder={NEED_EXAMPLES[key].strategy}
+                      style={{ fontSize: 13, padding: 6, borderRadius: 6, border: "1px solid #e5e7eb" }}
+                    />
+                  </label>
+                  <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
+                    Unhelpful pattern (optional)
+                    <input
+                      type="text"
+                      value={needsRiskPatterns[key]}
+                      onChange={(e) =>
+                        setNeedsRiskPatterns((prev) => ({ ...prev, [key]: e.target.value }))
+                      }
+                      placeholder={NEED_EXAMPLES[key].risk}
+                      style={{ fontSize: 13, padding: 6, borderRadius: 6, border: "1px solid #e5e7eb" }}
+                    />
+                  </label>
+                </div>
               </div>
             ))}
           </div>
@@ -661,6 +699,19 @@ export default function OnboardingPage() {
           <p style={{ fontSize: 13, color: "#6b7280", margin: "0 0 10px" }}>
             This shapes how aggressively the planner schedules your work.
           </p>
+          <div
+            style={{
+              fontSize: 12,
+              color: "#374151",
+              background: "#f9fafb",
+              border: "1px solid #e5e7eb",
+              borderRadius: 8,
+              padding: 8,
+              marginBottom: 10,
+            }}
+          >
+            Be realistic, not aspirational. Planner quality improves when this reflects your normal week.
+          </div>
           <label
             style={{
               fontSize: 12,
@@ -677,6 +728,7 @@ export default function OnboardingPage() {
               min={0}
               value={availableHours}
               onChange={(e) => setAvailableHours(e.target.value)}
+              placeholder="12"
               style={{
                 fontSize: 13,
                 padding: 6,
@@ -745,6 +797,19 @@ export default function OnboardingPage() {
         <p style={{ fontSize: 13, color: "#6b7280", margin: "0 0 10px" }}>
           Capture leverage areas, quarter focus, and one immediate step.
         </p>
+        <div
+          style={{
+            fontSize: 12,
+            color: "#374151",
+            background: "#f9fafb",
+            border: "1px solid #e5e7eb",
+            borderRadius: 8,
+            padding: 8,
+            marginBottom: 10,
+          }}
+        >
+          Pick leverage points where a small effort compounds (systems, recurring assets, delegation).
+        </div>
         <label
           style={{
             fontSize: 12,
@@ -760,6 +825,7 @@ export default function OnboardingPage() {
             value={leverageFocus}
             onChange={(e) => setLeverageFocus(e.target.value)}
             rows={3}
+            placeholder="Automate lead follow-up\nWeekly planning review ritual\nDelegate bookkeeping"
             style={{
               fontSize: 13,
               padding: 8,
@@ -783,7 +849,7 @@ export default function OnboardingPage() {
             type="text"
             value={quarterFocus}
             onChange={(e) => setQuarterFocus(e.target.value)}
-            placeholder="Business, Rental House, Health"
+            placeholder="Pipeline quality, Debt payoff, Strength training"
             style={{
               fontSize: 13,
               padding: 6,
@@ -806,7 +872,7 @@ export default function OnboardingPage() {
             value={immediateStep}
             onChange={(e) => setImmediateStep(e.target.value)}
             rows={2}
-            placeholder="One small action you could take today."
+            placeholder="Block 45 minutes today to draft the offer page."
             style={{
               fontSize: 13,
               padding: 8,
