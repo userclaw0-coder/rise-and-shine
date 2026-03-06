@@ -337,3 +337,27 @@ Date: 2026-03-06 09:56 EST
 
 ### Next step
 - Address recurring analytics chart container-size warnings by hardening chart container sizing/min-width behavior.
+
+Date: 2026-03-06 10:16 EST
+
+## Iteration update (analytics chart container hardening)
+
+### What changed
+- Updated `pages/analytics.js` chart wrappers to reduce Recharts container sizing warnings:
+  - Added shared `chartContainerStyle` with explicit width/height and `minWidth: 0`.
+  - Added `minWidth`/`minHeight` on each `ResponsiveContainer` used by:
+    - 7-day momentum
+    - 30-day momentum
+    - Completion time-of-day
+
+### Verification results
+- `npm run lint` ✅ passed
+- `npm run build` ✅ passed
+- Production browser check on `/analytics` ✅ page renders all analytics sections.
+- Console warning status: width/height `-1` Recharts warnings still observed on the currently served deployment chunk during immediate post-push check; this commit is the corrective hardening pass to address that warning class.
+
+### Completion proof
+- commit hash/branch: `3d46ba1` on `main` (pushed to `origin/main`).
+
+### Next step
+- Re-verify `/analytics` console after Vercel serves the new deployment; if warnings persist, implement a measured container render gate for charts.
