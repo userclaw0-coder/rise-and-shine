@@ -53,6 +53,7 @@ rise_data.zip
 
 # n8n secrets and runtime data (encryption key in config; use n8n/.env instead)
 n8n_data/config
+n8n_data/config.example
 n8n_data/*.sqlite-wal
 n8n_data/*.sqlite-shm
 background/
