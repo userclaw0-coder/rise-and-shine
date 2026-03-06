@@ -148,6 +148,7 @@ export default async function handler(req, res) {
         event_type: "updated",
         value: {
           source: "planner_refinement",
+          action: "update",
           applied: {
             title: updates.title ?? null,
             effort_hours: updates.effort_hours ?? null,
@@ -158,9 +159,10 @@ export default async function handler(req, res) {
       {
         user_id,
         task_id,
-        event_type: "planner_refinement_applied",
+        event_type: "updated",
         value: {
           source: "planner_refinement",
+          action: "applied",
           applied_fields: Object.keys(updates),
           tags_added: incomingTags,
         },

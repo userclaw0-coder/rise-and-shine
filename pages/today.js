@@ -427,11 +427,12 @@ export default function TodayPage() {
     }
   }
 
-  async function logRefinementEvent(eventType, item, extra = {}) {
-    if (!user || !item?.task_id || !eventType) return;
+  async function logRefinementEvent(action, item, extra = {}) {
+    if (!user || !item?.task_id || !action) return;
     try {
-      await logTaskEvent(user.id, item.task_id, eventType, {
+      await logTaskEvent(user.id, item.task_id, "updated", {
         source: "planner_refinement",
+        action,
         ...extra,
       });
     } catch {
@@ -441,9 +442,7 @@ export default function TodayPage() {
 
   function dismissRefinement(index, item = null) {
     if (item?.task_id) {
-      void logRefinementEvent("planner_refinement_dismissed", item, {
-        action: "dismiss",
-      });
+      void logRefinementEvent("dismiss", item);
     }
     setAiSuggestions((prev) => ({
       ...prev,
@@ -461,9 +460,7 @@ export default function TodayPage() {
       suggested_effort_minutes: item.suggested_effort_minutes,
     };
 
-    await logRefinementEvent("planner_refinement_accepted", item, {
-      action: "accept",
-    });
+    await logRefinementEvent("accept", item);
 
     try {
       const res = await fetch("/api/planner/apply", {

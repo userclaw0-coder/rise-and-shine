@@ -132,17 +132,13 @@ export default function AnalyticsPage() {
         else {
           const events = plannerRefinements.data || [];
           const metrics = { accepted: 0, dismissed: 0, applied: 0 };
-          let explicitApplied = 0;
-          let legacyApplied = 0;
           events.forEach((ev) => {
-            if (ev.event_type === "planner_refinement_accepted") metrics.accepted += 1;
-            if (ev.event_type === "planner_refinement_dismissed") metrics.dismissed += 1;
-            if (ev.event_type === "planner_refinement_applied") explicitApplied += 1;
-            if (ev.event_type === "updated" && ev.value?.source === "planner_refinement") {
-              legacyApplied += 1;
-            }
+            if (ev.event_type !== "updated" || ev.value?.source !== "planner_refinement") return;
+            const action = ev.value?.action;
+            if (action === "accept") metrics.accepted += 1;
+            if (action === "dismiss") metrics.dismissed += 1;
+            if (action === "applied") metrics.applied += 1;
           });
-          metrics.applied = explicitApplied > 0 ? explicitApplied : legacyApplied;
           setPlannerRefinementMetrics(metrics);
         }
       } catch (e) {
