@@ -561,7 +561,13 @@ Date: 2026-03-06 12:42 EST
 - `npm run build` ✅ passed
 
 ### Completion proof
-- pending commit on `main` for the files listed above.
+- commit hash/branch: `d071ce4` on `main` (pushed to `origin/main`).
+- Quality gates: `verify:scoring`, `verify:queue`, `verify:planner`, `lint`, and `build` all passing in this iteration.
 
 ### User impact
 - Planner refinement apply behavior now has deterministic regression coverage for title/effort normalization and additive case-insensitive tag merge, reducing risk of silent apply regressions.
+
+### Deployment verification note
+- `https://rise-and-shine-hazel.vercel.app/today?ts=d071ce4` returned HTTP 200 ✅
+- `https://rise-and-shine-hazel.vercel.app/analytics?ts=d071ce4` returned HTTP 200 ✅
+- No immediate production regression detected from route availability checks; continue next-loop UI/console verification after deployment propagation.
