@@ -480,3 +480,30 @@ Date: 2026-03-06 11:42 EST
 
 ### Next step
 - Continue verification baseline work with a small queue-selection fixture case that validates deterministic tie-breaking behavior.
+
+Date: 2026-03-06 12:01 EST
+
+## Iteration update (queue scoring tie-break verification)
+
+### Task executed
+- Added a deterministic tie-break fixture to the scoring verification script to ensure equal-score tasks are selected in stable `task.id` order.
+
+### Files changed
+- `scripts/verify-scoring.mjs`
+
+### Checks run + results
+- `npm run verify:scoring` ✅ passed (`verify-scoring: OK`)
+- `npm run lint` ✅ passed
+- `npm run build` ✅ passed
+
+### Completion proof
+- commit hash/branch: `542320c` on `main` (pushed to `origin/main`).
+
+### User impact
+- Queue-selection behavior now has explicit regression coverage for deterministic ordering when scores tie.
+
+### Deployment verification note
+- Production checks completed:
+  - `https://rise-and-shine-hazel.vercel.app/analytics?ts=542320c` loads and analytics panels render; console clean in check pass ✅
+  - `https://rise-and-shine-hazel.vercel.app/today?ts=542320c` loads; console clean ✅
+- No runtime errors observed; no corrective commit required this iteration.
