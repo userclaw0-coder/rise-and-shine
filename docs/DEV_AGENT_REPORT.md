@@ -926,3 +926,19 @@ Date: 2026-03-06 16:01 EST
 
 ### One-line user impact
 Repo diffs are now cleaner and more trustworthy, so product changes are easier to review and runtime DB sidecar churn no longer pollutes iteration evidence.
+
+Date: 2026-03-06 16:03 EST
+
+## Post-push verification update (runtime artifact hygiene packet)
+
+### Completion proof
+- commit hash/branch: `8248ed9` on `main` (pushed to `origin/main`).
+
+### Checks run + results
+- `npm run build` ✅ passed
+- Production checks:
+  - `https://rise-and-shine-hazel.vercel.app/today?ts=8248ed9` rendered successfully; console clean ✅
+  - `https://rise-and-shine-hazel.vercel.app/analytics?ts=8248ed9` rendered successfully; console clean ✅
+
+### One-line user impact
+Daily dev diffs now stay focused on real product changes because transient SQLite sidecar/runtime export files are no longer tracked noise.
