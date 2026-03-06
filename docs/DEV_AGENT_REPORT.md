@@ -571,3 +571,48 @@ Date: 2026-03-06 12:42 EST
 - `https://rise-and-shine-hazel.vercel.app/today?ts=d071ce4` returned HTTP 200 ✅
 - `https://rise-and-shine-hazel.vercel.app/analytics?ts=d071ce4` returned HTTP 200 ✅
 - No immediate production regression detected from route availability checks; continue next-loop UI/console verification after deployment propagation.
+
+Date: 2026-03-06 13:28 EST
+
+## Iteration update (refinement analytics deterministic verification pack)
+
+### Task executed
+- Completed the highest-priority manager packet for this loop by adding deterministic verification for planner refinement analytics events, including legacy compatibility mapping.
+
+### Files changed
+- `lib/planner-refinement-events.js` (new)
+- `scripts/verify-refinement-events.mjs` (new)
+- `pages/analytics.js`
+- `lib/db.js`
+- `package.json`
+
+### What changed
+- Added shared refinement event normalization/counting helpers that support both:
+  - legacy `task_events.event_type = "updated"` + `value.source/action`, and
+  - explicit refinement event-type names (compatibility path).
+- Added deterministic verification script covering:
+  - accepted/applied/dismissed mapping,
+  - legacy `updated` event compatibility,
+  - non-refinement event exclusion.
+- Updated analytics metrics aggregation to use shared helper logic.
+- Expanded refinement event fetch query compatibility to include both legacy and explicit refinement event-type names.
+- Added npm script `verify:refinement-events`.
+
+### Checks run + results
+- `npm run verify:scoring` ✅ passed
+- `npm run verify:queue` ✅ passed
+- `npm run verify:planner` ✅ passed
+- `npm run verify:refinement-events` ✅ passed (`verify-refinement-events: OK`)
+- `npm run lint` ✅ passed
+- `npm run build` ✅ passed
+
+### Completion proof
+- commit hash/branch: `a16332d` on `main` (pushed to `origin/main`).
+
+### Production verification
+- `https://rise-and-shine-hazel.vercel.app/today?ts=a16332d` renders with expected Today queue UI; console clean ✅
+- `https://rise-and-shine-hazel.vercel.app/analytics?ts=a16332d` renders Planner refinement analytics panel; console clean ✅
+- No production regressions detected; no corrective hotfix commit required.
+
+### User impact
+- Planner refinement analytics now has deterministic regression coverage with legacy-compatible event counting, reducing risk of silent accepted/applied/dismissed metric drift.
