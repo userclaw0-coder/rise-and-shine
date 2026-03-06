@@ -116,4 +116,27 @@ await runScenario({
   },
 });
 
+await runScenario({
+  failAt: "events",
+  failRollbackAt: "rollbackTags",
+  expect: [
+    "mutateTask",
+    "mutateTags",
+    "writeEvents",
+    "rollbackTask",
+    "rollbackTags",
+    "cleanupCreatedTags:tag-1,tag-2",
+  ],
+  assertError: (error) => {
+    assert.match(error.message, /planner_apply_failed_and_rollback_incomplete/);
+    assert.match(error.message, /forced_events_failure/);
+    assert.match(error.message, /rollbackTags: forced_rollbackTags_failure/);
+    assert.ok(Array.isArray(error.rollbackErrors));
+    assert.equal(error.rollbackErrors.length, 1);
+    assert.equal(error.rollbackErrors[0].stage, "rollbackTags");
+    assert.equal(error.rollbackErrors[0].message, "forced_rollbackTags_failure");
+    assert.equal(error.cause?.message, "forced_events_failure");
+  },
+});
+
 console.log("verify-planner-rollback: OK");

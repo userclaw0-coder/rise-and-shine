@@ -1130,3 +1130,34 @@ Date: 2026-03-06 17:13 EST
 
 ### One-line user impact
 Planner rollback protections remain actively enforced and production-stable, reducing risk of partial-write regressions reaching users.
+
+Date: 2026-03-06 17:23 EST
+
+## Iteration update (planner rollback verification hardening)
+
+### Project selected
+- `/home/clawofhank/projects/rise-and-shine` (highest-priority active packet in MEMORY: rollback gate continuity + evidence refresh)
+
+### What changed
+- Strengthened deterministic rollback coverage in `scripts/verify-planner-rollback.mjs` by adding an explicit rollback-failure scenario for `rollbackTags`.
+- New assertion path verifies combined-error integrity when event write fails and `rollbackTags` fails:
+  - confirms `planner_apply_failed_and_rollback_incomplete` wrapping,
+  - confirms original failure cause is preserved,
+  - confirms structured `rollbackErrors` metadata includes `rollbackTags` stage.
+
+### Verification (local quality gate)
+- `npm run verify:release` ✅
+  - `verify:scoring` ✅
+  - `verify:queue` ✅
+  - `verify:planner` ✅ (`verify-planner-apply` + `verify-planner-rollback`)
+  - `verify:refinement-events` ✅
+  - `npm run lint` ✅
+  - `npm run build` ✅
+
+### Production/deploy checks
+- `https://rise-and-shine-hazel.vercel.app/today?ts=loop171` loaded with expected Today UI; console messages empty ✅
+- `https://rise-and-shine-hazel.vercel.app/analytics?ts=loop170` loaded with analytics panels; console messages empty ✅
+- No production regression observed; no corrective hotfix commit required.
+
+### One-line user impact
+- Planner apply rollback protection now has tighter failure-path coverage, reducing risk of silent partial-state corruption during refinement apply errors.
