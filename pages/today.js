@@ -11,7 +11,6 @@ import {
   logTaskEvent,
   getOrCreateWorkoutTaskId,
   getOrCreateDailyPlan,
-  getDailyPlan,
   updateDailyPlan,
   createTask,
   setTaskTags,
@@ -19,7 +18,6 @@ import {
 } from "../lib/db";
 import {
   MODES,
-  DAILY_KEY_OUTCOMES_COUNT,
   chooseKeyOutcomes,
   getWorkoutPlanForDate,
 } from "../lib/scoring";
@@ -124,7 +122,7 @@ export default function TodayPage() {
         }
       }
     });
-  }, [user]);
+  }, [user, mode]);
 
   useEffect(() => {
     if (!user) return;
@@ -272,21 +270,30 @@ export default function TodayPage() {
     }
 
     load();
-  }, [user, todayStr, mode]);
+  }, [
+    user,
+    todayStr,
+    mode,
+    profilePrefs?.base_category_weights,
+    profilePrefs?.quick_win_definition_minutes,
+  ]);
 
   // Fetch completion state for queue task IDs so checkboxes reflect DB
   const queueTaskIds = useMemo(
     () => queueEntries.map((e) => e.task_id || e.task?.id).filter(Boolean),
     [queueEntries]
   );
+  const queueTaskIdsKey = useMemo(() => queueTaskIds.join(","), [queueTaskIds]);
   useEffect(() => {
-    if (!user || queueTaskIds.length === 0 || !todayStr) return;
-    getTaskEventsForTasksOnDate(user.id, queueTaskIds, todayStr).then((res) => {
+    if (!user || !queueTaskIdsKey || !todayStr) return;
+    const ids = queueTaskIdsKey.split(",").filter(Boolean);
+    if (ids.length === 0) return;
+    getTaskEventsForTasksOnDate(user.id, ids, todayStr).then((res) => {
       if (res.error) return;
       const map = buildCompletionMap(res.data || [], null);
       setCompletionMap((prev) => ({ ...prev, ...map }));
     });
-  }, [user, todayStr, queueTaskIds.join(",")]);
+  }, [user, todayStr, queueTaskIdsKey]);
 
   async function refillQueue() {
     if (!user || !dailyPlan || isRefilling) return;
@@ -385,7 +392,7 @@ export default function TodayPage() {
         suggested_subtasks_to_create: Array.isArray(ai.suggested_subtasks_to_create) ? ai.suggested_subtasks_to_create : [],
         automation_opportunities: Array.isArray(ai.automation_opportunities) ? ai.automation_opportunities : [],
       });
-    } catch (e) {
+    } catch {
       setAiError("AI suggestions unavailable. Please try again.");
       setAiSuggestions(null);
     } finally {

@@ -90,7 +90,6 @@ export default function VisionPage() {
         const res = await upsertUserProfile(user.id, profile);
         if (res.error) {
           // Keep it silent to avoid noisy errors; explicit save shows errors.
-          // eslint-disable-next-line no-console
           console.warn("Autosave vision failed:", res.error);
         } else {
           setSavedMsg("Autosaved.");
