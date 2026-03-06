@@ -9,7 +9,7 @@
     "lint": "eslint",
     "verify:scoring": "node scripts/verify-scoring.mjs",
     "verify:queue": "node scripts/verify-queue-lifecycle.mjs",
-    "verify:planner": "node scripts/verify-planner-apply.mjs",
+    "verify:planner": "node scripts/verify-planner-apply.mjs && node scripts/verify-planner-rollback.mjs",
     "verify:refinement-events": "node scripts/verify-refinement-events.mjs",
     "verify:release": "npm run verify:scoring && npm run verify:queue && npm run verify:planner && npm run verify:refinement-events && npm run lint && npm run build",
     "ingest:projects": "node scripts/ingest-project-folders.mjs",

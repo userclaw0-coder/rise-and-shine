@@ -990,3 +990,25 @@ Iteration evidence stays cleaner because local n8n config template artifacts no 
 Failed planner refinements now clean up newly created tags automatically, reducing hidden data drift and making apply behavior safer under partial failures.
 
 Date: 2026-03-06 16:24 EST
+
+Date: 2026-03-06 16:33 EST
+
+## Iteration update (planner rollback gate hardening)
+
+### What changed
+- Added `lib/planner-apply-transaction.js` to centralize planner apply rollback orchestration.
+- Refactored `pages/api/planner/apply.js` to use the shared rollback orchestrator while preserving existing task/tag/event behavior.
+- Added deterministic failure-injection verification script: `scripts/verify-planner-rollback.mjs`.
+- Wired rollback verification into default planner gate by updating `verify:planner` in `package.json`.
+
+### Verification results
+- `npm run verify:planner` ✅ passed
+  - `verify-planner-apply: OK`
+  - `verify-planner-rollback: OK`
+- `npm run build` ✅ passed
+
+### Completion proof
+- Pending commit/push for this iteration (single-project scope: `rise-and-shine`).
+
+### User impact
+Planner refinement apply now has deterministic rollback-gate coverage, reducing risk of partial-write regressions shipping to production.
