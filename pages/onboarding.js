@@ -3,10 +3,29 @@ import DashboardLayout from "../components/DashboardLayout";
 import { useAuth } from "../hooks/useAuth";
 import { getUserProfile, upsertUserProfile } from "../lib/db";
 
+const NEED_KEYS = [
+  "certainty",
+  "variety",
+  "significance",
+  "love_connection",
+  "growth",
+  "contribution",
+];
+
+const NEED_LABELS = {
+  certainty: "Certainty",
+  variety: "Variety",
+  significance: "Significance",
+  love_connection: "Love & Connection",
+  growth: "Growth",
+  contribution: "Contribution",
+};
+
 const STEPS = [
   "Identity & vision",
   "Life domains & outcomes",
-  "Needs, resources, constraints",
+  "Six needs assessment",
+  "Brain dump, resources, constraints",
   "Time & energy",
   "Strategic focus",
 ];
@@ -29,6 +48,34 @@ export default function OnboardingPage() {
     growth: "",
   });
   const [desiredOutcomes, setDesiredOutcomes] = useState("");
+  const [humanNeedsScores, setHumanNeedsScores] = useState({
+    certainty: "",
+    variety: "",
+    significance: "",
+    love_connection: "",
+    growth: "",
+    contribution: "",
+  });
+  const [humanNeedsStrategies, setHumanNeedsStrategies] = useState({
+    certainty: "",
+    variety: "",
+    significance: "",
+    love_connection: "",
+    growth: "",
+    contribution: "",
+  });
+  const [needsRiskPatterns, setNeedsRiskPatterns] = useState({
+    certainty: "",
+    variety: "",
+    significance: "",
+    love_connection: "",
+    growth: "",
+    contribution: "",
+  });
+  const [brainDumpRaw, setBrainDumpRaw] = useState("");
+  const [brainDumpTasks, setBrainDumpTasks] = useState("");
+  const [brainDumpProjects, setBrainDumpProjects] = useState("");
+  const [brainDumpIdeas, setBrainDumpIdeas] = useState("");
   const [resources, setResources] = useState("");
   const [constraints, setConstraints] = useState("");
   const [availableHours, setAvailableHours] = useState("");
@@ -61,6 +108,40 @@ export default function OnboardingPage() {
             .filter(Boolean)
             .join("\n")
         );
+        setHumanNeedsScores({
+          certainty: p.human_needs_scores?.certainty != null ? String(p.human_needs_scores.certainty) : "",
+          variety: p.human_needs_scores?.variety != null ? String(p.human_needs_scores.variety) : "",
+          significance: p.human_needs_scores?.significance != null ? String(p.human_needs_scores.significance) : "",
+          love_connection:
+            p.human_needs_scores?.love_connection != null
+              ? String(p.human_needs_scores.love_connection)
+              : "",
+          growth: p.human_needs_scores?.growth != null ? String(p.human_needs_scores.growth) : "",
+          contribution:
+            p.human_needs_scores?.contribution != null
+              ? String(p.human_needs_scores.contribution)
+              : "",
+        });
+        setHumanNeedsStrategies({
+          certainty: p.human_needs_strategies?.certainty || "",
+          variety: p.human_needs_strategies?.variety || "",
+          significance: p.human_needs_strategies?.significance || "",
+          love_connection: p.human_needs_strategies?.love_connection || "",
+          growth: p.human_needs_strategies?.growth || "",
+          contribution: p.human_needs_strategies?.contribution || "",
+        });
+        setNeedsRiskPatterns({
+          certainty: p.needs_risk_patterns?.certainty || "",
+          variety: p.needs_risk_patterns?.variety || "",
+          significance: p.needs_risk_patterns?.significance || "",
+          love_connection: p.needs_risk_patterns?.love_connection || "",
+          growth: p.needs_risk_patterns?.growth || "",
+          contribution: p.needs_risk_patterns?.contribution || "",
+        });
+        setBrainDumpRaw(p.brain_dump_raw || "");
+        setBrainDumpTasks((p.brain_dump_structured?.tasks || []).join("\n"));
+        setBrainDumpProjects((p.brain_dump_structured?.projects || []).join("\n"));
+        setBrainDumpIdeas((p.brain_dump_structured?.ideas || []).join("\n"));
         setResources((p.resources || []).join("\n"));
         setConstraints((p.constraints || []).join("\n"));
         setAvailableHours(
@@ -105,6 +186,32 @@ export default function OnboardingPage() {
       identity_attributes: identities,
       life_domains: lifeDomains,
       desired_outcomes: outcomes,
+      human_needs_scores: NEED_KEYS.reduce((acc, key) => {
+        const v = Number(humanNeedsScores[key]);
+        acc[key] = Number.isFinite(v) ? Math.max(1, Math.min(10, v)) : null;
+        return acc;
+      }, {}),
+      human_needs_strategies: { ...humanNeedsStrategies },
+      needs_risk_patterns: { ...needsRiskPatterns },
+      brain_dump_raw: brainDumpRaw || "",
+      brain_dump_structured: {
+        tasks: brainDumpTasks
+          .split("\n")
+          .map((s) => s.trim())
+          .filter(Boolean),
+        projects: brainDumpProjects
+          .split("\n")
+          .map((s) => s.trim())
+          .filter(Boolean),
+        ideas: brainDumpIdeas
+          .split("\n")
+          .map((s) => s.trim())
+          .filter(Boolean),
+        constraints: constraints
+          .split("\n")
+          .map((s) => s.trim())
+          .filter(Boolean),
+      },
       resources: resources
         .split("\n")
         .map((s) => s.trim())
@@ -278,11 +385,83 @@ export default function OnboardingPage() {
       return (
         <>
           <h2 style={{ fontSize: 16, fontWeight: 600, margin: "0 0 8px" }}>
-            Needs, resources, and constraints
+            Six human needs assessment
           </h2>
           <p style={{ fontSize: 13, color: "#6b7280", margin: "0 0 10px" }}>
-            Capture what supports you and what gets in the way.
+            Rate each need (1–10), how you currently meet it, and any unhelpful patterns.
           </p>
+          <div style={{ display: "grid", gap: 10 }}>
+            {NEED_KEYS.map((key) => (
+              <div key={key} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 10 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{NEED_LABELS[key]}</div>
+                <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4, marginBottom: 6 }}>
+                  Score (1-10)
+                  <input
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={humanNeedsScores[key]}
+                    onChange={(e) =>
+                      setHumanNeedsScores((prev) => ({ ...prev, [key]: e.target.value }))
+                    }
+                    style={{ fontSize: 13, padding: 6, borderRadius: 6, border: "1px solid #e5e7eb", maxWidth: 90 }}
+                  />
+                </label>
+                <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4, marginBottom: 6 }}>
+                  Current strategy
+                  <input
+                    type="text"
+                    value={humanNeedsStrategies[key]}
+                    onChange={(e) =>
+                      setHumanNeedsStrategies((prev) => ({ ...prev, [key]: e.target.value }))
+                    }
+                    style={{ fontSize: 13, padding: 6, borderRadius: 6, border: "1px solid #e5e7eb" }}
+                  />
+                </label>
+                <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
+                  Unhelpful pattern (optional)
+                  <input
+                    type="text"
+                    value={needsRiskPatterns[key]}
+                    onChange={(e) =>
+                      setNeedsRiskPatterns((prev) => ({ ...prev, [key]: e.target.value }))
+                    }
+                    style={{ fontSize: 13, padding: 6, borderRadius: 6, border: "1px solid #e5e7eb" }}
+                  />
+                </label>
+              </div>
+            ))}
+          </div>
+        </>
+      );
+    }
+    if (step === 3) {
+      return (
+        <>
+          <h2 style={{ fontSize: 16, fontWeight: 600, margin: "0 0 8px" }}>
+            Brain dump, resources, and constraints
+          </h2>
+          <p style={{ fontSize: 13, color: "#6b7280", margin: "0 0 10px" }}>
+            Capture everything on your mind, then structure it for tasks/projects/ideas.
+          </p>
+          <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
+            Brain dump (raw)
+            <textarea value={brainDumpRaw} onChange={(e) => setBrainDumpRaw(e.target.value)} rows={4} style={{ fontSize: 13, padding: 8, borderRadius: 8, border: "1px solid #e5e7eb" }} />
+          </label>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: 8 }}>
+            <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
+              Structured tasks (one per line)
+              <textarea value={brainDumpTasks} onChange={(e) => setBrainDumpTasks(e.target.value)} rows={4} style={{ fontSize: 13, padding: 8, borderRadius: 8, border: "1px solid #e5e7eb" }} />
+            </label>
+            <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
+              Structured projects (one per line)
+              <textarea value={brainDumpProjects} onChange={(e) => setBrainDumpProjects(e.target.value)} rows={4} style={{ fontSize: 13, padding: 8, borderRadius: 8, border: "1px solid #e5e7eb" }} />
+            </label>
+            <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
+              Structured ideas (one per line)
+              <textarea value={brainDumpIdeas} onChange={(e) => setBrainDumpIdeas(e.target.value)} rows={4} style={{ fontSize: 13, padding: 8, borderRadius: 8, border: "1px solid #e5e7eb" }} />
+            </label>
+          </div>
           <label
             style={{
               fontSize: 12,
@@ -331,7 +510,7 @@ export default function OnboardingPage() {
         </>
       );
     }
-    if (step === 3) {
+    if (step === 4) {
       return (
         <>
           <h2 style={{ fontSize: 16, fontWeight: 600, margin: "0 0 8px" }}>
@@ -527,7 +706,7 @@ export default function OnboardingPage() {
               color: "#6b7280",
             }}
           >
-            5 short steps to tune Rise &amp; Shine to your life.
+            6 short steps to tune Rise &amp; Shine to your life.
           </p>
         </div>
       </div>
