@@ -19,6 +19,7 @@ import {
 import {
   MODES,
   chooseKeyOutcomes,
+  computeTaskScore,
   getWorkoutPlanForDate,
 } from "../lib/scoring";
 
@@ -469,6 +470,35 @@ export default function TodayPage() {
     return m;
   }, [queueEntries]);
 
+  const queueReasonByTaskId = useMemo(() => {
+    const reasons = new Map();
+    for (const entry of queueEntries || []) {
+      const task = entry?.task;
+      if (!task?.id) continue;
+      const scoring = computeTaskScore(task, {
+        mode,
+        now: new Date(),
+        lastCompletedAt: lastCompletedMap[task.id] || null,
+        baseCategoryWeights: profilePrefs?.base_category_weights,
+        quickWinMinutes: profilePrefs?.quick_win_definition_minutes,
+      });
+      const c = scoring.components || {};
+      const bits = [];
+      if (c.isQuickWin) bits.push("quick win");
+      if (c.isHighLeverage) bits.push("high leverage");
+      if ((c.priorityScore || 0) >= 40) bits.push(`priority ${task.priority || "high"}`);
+      if ((c.categoryComponent || 0) > 16) bits.push("strong category fit");
+      reasons.set(task.id, bits.length > 0 ? bits.join(" • ") : "best available fit");
+    }
+    return reasons;
+  }, [
+    queueEntries,
+    mode,
+    lastCompletedMap,
+    profilePrefs?.base_category_weights,
+    profilePrefs?.quick_win_definition_minutes,
+  ]);
+
   // Show loading when: still checking auth, no user (redirecting), or data loading
   if (isCheckingAuth || !user || loading) {
     return (
@@ -618,6 +648,15 @@ export default function TodayPage() {
                       >
                         {entry.slotType || `#${idx + 1}`} • Priority{" "}
                         {entry.task.priority || "n/a"}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "#9ca3af",
+                          marginTop: 2,
+                        }}
+                      >
+                        Why chosen: {queueReasonByTaskId.get(entry.task.id) || "best available fit"}
                       </div>
                     </div>
                     <div
