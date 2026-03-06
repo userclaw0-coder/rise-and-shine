@@ -21,6 +21,33 @@ const NEED_LABELS = {
   contribution: "Contribution",
 };
 
+const NEED_EXAMPLES = {
+  certainty: {
+    strategy: "Daily planning block + fixed AM routine",
+    risk: "Over-planning to avoid hard conversations",
+  },
+  variety: {
+    strategy: "Two novelty blocks per week (new route, new idea sprint)",
+    risk: "Context switching when work feels boring",
+  },
+  significance: {
+    strategy: "Ship one visible win every Friday",
+    risk: "Chasing recognition over meaningful progress",
+  },
+  love_connection: {
+    strategy: "No-phone dinner + weekly friend check-in",
+    risk: "Isolating when stressed",
+  },
+  growth: {
+    strategy: "30 minutes skill-building daily",
+    risk: "Endless learning without applying",
+  },
+  contribution: {
+    strategy: "Mentor one person / week or publish useful notes",
+    risk: "Saying yes to everyone and burning out",
+  },
+};
+
 const STEPS = [
   "Identity & vision",
   "Life domains & outcomes",
@@ -473,6 +500,20 @@ export default function OnboardingPage() {
           <p style={{ fontSize: 13, color: "#6b7280", margin: "0 0 10px" }}>
             Rate each need (1–10), how you currently meet it, and any unhelpful patterns.
           </p>
+          <div
+            style={{
+              fontSize: 12,
+              color: "#374151",
+              background: "#f9fafb",
+              border: "1px solid #e5e7eb",
+              borderRadius: 8,
+              padding: 8,
+              marginBottom: 10,
+            }}
+          >
+            Tip: write concrete behaviors (what you actually do) rather than ideals.
+            Example: &quot;I get certainty from a strict morning routine.&quot;
+          </div>
           <div style={{ display: "grid", gap: 10 }}>
             {NEED_KEYS.map((key) => (
               <div key={key} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 10 }}>
@@ -498,6 +539,7 @@ export default function OnboardingPage() {
                     onChange={(e) =>
                       setHumanNeedsStrategies((prev) => ({ ...prev, [key]: e.target.value }))
                     }
+                    placeholder={NEED_EXAMPLES[key].strategy}
                     style={{ fontSize: 13, padding: 6, borderRadius: 6, border: "1px solid #e5e7eb" }}
                   />
                 </label>
@@ -509,6 +551,7 @@ export default function OnboardingPage() {
                     onChange={(e) =>
                       setNeedsRiskPatterns((prev) => ({ ...prev, [key]: e.target.value }))
                     }
+                    placeholder={NEED_EXAMPLES[key].risk}
                     style={{ fontSize: 13, padding: 6, borderRadius: 6, border: "1px solid #e5e7eb" }}
                   />
                 </label>
@@ -527,22 +570,36 @@ export default function OnboardingPage() {
           <p style={{ fontSize: 13, color: "#6b7280", margin: "0 0 10px" }}>
             Capture everything on your mind, then structure it for tasks/projects/ideas.
           </p>
+          <div
+            style={{
+              fontSize: 12,
+              color: "#374151",
+              background: "#f9fafb",
+              border: "1px solid #e5e7eb",
+              borderRadius: 8,
+              padding: 8,
+              marginBottom: 10,
+            }}
+          >
+            Brain dump prompt: &quot;What is taking up mental space right now?&quot; Then sort items:
+            tasks (single actions), projects (multi-step), ideas (someday/maybe).
+          </div>
           <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
             Brain dump (raw)
-            <textarea value={brainDumpRaw} onChange={(e) => setBrainDumpRaw(e.target.value)} rows={4} style={{ fontSize: 13, padding: 8, borderRadius: 8, border: "1px solid #e5e7eb" }} />
+            <textarea value={brainDumpRaw} onChange={(e) => setBrainDumpRaw(e.target.value)} rows={4} placeholder="Everything swirling in your head: obligations, worries, ideas, errands, open loops…" style={{ fontSize: 13, padding: 8, borderRadius: 8, border: "1px solid #e5e7eb" }} />
           </label>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: 8 }}>
             <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
               Structured tasks (one per line)
-              <textarea value={brainDumpTasks} onChange={(e) => setBrainDumpTasks(e.target.value)} rows={4} style={{ fontSize: 13, padding: 8, borderRadius: 8, border: "1px solid #e5e7eb" }} />
+              <textarea value={brainDumpTasks} onChange={(e) => setBrainDumpTasks(e.target.value)} rows={4} placeholder="Call dentist&#10;Submit March invoices" style={{ fontSize: 13, padding: 8, borderRadius: 8, border: "1px solid #e5e7eb" }} />
             </label>
             <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
               Structured projects (one per line)
-              <textarea value={brainDumpProjects} onChange={(e) => setBrainDumpProjects(e.target.value)} rows={4} style={{ fontSize: 13, padding: 8, borderRadius: 8, border: "1px solid #e5e7eb" }} />
+              <textarea value={brainDumpProjects} onChange={(e) => setBrainDumpProjects(e.target.value)} rows={4} placeholder="Website redesign&#10;Family summer trip plan" style={{ fontSize: 13, padding: 8, borderRadius: 8, border: "1px solid #e5e7eb" }} />
             </label>
             <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
               Structured ideas (one per line)
-              <textarea value={brainDumpIdeas} onChange={(e) => setBrainDumpIdeas(e.target.value)} rows={4} style={{ fontSize: 13, padding: 8, borderRadius: 8, border: "1px solid #e5e7eb" }} />
+              <textarea value={brainDumpIdeas} onChange={(e) => setBrainDumpIdeas(e.target.value)} rows={4} placeholder="Podcast concept: mornings for makers&#10;Experiment with 4-day deep-work week" style={{ fontSize: 13, padding: 8, borderRadius: 8, border: "1px solid #e5e7eb" }} />
             </label>
           </div>
           <label
@@ -560,6 +617,7 @@ export default function OnboardingPage() {
               value={resources}
               onChange={(e) => setResources(e.target.value)}
               rows={3}
+              placeholder="Supportive partner&#10;$3k runway&#10;Contractor availability"
               style={{
                 fontSize: 13,
                 padding: 8,
@@ -582,6 +640,7 @@ export default function OnboardingPage() {
               value={constraints}
               onChange={(e) => setConstraints(e.target.value)}
               rows={3}
+              placeholder="School pickup 3pm daily&#10;Low energy after 8pm"
               style={{
                 fontSize: 13,
                 padding: 8,
