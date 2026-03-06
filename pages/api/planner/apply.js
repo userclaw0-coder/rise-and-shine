@@ -11,6 +11,24 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+async function restoreTaskState({ userId, taskId, originalTask }) {
+  if (!originalTask) return;
+  await supabase
+    .from("tasks")
+    .update({ title: originalTask.title, effort_hours: originalTask.effort_hours })
+    .eq("user_id", userId)
+    .eq("id", taskId);
+}
+
+async function restoreTaskTags({ userId, taskId, originalTagIds }) {
+  await supabase.from("task_tags").delete().eq("user_id", userId).eq("task_id", taskId);
+
+  if (!Array.isArray(originalTagIds) || originalTagIds.length === 0) return;
+
+  const restoreLinks = originalTagIds.map((tag_id) => ({ user_id: userId, task_id: taskId, tag_id }));
+  await supabase.from("task_tags").insert(restoreLinks);
+}
+
 export default async function handler(req, res) {
   try {
     if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
@@ -43,118 +61,135 @@ export default async function handler(req, res) {
     if (taskErr) throw taskErr;
     if (!existingTask) return res.status(404).json({ error: "Task not found" });
 
+    const { data: initialTagLinks, error: initialTagErr } = await supabase
+      .from("task_tags")
+      .select("tag_id")
+      .eq("user_id", userId)
+      .eq("task_id", task_id);
+    if (initialTagErr) throw initialTagErr;
+
+    const originalTagIds = (initialTagLinks || []).map((r) => r.tag_id).filter(Boolean);
+
     const updates = buildPlannerTaskUpdates({
       suggested_title,
       suggested_effort_minutes,
     });
 
-    let updatedTask = existingTask;
-    if (Object.keys(updates).length > 0) {
-      const { data, error } = await supabase
-        .from("tasks")
-        .update(updates)
-        .eq("user_id", userId)
-        .eq("id", task_id)
-        .select("id,title,effort_hours")
-        .single();
-      if (error) throw error;
-      updatedTask = data;
-    }
-
     const incomingTags = normalizeIncomingTags(suggested_tags_add);
 
+    let updatedTask = existingTask;
     let finalTagNames = [];
 
-    if (incomingTags.length > 0) {
-      const { data: existingLinks, error: linkErr } = await supabase
-        .from("task_tags")
-        .select("tag_id")
-        .eq("user_id", userId)
-        .eq("task_id", task_id);
-      if (linkErr) throw linkErr;
+    let taskMutated = false;
+    let tagsMutated = false;
 
-      const existingTagIds = (existingLinks || []).map((r) => r.tag_id).filter(Boolean);
-      let existingTagRows = [];
-      if (existingTagIds.length > 0) {
-        const { data: rows, error: tagsErr } = await supabase
-          .from("tags")
-          .select("id,name")
+    try {
+      if (Object.keys(updates).length > 0) {
+        const { data, error } = await supabase
+          .from("tasks")
+          .update(updates)
           .eq("user_id", userId)
-          .in("id", existingTagIds);
-        if (tagsErr) throw tagsErr;
-        existingTagRows = rows || [];
-      }
-
-      finalTagNames = mergePlannerTagNames(
-        existingTagRows.map((r) => r.name),
-        incomingTags
-      );
-
-      // Ensure all desired tags exist
-      const ensuredIds = [];
-      for (const name of finalTagNames) {
-        const { data: found, error: foundErr } = await supabase
-          .from("tags")
-          .select("id")
-          .eq("user_id", userId)
-          .ilike("name", name)
-          .limit(1)
-          .maybeSingle();
-        if (foundErr) throw foundErr;
-        if (found?.id) {
-          ensuredIds.push(found.id);
-          continue;
-        }
-        const { data: created, error: createErr } = await supabase
-          .from("tags")
-          .insert({ user_id: userId, name })
-          .select("id")
+          .eq("id", task_id)
+          .select("id,title,effort_hours")
           .single();
-        if (createErr) throw createErr;
-        ensuredIds.push(created.id);
+        if (error) throw error;
+        updatedTask = data;
+        taskMutated = true;
       }
 
-      const { error: clearErr } = await supabase
-        .from("task_tags")
-        .delete()
-        .eq("user_id", userId)
-        .eq("task_id", task_id);
-      if (clearErr) throw clearErr;
+      if (incomingTags.length > 0) {
+        let existingTagRows = [];
+        if (originalTagIds.length > 0) {
+          const { data: rows, error: tagsErr } = await supabase
+            .from("tags")
+            .select("id,name")
+            .eq("user_id", userId)
+            .in("id", originalTagIds);
+          if (tagsErr) throw tagsErr;
+          existingTagRows = rows || [];
+        }
 
-      if (ensuredIds.length > 0) {
-        const links = ensuredIds.map((tag_id) => ({ user_id: userId, task_id, tag_id }));
-        const { error: insErr } = await supabase.from("task_tags").insert(links);
-        if (insErr) throw insErr;
+        finalTagNames = mergePlannerTagNames(
+          existingTagRows.map((r) => r.name),
+          incomingTags
+        );
+
+        const ensuredIds = [];
+        for (const name of finalTagNames) {
+          const { data: found, error: foundErr } = await supabase
+            .from("tags")
+            .select("id")
+            .eq("user_id", userId)
+            .ilike("name", name)
+            .limit(1)
+            .maybeSingle();
+          if (foundErr) throw foundErr;
+          if (found?.id) {
+            ensuredIds.push(found.id);
+            continue;
+          }
+
+          const { data: created, error: createErr } = await supabase
+            .from("tags")
+            .insert({ user_id: userId, name })
+            .select("id")
+            .single();
+          if (createErr) throw createErr;
+          ensuredIds.push(created.id);
+        }
+
+        const { error: clearErr } = await supabase
+          .from("task_tags")
+          .delete()
+          .eq("user_id", userId)
+          .eq("task_id", task_id);
+        if (clearErr) throw clearErr;
+        tagsMutated = true;
+
+        if (ensuredIds.length > 0) {
+          const links = ensuredIds.map((tag_id) => ({ user_id: userId, task_id, tag_id }));
+          const { error: insErr } = await supabase.from("task_tags").insert(links);
+          if (insErr) throw insErr;
+        }
       }
-    }
 
-    await supabase.from("task_events").insert([
-      {
-        user_id: userId,
-        task_id,
-        event_type: "updated",
-        value: {
-          source: "planner_refinement",
-          action: "update",
-          applied: {
-            title: updates.title ?? null,
-            effort_hours: updates.effort_hours ?? null,
+      const { error: eventsErr } = await supabase.from("task_events").insert([
+        {
+          user_id: userId,
+          task_id,
+          event_type: "updated",
+          value: {
+            source: "planner_refinement",
+            action: "update",
+            applied: {
+              title: updates.title ?? null,
+              effort_hours: updates.effort_hours ?? null,
+              tags_added: incomingTags,
+            },
+          },
+        },
+        {
+          user_id: userId,
+          task_id,
+          event_type: "updated",
+          value: {
+            source: "planner_refinement",
+            action: "applied",
+            applied_fields: Object.keys(updates),
             tags_added: incomingTags,
           },
         },
-      },
-      {
-        user_id: userId,
-        task_id,
-        event_type: "updated",
-        value: {
-          source: "planner_refinement",
-          action: "applied",
-          applied_fields: Object.keys(updates),
-          tags_added: incomingTags,
-        },
-      },
-    ]);
+      ]);
+      if (eventsErr) throw eventsErr;
+    } catch (mutationErr) {
+      if (taskMutated) {
+        await restoreTaskState({ userId, taskId: task_id, originalTask: existingTask });
+      }
+      if (tagsMutated) {
+        await restoreTaskTags({ userId, taskId: task_id, originalTagIds });
+      }
+      throw mutationErr;
+    }
 
     return res.json({
       ok: true,
