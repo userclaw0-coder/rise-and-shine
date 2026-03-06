@@ -196,3 +196,36 @@ Date: 2026-03-06 07:56 EST
 
 ### Next step
 - Optional: split “accepted” into pre-apply intent vs post-apply success conversion rate in a dedicated chart/time-series.
+
+Date: 2026-03-06 08:26 EST
+
+## Iteration update (onboarding parity: six-needs + brain-dump)
+
+### What changed
+- Expanded `pages/onboarding.js` from 5 to 6 steps to align more closely with `docs/ONBOARDING_FLOW.md`.
+- Added explicit **Six Human Needs** capture (for each need):
+  - score (1–10),
+  - current strategy,
+  - unhelpful pattern.
+- Added explicit **Brain Dump** capture:
+  - raw brain dump text,
+  - structured buckets for tasks/projects/ideas,
+  - constraints mirrored into structured payload.
+- Persisted new onboarding fields into `user_profile.profile` JSON:
+  - `human_needs_scores`
+  - `human_needs_strategies`
+  - `needs_risk_patterns`
+  - `brain_dump_raw`
+  - `brain_dump_structured`
+
+### Verification
+- `npm run lint` ✅
+- `npm run build` ✅
+- Deployed app checks via browser:
+  - `/analytics` loads and planner analytics panel renders ✅
+  - `/onboarding` currently still shows prior 5-step UI on production at check time (likely deployment propagation lag), no hard runtime error observed.
+  - Console: recurring chart container size warnings observed from analytics render path (pre-existing warning class; non-blocking for this change).
+
+### Completion proof
+- Code commit: `625c485` on `main` (pushed to `origin/main`).
+- Next step: re-check production after deployment catches up, then continue remaining onboarding parity gaps if any (field-level UX polish/validation).
