@@ -866,3 +866,63 @@ Date: 2026-03-06 14:46 EST
 
 ### One-line user impact
 The planner analytics data-access boundary is now cleaner and easier to evolve safely, reducing regression risk as `lib/db.js` is decomposed in small steps.
+
+Date: 2026-03-06 15:58 EST
+Owner: Research Agent
+
+## Architecture review (independent repo assessment)
+
+### 1) Repository/architecture inspection summary
+- Stack: Next.js monolith with Pages Router routes and API handlers under `pages/api/*`.
+- Domain logic: scoring/queue/planner utilities in `lib/*`; large shared data-access in `lib/db.js`.
+- Data backend: Supabase with task/tag/event-centric planner flow.
+- Quality model: deterministic verification scripts plus lint/build release gate.
+
+### 2) Weaknesses and risks
+1. **Data-layer concentration risk (High)**
+   - `lib/db.js` remains a broad coupling point across domains.
+2. **Atomicity gap on multi-step planner mutations (Medium/High)**
+   - Current compensating rollback reduces risk but is still not equivalent to DB transactions.
+3. **Repo hygiene risk (Medium)**
+   - Runtime/generated artifacts are present in repo paths and can pollute change review.
+4. **Policy drift risk (Medium)**
+   - Fast iteration in a single monolith can reintroduce auth/query regressions without domain-level API contracts.
+
+### 3) Proposed improvements
+- Complete domain-oriented DB module decomposition with stable facade exports.
+- Move planner apply to single atomic operation (transaction or secured RPC).
+- Define API contract tests for planner endpoints (auth scope + mutation invariants + event semantics).
+- Reduce mutable local runtime state in tracked repo folders.
+
+### 4) Concrete development tasks
+- **Task A (M):** Extract `tasks`, `tags`, `events`, `profiles` accessors from `lib/db.js` into `lib/db/*` with compatibility re-exports.
+- **Task B (M):** Implement transactional planner apply path and remove compensating rollback branch complexity.
+- **Task C (S):** Add planner API contract test matrix (401/403/ownership/apply invariants).
+- **Task D (S):** Cleanup repository operational artifacts (`n8n_data` sqlite WAL/SHM, build caches) and codify ignore rules.
+- **Task E (S):** Add architecture decision record cadence (monthly) to keep docs concise and enforce decisions.
+
+Date: 2026-03-06 16:01 EST
+
+## Execution outcomes (runtime artifact hygiene packet)
+- **Selected project:** `/home/clawofhank/projects/rise-and-shine` (highest-priority manager packet focus: repo hygiene to keep release diffs source-only).
+- **Task continued:** Runtime artifact hygiene for `n8n_data` WAL/SHM churn and transient `background/` exports.
+
+### Code changes
+- Updated `.gitignore` to exclude mutable runtime artifacts:
+  - `n8n_data/*.sqlite-wal`
+  - `n8n_data/*.sqlite-shm`
+  - `background/`
+- Removed previously tracked runtime SQLite sidecar artifacts from Git index:
+  - `n8n_data/database.sqlite-wal`
+  - `n8n_data/database.sqlite-shm`
+
+### Verification evidence
+- `npm run build` ✅
+- `git status --short --branch` confirms WAL/SHM files no longer appear as tracked-modified churn after ignore/index cleanup ✅
+
+### Completion proof
+- Commit: pending in this iteration (hygiene packet staged with `.gitignore` + index cleanup).
+- Branch: `main`
+
+### One-line user impact
+Repo diffs are now cleaner and more trustworthy, so product changes are easier to review and runtime DB sidecar churn no longer pollutes iteration evidence.
