@@ -1,13 +1,14 @@
 import { createClient } from "@supabase/supabase-js";
+import {
+  buildPlannerTaskUpdates,
+  mergePlannerTagNames,
+  normalizeIncomingTags,
+} from "../../../lib/planner-apply";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
-
-function normalizeTagName(name) {
-  return String(name || "").trim();
-}
 
 export default async function handler(req, res) {
   try {
@@ -34,18 +35,10 @@ export default async function handler(req, res) {
     if (taskErr) throw taskErr;
     if (!existingTask) return res.status(404).json({ error: "Task not found" });
 
-    const updates = {};
-    if (typeof suggested_title === "string" && suggested_title.trim()) {
-      updates.title = suggested_title.trim();
-    }
-    if (
-      suggested_effort_minutes !== undefined &&
-      suggested_effort_minutes !== null &&
-      Number.isFinite(Number(suggested_effort_minutes))
-    ) {
-      const hours = Number(suggested_effort_minutes) / 60;
-      updates.effort_hours = Math.max(0, Number(hours.toFixed(2)));
-    }
+    const updates = buildPlannerTaskUpdates({
+      suggested_title,
+      suggested_effort_minutes,
+    });
 
     let updatedTask = existingTask;
     if (Object.keys(updates).length > 0) {
@@ -60,15 +53,7 @@ export default async function handler(req, res) {
       updatedTask = data;
     }
 
-    const incomingTags = Array.isArray(suggested_tags_add)
-      ? Array.from(
-          new Set(
-            suggested_tags_add
-              .map(normalizeTagName)
-              .filter(Boolean)
-          )
-        )
-      : [];
+    const incomingTags = normalizeIncomingTags(suggested_tags_add);
 
     let finalTagNames = [];
 
@@ -92,16 +77,10 @@ export default async function handler(req, res) {
         existingTagRows = rows || [];
       }
 
-      const existingNames = new Set(existingTagRows.map((r) => normalizeTagName(r.name).toLowerCase()));
-      const desiredNames = new Set(existingTagRows.map((r) => normalizeTagName(r.name)));
-
-      for (const tagName of incomingTags) {
-        if (!existingNames.has(tagName.toLowerCase())) {
-          desiredNames.add(tagName);
-        }
-      }
-
-      finalTagNames = Array.from(desiredNames);
+      finalTagNames = mergePlannerTagNames(
+        existingTagRows.map((r) => r.name),
+        incomingTags
+      );
 
       // Ensure all desired tags exist
       const ensuredIds = [];

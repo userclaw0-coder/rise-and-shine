@@ -539,3 +539,29 @@ Date: 2026-03-06 12:24 EST
   - `https://rise-and-shine-hazel.vercel.app/today?ts=46c5fcd` loads with Next 3 Actions and clean console ✅
   - `https://rise-and-shine-hazel.vercel.app/analytics?ts=46c5fcd` loads planner analytics panels and clean console ✅
 - No runtime errors observed; no corrective commit required this iteration.
+
+Date: 2026-03-06 12:42 EST
+
+## Iteration update (planner apply-path deterministic verification fixtures)
+
+### Task executed
+- Delivered P1 planner apply-path deterministic verification pack by extracting planner apply normalization/merge logic into a shared module and adding fixtures for update/tag invariants.
+
+### Files changed
+- `lib/planner-apply.js` (new)
+- `scripts/verify-planner-apply.mjs` (new)
+- `pages/api/planner/apply.js`
+- `package.json`
+
+### Checks run + results
+- `npm run verify:scoring` ✅ passed
+- `npm run verify:queue` ✅ passed
+- `npm run verify:planner` ✅ passed (`verify-planner-apply: OK`)
+- `npm run lint` ✅ passed
+- `npm run build` ✅ passed
+
+### Completion proof
+- pending commit on `main` for the files listed above.
+
+### User impact
+- Planner refinement apply behavior now has deterministic regression coverage for title/effort normalization and additive case-insensitive tag merge, reducing risk of silent apply regressions.
