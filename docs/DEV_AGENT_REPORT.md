@@ -979,8 +979,12 @@ Iteration evidence stays cleaner because local n8n config template artifacts no 
 - `npm run build` ✅
 
 ### Completion proof
-- Commit: pending (this iteration)
+- Commit: `de66b0e`
 - Branch: `main`
+
+### Production checks (post-push)
+- `https://rise-and-shine-hazel.vercel.app/today?ts=de66b0e-2` rendered expected Today UI; console errors: none ✅
+- `https://rise-and-shine-hazel.vercel.app/analytics?ts=de66b0e` rendered Analytics UI; console errors: none ✅
 
 ### One-line user impact
 Failed planner refinements now clean up newly created tags automatically, reducing hidden data drift and making apply behavior safer under partial failures.
