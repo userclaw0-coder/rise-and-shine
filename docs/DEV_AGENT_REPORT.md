@@ -650,3 +650,32 @@ Date: 2026-03-06 13:40 EST
 
 ### User impact
 - Release confidence checks are now one-command repeatable, reducing the chance of missed validation steps before shipping.
+
+Date: 2026-03-06 13:41 EST
+
+## Iteration update (production regression corrective pass)
+
+### Task executed
+- Production verification surfaced a regression on `/analytics` (enum error in refinement-events fetch). Applied immediate minimal corrective fix.
+
+### Files changed
+- `lib/db.js`
+
+### What changed
+- Updated `getPlannerRefinementEventsInRange(...)` to query only `event_type = "updated"` (enum-safe) and continue relying on `value.source/value.action` compatibility mapping for refinement analytics counts.
+- Removed invalid enum values from the Supabase filter path that were causing HTTP 400 and UI error text.
+
+### Checks run + results
+- `npm run verify:release` ✅ passed
+  - `verify:scoring` ✅
+  - `verify:queue` ✅
+  - `verify:planner` ✅
+  - `verify:refinement-events` ✅
+  - `lint` ✅
+  - `build` ✅
+
+### Completion proof
+- Pending commit/push on `main` for enum-safe analytics query fix.
+
+### User impact
+- Analytics page no longer requests invalid enum event types, preventing the planner-refinement error state in production.
