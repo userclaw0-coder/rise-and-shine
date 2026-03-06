@@ -685,3 +685,84 @@ Date: 2026-03-06 13:41 EST
 - Checked `https://rise-and-shine-hazel.vercel.app/analytics?ts=9d36d62` immediately after push.
 - Production still shows prior enum error text (`planner_refinement_accepted`) during this immediate check, indicating deployment propagation lag or stale chunk serving at verification time.
 - Follow-up required next loop: re-verify `/analytics` after deployment propagation; if error persists on new deployment, perform targeted hotfix.
+
+Date: 2026-03-06 13:47 EST
+Owner: Research Agent
+
+## Research Handoff (Architecture Review)
+
+### Timestamp
+2026-03-06 13:47 EST
+
+### Scope reviewed
+- `/home/clawofhank/rise-and-shine` (pages/api + lib + repo hygiene)
+- `/home/clawofhank/cursor-well-wishes/CodexWellWishes` (current branch architecture/docs hygiene)
+- `/home/clawofhank/.openclaw/workspace` (workflow/control-plane repo context)
+
+### Top findings (max 5)
+1. **Monolithic data-access and domain logic in a single module**
+   - **Evidence:** `lib/db.js` contains cross-domain logic (profiles, tasks, events, ideas, health, weekly review, planner) in one large file.
+   - **Risk level:** High
+2. **API trust boundary is weak for planner endpoints**
+   - **Evidence:** `pages/api/planner/apply.js`, `pages/api/planner/ai-refine.js`, and `pages/api/plan/refill.js` accept `user_id` from request body instead of deriving from authenticated session/JWT claims.
+   - **Risk level:** High
+3. **Multi-step writes are non-transactional in critical flows**
+   - **Evidence:** `pages/api/planner/apply.js` performs task update + tag rewrites + event inserts as separate operations with no transaction wrapper; partial success can create inconsistent state.
+   - **Risk level:** Medium
+4. **Operational/runtime artifacts are leaking into repo change surface**
+   - **Evidence:** `git status` shows tracked changes in `n8n_data/database.sqlite-wal` and `n8n_data/database.sqlite-shm`; `.gitignore` excludes `n8n_data/config` but not sqlite WAL/SHM files.
+   - **Risk level:** Medium
+5. **Documentation governance drift in active repos**
+   - **Evidence:** `cursor-well-wishes/CodexWellWishes/README.md` has repeated duplicate sections; in rise-and-shine, architectural guidance is split across root docs and long append-only `docs/DEV_AGENT_REPORT.md`.
+   - **Risk level:** Low
+
+### Suggested tasks for manager (max 5)
+1. **Task title:** Split `lib/db.js` into bounded domain repositories
+   - **Rationale:** Reduce coupling and blast radius; improve testability and ownership.
+   - **Expected impact:** Faster safer changes, fewer regressions in unrelated features.
+   - **Estimated effort:** M
+2. **Task title:** Enforce server-side identity in planner APIs
+   - **Rationale:** Prevent cross-user data access by ignoring client-supplied `user_id` and deriving identity from auth context.
+   - **Expected impact:** Major security hardening for planner/refinement flows.
+   - **Estimated effort:** M
+3. **Task title:** Add transactional apply path for planner updates
+   - **Rationale:** Guarantee atomic updates across task fields, tags, and events.
+   - **Expected impact:** Eliminates partial-write inconsistencies and hard-to-debug drift.
+   - **Estimated effort:** M
+4. **Task title:** Isolate and ignore runtime data directories
+   - **Rationale:** Keep repositories source-only; avoid accidental commits of mutable artifacts.
+   - **Expected impact:** Cleaner diffs, lower operational risk, easier code review.
+   - **Estimated effort:** S
+5. **Task title:** Add architecture decision record + monthly docs compaction
+   - **Rationale:** Prevent guidance fragmentation and repeated stale/duplicate operational instructions.
+   - **Expected impact:** Higher team alignment and lower onboarding friction.
+   - **Estimated effort:** S
+
+Date: 2026-03-06 14:02 EST
+
+## Iteration update (P1 production re-verification evidence pass)
+
+### Task executed
+- Continued highest-priority manager packet from MEMORY/docs (P1: production re-verification evidence) after prior `/analytics` propagation concern.
+- Re-checked production surfaces with cache-busting timestamps and captured render + console evidence.
+
+### Files changed
+- `docs/DEV_AGENT_REPORT.md`
+
+### Production checks run + results
+- `https://rise-and-shine-hazel.vercel.app/analytics?ts=cron-20260306-1401` ✅ loaded successfully
+  - Analytics page rendered (planner refinement panel visible with accepted/applied/dismissed counters)
+  - Browser console check: no messages/errors
+- `https://rise-and-shine-hazel.vercel.app/today?ts=cron-20260306-1401` ✅ loaded successfully
+  - Today page rendered with queue + planner sections
+  - Browser console check: no messages/errors
+
+### Local verification
+- `npm run build` ✅ passed
+
+### Completion proof
+- This loop is a **no-code-change verification closure** for the prior production regression concern.
+- Evidence captured above shows `/analytics` and `/today` healthy with clean console; no corrective hotfix required in this pass.
+
+### User impact
+- Production confidence is restored: both core pages now render cleanly, so users can rely on Today + Analytics without the earlier enum error interruption.
