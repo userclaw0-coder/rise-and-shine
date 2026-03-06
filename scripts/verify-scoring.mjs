@@ -57,4 +57,20 @@ function task(id, overrides = {}) {
   assert.equal(result.components.isQuickWin, true, "quick-win tag should be reflected");
 })();
 
+(function verifyDeterministicTieBreak() {
+  const tasks = [
+    task("b-task", { priority: "Medium", category: "Business", tags: [] }),
+    task("a-task", { priority: "Medium", category: "Business", tags: [] }),
+  ];
+
+  const picked = chooseKeyOutcomes(tasks, { now, count: 2 });
+  const ids = picked.map((x) => x.task.id);
+
+  assert.deepEqual(
+    ids,
+    ["a-task", "b-task"],
+    "equal-score tasks should be selected in stable id order"
+  );
+})();
+
 console.log("verify-scoring: OK");
