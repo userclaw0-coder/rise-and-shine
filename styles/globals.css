@@ -79,3 +79,23 @@ body {
 .backlog-table-inner {
   min-width: 680px;
 }
+
+@media (max-width: 980px) {
+  .backlog-table-inner {
+    min-width: 0;
+  }
+
+  .today-header {
+    flex-direction: column;
+    align-items: stretch !important;
+  }
+
+  .today-header-controls {
+    width: 100%;
+  }
+
+  .today-header-controls label,
+  .today-header-controls button {
+    min-height: 44px;
+  }
+}

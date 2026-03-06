@@ -511,6 +511,7 @@ export default function TodayPage() {
   return (
     <DashboardLayout>
       <div
+        className="today-header"
         style={{
           display: "flex",
           justifyContent: "space-between",
@@ -541,6 +542,7 @@ export default function TodayPage() {
           </p>
         </div>
         <div
+          className="today-header-controls"
           style={{
             display: "flex",
             gap: 8,

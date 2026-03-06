@@ -186,6 +186,16 @@ export default function BacklogPage() {
   ]);
 
   const [collapsedParents, setCollapsedParents] = useState({});
+  const [isCompact, setIsCompact] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const media = window.matchMedia("(max-width: 980px)");
+    const onChange = () => setIsCompact(media.matches);
+    onChange();
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, []);
 
   function toggleCollapsed(taskId) {
     setCollapsedParents((prev) => ({
@@ -329,11 +339,12 @@ export default function BacklogPage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns:
-              "minmax(0, 3fr) minmax(0, 1.5fr) minmax(0, 1.1fr) 80px 120px 120px",
+            gridTemplateColumns: isCompact
+              ? "minmax(0, 1fr)"
+              : "minmax(0, 3fr) minmax(0, 1.5fr) minmax(0, 1.1fr) 80px 120px 120px",
             gap: 8,
-            alignItems: "center",
-            padding: "6px 0",
+            alignItems: isCompact ? "stretch" : "center",
+            padding: isCompact ? "10px 0" : "6px 0",
             borderBottom: "1px solid #f3f4f6",
           }}
         >
@@ -377,7 +388,7 @@ export default function BacklogPage() {
             />
           </div>
 
-          <div style={{ display: "flex", gap: 4 }}>
+          <div style={{ display: "flex", gap: 4, flexWrap: isCompact ? "wrap" : "nowrap" }}>
             <select
               value={task.category_id || ""}
               onChange={(e) => {
@@ -431,7 +442,7 @@ export default function BacklogPage() {
             </select>
           </div>
 
-          <div style={{ display: "flex", gap: 4 }}>
+          <div style={{ display: "flex", gap: 4, flexWrap: isCompact ? "wrap" : "nowrap" }}>
             <select
               value={task.priority || "Medium"}
               onChange={(e) =>
@@ -579,15 +590,17 @@ export default function BacklogPage() {
                 background: "#ffffff",
               }}
             />
-            <div
-              style={{
-                marginTop: 2,
-                fontSize: 10,
-                color: "#9ca3af",
-              }}
-            >
-              Use tags like: quick-win, high-leverage, urgent, blocked, waiting
-            </div>
+            {!isCompact && (
+              <div
+                style={{
+                  marginTop: 2,
+                  fontSize: 10,
+                  color: "#9ca3af",
+                }}
+              >
+                Use tags like: quick-win, high-leverage, urgent, blocked, waiting
+              </div>
+            )}
           </div>
         </div>
 
@@ -1107,26 +1120,28 @@ export default function BacklogPage() {
               padding: "8px 10px",
             }}
           >
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns:
-                  "minmax(0, 3fr) minmax(0, 1.5fr) minmax(0, 1.1fr) 80px 120px 120px",
-                gap: 8,
-                fontSize: 11,
-                fontWeight: 500,
-                color: "#6b7280",
-                paddingBottom: 4,
-                borderBottom: "1px solid #f3f4f6",
-              }}
-            >
-              <div>Title / hierarchy</div>
-              <div>Category / subcategory</div>
-              <div>Priority / effort</div>
-              <div>Due</div>
-              <div>Status / actions</div>
-              <div>Tags</div>
-            </div>
+            {!isCompact && (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns:
+                    "minmax(0, 3fr) minmax(0, 1.5fr) minmax(0, 1.1fr) 80px 120px 120px",
+                  gap: 8,
+                  fontSize: 11,
+                  fontWeight: 500,
+                  color: "#6b7280",
+                  paddingBottom: 4,
+                  borderBottom: "1px solid #f3f4f6",
+                }}
+              >
+                <div>Title / hierarchy</div>
+                <div>Category / subcategory</div>
+                <div>Priority / effort</div>
+                <div>Due</div>
+                <div>Status / actions</div>
+                <div>Tags</div>
+              </div>
+            )}
 
             <div>
               {filteredRootTasks.length === 0 ? (
