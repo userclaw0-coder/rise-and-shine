@@ -795,9 +795,9 @@ Date: 2026-03-06 14:29 EST
 - `npm run verify:release` ✅ (`verify:scoring`, `verify:queue`, `verify:planner`, `verify:refinement-events`, lint, build)
 
 ### Completion proof
-- Commit: (pending in this entry; see latest git commit below after push)
+- Commit: `a611573` (pushed to `origin/main`)
 - Branch: `main`
-- Checks: all release gates green in this iteration.
+- Checks: all release gates green in this iteration (`npm run verify:release`).
 
 ### One-line user impact
 Planner API routes now trust authenticated server identity instead of raw client `user_id`, closing a spoofing path and improving data integrity/security.
