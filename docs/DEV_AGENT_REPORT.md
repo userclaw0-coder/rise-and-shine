@@ -159,3 +159,40 @@ Implemented the selected next task: **persisted AI refinement approval flow**.
 
 ### Next step
 - Add an explicit **planner apply event taxonomy + analytics hooks** (e.g., refinement accepted/dismissed counters), then proceed to onboarding parity task (six-needs + brain-dump structured capture).
+
+Date: 2026-03-06 07:11 EST
+Manager policy compliance update applied.
+Completion proof: 7a2ede6 (branch: main).
+
+Date: 2026-03-06 07:56 EST
+
+## Iteration update (planner refinement analytics)
+
+### What changed
+1. Added planner refinement analytics event logging in **`pages/today.js`**
+   - New helper `logRefinementEvent(...)` logs task events with `value.source = "planner_refinement"`.
+   - `Approve` now records `event_type: "planner_refinement_accepted"` before apply.
+   - `Dismiss` now records `event_type: "planner_refinement_dismissed"`.
+
+2. Extended apply endpoint in **`pages/api/planner/apply.js`**
+   - Existing `updated` event is preserved.
+   - Added explicit `event_type: "planner_refinement_applied"` event for analytics-grade apply counts.
+
+3. Added analytics query helper in **`lib/db.js`**
+   - New function: `getPlannerRefinementEventsInRange(userId, startDateStr, endDateStr)`.
+   - Pulls refinement decision/apply event types plus legacy `updated` planner-refinement events for backwards compatibility.
+
+4. Added UI metrics in **`pages/analytics.js`**
+   - New “Planner refinement analytics (last 30 days)” panel showing:
+     - Accepted
+     - Applied
+     - Dismissed
+   - Uses new query helper and legacy fallback logic for applied counts.
+
+### Verification results
+- `npm run lint` ✅ passed
+- `npm run build` ✅ passed
+- Build confirms planner endpoint remains active: `ƒ /api/planner/apply` ✅
+
+### Next step
+- Optional: split “accepted” into pre-apply intent vs post-apply success conversion rate in a dedicated chart/time-series.

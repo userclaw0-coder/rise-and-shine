@@ -141,19 +141,31 @@ export default async function handler(req, res) {
       }
     }
 
-    await supabase.from("task_events").insert({
-      user_id,
-      task_id,
-      event_type: "updated",
-      value: {
-        source: "planner_refinement",
-        applied: {
-          title: updates.title ?? null,
-          effort_hours: updates.effort_hours ?? null,
+    await supabase.from("task_events").insert([
+      {
+        user_id,
+        task_id,
+        event_type: "updated",
+        value: {
+          source: "planner_refinement",
+          applied: {
+            title: updates.title ?? null,
+            effort_hours: updates.effort_hours ?? null,
+            tags_added: incomingTags,
+          },
+        },
+      },
+      {
+        user_id,
+        task_id,
+        event_type: "planner_refinement_applied",
+        value: {
+          source: "planner_refinement",
+          applied_fields: Object.keys(updates),
           tags_added: incomingTags,
         },
       },
-    });
+    ]);
 
     return res.json({
       ok: true,

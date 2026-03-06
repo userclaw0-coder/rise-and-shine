@@ -5,6 +5,7 @@ import {
   getCompletedEventsInRange,
   getLastCompletedEventsWithTasks,
   getWeeklyReviewWeeks,
+  getPlannerRefinementEventsInRange,
 } from "../lib/db";
 import {
   BarChart,
@@ -35,6 +36,11 @@ export default function AnalyticsPage() {
   const [hourHistogram, setHourHistogram] = useState([]);
   const [lastCompleted, setLastCompleted] = useState([]);
   const [weeklyStreak, setWeeklyStreak] = useState(0);
+  const [plannerRefinementMetrics, setPlannerRefinementMetrics] = useState({
+    accepted: 0,
+    dismissed: 0,
+    applied: 0,
+  });
 
   useEffect(() => {
     if (!user) return;
@@ -47,11 +53,12 @@ export default function AnalyticsPage() {
       const start30 = addDays(today, -30);
 
       try {
-        const [range7, range30, last, weeks] = await Promise.all([
+        const [range7, range30, last, weeks, plannerRefinements] = await Promise.all([
           getCompletedEventsInRange(user.id, dateStr(start7), dateStr(today)),
           getCompletedEventsInRange(user.id, dateStr(start30), dateStr(today)),
           getLastCompletedEventsWithTasks(user.id, 50),
           getWeeklyReviewWeeks(user.id, 52),
+          getPlannerRefinementEventsInRange(user.id, dateStr(start30), dateStr(today)),
         ]);
 
         if (range7.error) setError(range7.error.message);
@@ -120,6 +127,24 @@ export default function AnalyticsPage() {
           }
           setWeeklyStreak(streak);
         }
+
+        if (plannerRefinements.error) setError(plannerRefinements.error.message);
+        else {
+          const events = plannerRefinements.data || [];
+          const metrics = { accepted: 0, dismissed: 0, applied: 0 };
+          let explicitApplied = 0;
+          let legacyApplied = 0;
+          events.forEach((ev) => {
+            if (ev.event_type === "planner_refinement_accepted") metrics.accepted += 1;
+            if (ev.event_type === "planner_refinement_dismissed") metrics.dismissed += 1;
+            if (ev.event_type === "planner_refinement_applied") explicitApplied += 1;
+            if (ev.event_type === "updated" && ev.value?.source === "planner_refinement") {
+              legacyApplied += 1;
+            }
+          });
+          metrics.applied = explicitApplied > 0 ? explicitApplied : legacyApplied;
+          setPlannerRefinementMetrics(metrics);
+        }
       } catch (e) {
         setError(e.message || "Failed to load analytics.");
       } finally {
@@ -175,6 +200,31 @@ export default function AnalyticsPage() {
         {error && (
           <p style={{ color: "#b91c1c", fontSize: 13, marginTop: 8 }}>{error}</p>
         )}
+
+        <section
+          style={{
+            marginTop: 20,
+            padding: 16,
+            background: "#fff",
+            borderRadius: 16,
+            border: "1px solid #e5e7eb",
+          }}
+        >
+          <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
+            Planner refinement analytics (last 30 days)
+          </h2>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ padding: "8px 12px", borderRadius: 10, background: "#ecfdf5", color: "#065f46", fontSize: 13 }}>
+              Accepted: <strong>{plannerRefinementMetrics.accepted}</strong>
+            </div>
+            <div style={{ padding: "8px 12px", borderRadius: 10, background: "#eff6ff", color: "#1d4ed8", fontSize: 13 }}>
+              Applied: <strong>{plannerRefinementMetrics.applied}</strong>
+            </div>
+            <div style={{ padding: "8px 12px", borderRadius: 10, background: "#f9fafb", color: "#374151", fontSize: 13 }}>
+              Dismissed: <strong>{plannerRefinementMetrics.dismissed}</strong>
+            </div>
+          </div>
+        </section>
 
         <section
           style={{

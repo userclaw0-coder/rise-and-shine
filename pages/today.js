@@ -427,7 +427,24 @@ export default function TodayPage() {
     }
   }
 
-  function dismissRefinement(index) {
+  async function logRefinementEvent(eventType, item, extra = {}) {
+    if (!user || !item?.task_id || !eventType) return;
+    try {
+      await logTaskEvent(user.id, item.task_id, eventType, {
+        source: "planner_refinement",
+        ...extra,
+      });
+    } catch {
+      // analytics logging should not block UX flows
+    }
+  }
+
+  function dismissRefinement(index, item = null) {
+    if (item?.task_id) {
+      void logRefinementEvent("planner_refinement_dismissed", item, {
+        action: "dismiss",
+      });
+    }
     setAiSuggestions((prev) => ({
       ...prev,
       task_refinements: (prev?.task_refinements || []).filter((_, i) => i !== index),
@@ -443,6 +460,10 @@ export default function TodayPage() {
       suggested_tags_add: item.suggested_tags_add,
       suggested_effort_minutes: item.suggested_effort_minutes,
     };
+
+    await logRefinementEvent("planner_refinement_accepted", item, {
+      action: "accept",
+    });
 
     try {
       const res = await fetch("/api/planner/apply", {
@@ -491,7 +512,7 @@ export default function TodayPage() {
 
       setAppliedMessage("Applied.");
       setTimeout(() => setAppliedMessage(""), 2000);
-      dismissRefinement(index);
+      dismissRefinement(index, null);
     } catch {
       setError("Failed to apply refinement.");
     }
@@ -847,7 +868,7 @@ export default function TodayPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => dismissRefinement(idx)}
+                          onClick={() => dismissRefinement(idx, item)}
                           style={{
                             fontSize: 12,
                             padding: "4px 10px",
