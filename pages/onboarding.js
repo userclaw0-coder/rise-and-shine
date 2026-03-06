@@ -37,6 +37,7 @@ export default function OnboardingPage() {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState("");
+  const [stepErrors, setStepErrors] = useState([]);
 
   const [identityAttributes, setIdentityAttributes] = useState("");
   const [lifeDomains, setLifeDomains] = useState({
@@ -160,6 +161,10 @@ export default function OnboardingPage() {
     load();
   }, [user]);
 
+  useEffect(() => {
+    setStepErrors([]);
+  }, [step]);
+
   if (isCheckingAuth || !user || loading) {
     return (
       <DashboardLayout>
@@ -242,6 +247,79 @@ export default function OnboardingPage() {
     };
   }
 
+  function getStepErrors(stepIndex) {
+    const errors = [];
+
+    if (stepIndex === 0) {
+      if (!identityAttributes.split(",").map((s) => s.trim()).filter(Boolean).length) {
+        errors.push("Add at least one identity phrase.");
+      }
+    }
+
+    if (stepIndex === 1) {
+      const hasLifeDomain = Object.values(lifeDomains).some((v) => String(v || "").trim().length > 0);
+      const hasOutcomes = desiredOutcomes
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean).length > 0;
+      if (!hasLifeDomain && !hasOutcomes) {
+        errors.push("Add at least one life domain note or one desired outcome.");
+      }
+    }
+
+    if (stepIndex === 2) {
+      NEED_KEYS.forEach((key) => {
+        const score = Number(humanNeedsScores[key]);
+        if (!Number.isFinite(score) || score < 1 || score > 10) {
+          errors.push(`${NEED_LABELS[key]} score must be between 1 and 10.`);
+        }
+        if (!String(humanNeedsStrategies[key] || "").trim()) {
+          errors.push(`${NEED_LABELS[key]} needs a current strategy.`);
+        }
+      });
+    }
+
+    if (stepIndex === 3) {
+      const hasRaw = String(brainDumpRaw || "").trim().length > 0;
+      const hasStructured = [brainDumpTasks, brainDumpProjects, brainDumpIdeas]
+        .some((v) => String(v || "").trim().length > 0);
+      if (!hasRaw && !hasStructured) {
+        errors.push("Add a raw brain dump or at least one structured item.");
+      }
+    }
+
+    if (stepIndex === 4 && String(availableHours || "").trim()) {
+      const hours = Number(availableHours);
+      if (!Number.isFinite(hours) || hours < 0 || hours > 168) {
+        errors.push("Available hours per week must be between 0 and 168.");
+      }
+    }
+
+    if (stepIndex === 5) {
+      const hasFocus =
+        String(leverageFocus || "").trim().length > 0 ||
+        String(quarterFocus || "").trim().length > 0 ||
+        String(immediateStep || "").trim().length > 0;
+      if (!hasFocus) {
+        errors.push("Add at least one strategic focus item or an immediate step.");
+      }
+    }
+
+    return errors;
+  }
+
+  function validateStep(stepIndex) {
+    const errors = getStepErrors(stepIndex);
+    setStepErrors(errors);
+    return errors.length === 0;
+  }
+
+  function validateAllSteps() {
+    const allErrors = STEPS.flatMap((_, idx) => getStepErrors(idx));
+    setStepErrors(allErrors);
+    return allErrors.length === 0;
+  }
+
   async function handleSave() {
     setSaving(true);
     setError("");
@@ -260,8 +338,13 @@ export default function OnboardingPage() {
   }
 
   async function handleCompleteOnboarding() {
-    setSaving(true);
     setError("");
+    if (!validateAllSteps()) {
+      setError("Please fix the onboarding validation items before completing.");
+      return;
+    }
+
+    setSaving(true);
     try {
       const profile = buildProfile();
       const res = await upsertUserProfile(user.id, profile);
@@ -739,6 +822,14 @@ export default function OnboardingPage() {
             {error}
           </p>
         )}
+        {stepErrors.length > 0 && (
+          <ul style={{ margin: "0 0 10px", paddingLeft: 18, color: "#b91c1c", fontSize: 12 }}>
+            {stepErrors.slice(0, 4).map((msg, idx) => (
+              <li key={`${msg}-${idx}`}>{msg}</li>
+            ))}
+            {stepErrors.length > 4 && <li>+{stepErrors.length - 4} more…</li>}
+          </ul>
+        )}
         {renderStep()}
         <div
           style={{
@@ -768,9 +859,12 @@ export default function OnboardingPage() {
             </button>
             <button
               type="button"
-              onClick={() =>
-                setStep((s) => Math.min(STEPS.length - 1, s + 1))
-              }
+              onClick={() => {
+                if (step === STEPS.length - 1) return;
+                setError("");
+                if (!validateStep(step)) return;
+                setStep((s) => Math.min(STEPS.length - 1, s + 1));
+              }}
               disabled={step === STEPS.length - 1}
               style={{
                 fontSize: 13,
