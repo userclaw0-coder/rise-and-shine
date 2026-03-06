@@ -1,36 +1,106 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Rise-and-Shine
 
-## Getting Started
+Personal execution OS for daily momentum: capture tasks, rank next actions, run focused daily queue, reflect weekly, and track energy/health trends.
 
-First, run the development server:
+Production: https://rise-and-shine-hazel.vercel.app
+
+## What this app does
+
+- **Today queue (Next-3):** surfaces the best three actions from backlog using weighted scoring.
+- **Backlog + templates:** capture recurring patterns and projects.
+- **Planner refinement:** AI-assisted task rewrite/effort/tag suggestions with apply + analytics events.
+- **Onboarding (6-step):** identity, life domains, six-needs profile, brain dump, energy/time, strategic focus.
+- **Analytics:** momentum, completion timing, planner refinement stats.
+- **Health + notes + ideas:** lightweight personal operating data in one place.
+
+## Tech stack
+
+- Next.js (Pages Router)
+- React
+- Supabase (DB + API client)
+- Recharts (analytics visualizations)
+
+## Project structure
+
+- `pages/` – routes + API endpoints
+  - key routes: `today`, `backlog`, `templates`, `analytics`, `onboarding`, `weekly-review`
+  - key APIs: `api/planner/ai-refine`, `api/planner/apply`, `api/ingest/projects`
+- `lib/` – DB access and core ranking/scoring logic
+- `docs/` – canonical product/algorithm/docs + dev agent report
+- `scripts/` – ingestion helpers
+
+## Local setup
+
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Create `.env.local` (or export env vars) with required values:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+RISE_DEFAULT_USER_ID=
+
+# Optional/feature flags
+OPENAI_API_KEY=
+PLANNER_MODEL=
+RISE_PROJECT_ROOT=
+RISE_INGEST_TOKEN=
+```
+
+3. Start dev server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+4. Open http://localhost:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Quality gates
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Run before commit/push:
 
-## Learn More
+```bash
+npm run lint
+npm run build
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Ingestion scripts
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Project-folder ingest:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm run ingest:projects
+npm run ingest:projects:dry
+npm run ingest:projects:webhook:test
+```
 
-## Deploy on Vercel
+## Deployment
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Deployed on Vercel from `main` branch.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Recommended post-deploy checks:
+
+1. `https://rise-and-shine-hazel.vercel.app/today`
+2. `https://rise-and-shine-hazel.vercel.app/analytics`
+3. `https://rise-and-shine-hazel.vercel.app/onboarding`
+4. Browser console is clean on changed pages.
+
+## Canonical docs
+
+- `docs/PROJECT_SPEC.md`
+- `docs/NEXT_ACTION_ALGO_V2.md`
+- `docs/SCHEMA_ALIGNMENT.md`
+- `docs/ONBOARDING_FLOW.md`
+- `docs/DEV_AGENT_REPORT.md`
+
+## Team workflow note
+
+The manager loop appends every iteration outcome to `docs/DEV_AGENT_REPORT.md` with one of:
+
+- **Code change proof:** commit hash + branch
+- **No-code-change proof:** reason + verification + next step
