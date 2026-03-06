@@ -801,3 +801,36 @@ Date: 2026-03-06 14:29 EST
 
 ### One-line user impact
 Planner API routes now trust authenticated server identity instead of raw client `user_id`, closing a spoofing path and improving data integrity/security.
+
+Date: 2026-03-06 14:35 EST
+
+## Execution outcomes (Project loop iteration)
+- **Selected project:** `/home/clawofhank/projects/rise-and-shine` (latest highest-priority manager packet in `MEMORY.md` remains Rise-and-Shine security/architecture hardening).
+- **Task continued:** P2 — add transaction-safe behavior for planner apply by preventing partial-write persistence on failure.
+
+### Code changes
+- Updated `pages/api/planner/apply.js` to add compensating rollback behavior for planner apply mutations:
+  - snapshot original task (`title`, `effort_hours`) and current `task_tags` links before mutating,
+  - track whether task and tag mutations were applied,
+  - if downstream mutation/event logging fails, restore original task fields and original tag links.
+- Kept scope minimal and endpoint-local (no broad refactor), while preserving existing planner apply response behavior.
+
+### Verification evidence
+- `npm run verify:release` ✅
+  - `verify:scoring` ✅
+  - `verify:queue` ✅
+  - `verify:planner` ✅
+  - `verify:refinement-events` ✅
+  - `npm run lint` ✅
+  - `npm run build` ✅
+- Production checks (post-push):
+  - `https://rise-and-shine-hazel.vercel.app/today?ts=cron-20260306-1435` loaded and rendered expected Today UI; console clean ✅
+  - `https://rise-and-shine-hazel.vercel.app/analytics?ts=cron-20260306-1435` loaded and rendered analytics panels; console clean ✅
+
+### Completion proof
+- Commit: `207a68f` (pushed to `origin/main`)
+- Branch: `main`
+- Checks: `npm run verify:release` green + production `/today` and `/analytics` verification completed.
+
+### One-line user impact
+Planner refinements are now safer under failure conditions: if a later apply step fails, task/title/effort and tag links are restored instead of leaving partial updates.
