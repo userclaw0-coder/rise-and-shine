@@ -8,6 +8,7 @@ import {
   getPlannerRefinementEventsInRange,
 } from "../lib/db";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
+import { countRefinementActions } from "../lib/planner-refinement-events";
 
 function dateStr(d) {
   return d.toISOString().slice(0, 10);
@@ -166,15 +167,7 @@ export default function AnalyticsPage() {
         if (plannerRefinements.error) setError(plannerRefinements.error.message);
         else {
           const events = plannerRefinements.data || [];
-          const metrics = { accepted: 0, dismissed: 0, applied: 0 };
-          events.forEach((ev) => {
-            if (ev.event_type !== "updated" || ev.value?.source !== "planner_refinement") return;
-            const action = ev.value?.action;
-            if (action === "accept") metrics.accepted += 1;
-            if (action === "dismiss") metrics.dismissed += 1;
-            if (action === "applied") metrics.applied += 1;
-          });
-          setPlannerRefinementMetrics(metrics);
+          setPlannerRefinementMetrics(countRefinementActions(events));
         }
       } catch (e) {
         setError(e.message || "Failed to load analytics.");

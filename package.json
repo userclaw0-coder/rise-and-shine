@@ -10,6 +10,7 @@
     "verify:scoring": "node scripts/verify-scoring.mjs",
     "verify:queue": "node scripts/verify-queue-lifecycle.mjs",
     "verify:planner": "node scripts/verify-planner-apply.mjs",
+    "verify:refinement-events": "node scripts/verify-refinement-events.mjs",
     "ingest:projects": "node scripts/ingest-project-folders.mjs",
     "ingest:projects:dry": "node scripts/ingest-project-folders.mjs --dry-run",
     "ingest:projects:webhook:test": "curl -s -X POST http://localhost:3000/api/ingest/projects -H 'Content-Type: application/json' -d '{\"dry_run\":true}' | jq"
