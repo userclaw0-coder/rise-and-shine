@@ -438,3 +438,31 @@ Date: 2026-03-06 11:35 EST
 
 ### Next step
 - Re-check `/analytics` once Vercel serves the new deployment for `565f7c0`; if warnings still reproduce on the new chunk, add visibility/IntersectionObserver render gate as immediate follow-up fix.
+
+Date: 2026-03-06 11:41 EST
+
+## Iteration update (analytics verification + scoring verification baseline)
+
+### What changed
+- Verified current production deployment health before coding:
+  - `https://rise-and-shine-hazel.vercel.app/analytics?ts=565f7c0` loads and console is clean (no Recharts `-1` warnings observed in this pass) ✅
+  - `https://rise-and-shine-hazel.vercel.app/today?ts=565f7c0` loads with clean console ✅
+- Implemented a minimal deterministic verification baseline for queue/scoring logic:
+  - Added `scripts/verify-scoring.mjs` with assertions for:
+    - blocked/waiting exclusion in key-outcome selection,
+    - quick-win + high-leverage slot intent,
+    - score output shape sanity check.
+  - Added npm script: `verify:scoring` in `package.json`.
+
+### Verification results
+- `npm run verify:scoring` ✅ passed (`verify-scoring: OK`)
+- `npm run lint` ✅ passed
+- `npm run build` ✅ passed
+
+### Completion proof
+- pending commit on `main` for:
+  - `package.json`
+  - `scripts/verify-scoring.mjs`
+
+### Next step
+- Commit and push this verification-baseline increment, then re-validate production deployment once Vercel serves the new commit.
