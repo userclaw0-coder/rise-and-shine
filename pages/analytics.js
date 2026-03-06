@@ -41,6 +41,17 @@ export default function AnalyticsPage() {
     dismissed: 0,
     applied: 0,
   });
+  const [chartsReady, setChartsReady] = useState(false);
+
+  const chartContainerStyle = {
+    width: "100%",
+    minWidth: 0,
+    height: 220,
+  };
+
+  useEffect(() => {
+    setChartsReady(true);
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -234,16 +245,18 @@ export default function AnalyticsPage() {
           <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
             7-day momentum (tasks completed per day)
           </h2>
-          <div style={{ height: 200 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={sevenDayData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Bar dataKey="count" fill="#111827" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          <div style={chartContainerStyle}>
+            {chartsReady ? (
+              <ResponsiveContainer width="100%" height="100%" minWidth={280} minHeight={180}>
+                <BarChart data={sevenDayData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Bar dataKey="count" fill="#111827" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : null}
           </div>
         </section>
 
@@ -259,16 +272,18 @@ export default function AnalyticsPage() {
           <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
             30-day momentum
           </h2>
-          <div style={{ height: 200 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={thirtyDayData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="date" tick={{ fontSize: 9 }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Bar dataKey="count" fill="#374151" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          <div style={chartContainerStyle}>
+            {chartsReady ? (
+              <ResponsiveContainer width="100%" height="100%" minWidth={280} minHeight={180}>
+                <BarChart data={thirtyDayData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="date" tick={{ fontSize: 9 }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Bar dataKey="count" fill="#374151" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : null}
           </div>
         </section>
 
@@ -284,16 +299,18 @@ export default function AnalyticsPage() {
           <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
             Completion time of day (UTC hour)
           </h2>
-          <div style={{ height: 200 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={hourHistogram}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="hour" tick={{ fontSize: 10 }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Bar dataKey="count" fill="#059669" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          <div style={chartContainerStyle}>
+            {chartsReady ? (
+              <ResponsiveContainer width="100%" height="100%" minWidth={280} minHeight={180}>
+                <BarChart data={hourHistogram}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="hour" tick={{ fontSize: 10 }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Bar dataKey="count" fill="#059669" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : null}
           </div>
         </section>
 
