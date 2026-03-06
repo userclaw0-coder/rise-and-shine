@@ -12,7 +12,8 @@ async function runScenario({ failAt, failRollbackAt, expect, assertError }) {
   };
 
   const failRollbackIf = (stage) => {
-    if (failRollbackAt === stage) {
+    const rollbackFailures = Array.isArray(failRollbackAt) ? failRollbackAt : [failRollbackAt];
+    if (rollbackFailures.includes(stage)) {
       throw new Error(`forced_${stage}_failure`);
     }
   };
@@ -135,6 +136,55 @@ await runScenario({
     assert.equal(error.rollbackErrors.length, 1);
     assert.equal(error.rollbackErrors[0].stage, "rollbackTags");
     assert.equal(error.rollbackErrors[0].message, "forced_rollbackTags_failure");
+    assert.equal(error.cause?.message, "forced_events_failure");
+  },
+});
+
+await runScenario({
+  failAt: "events",
+  failRollbackAt: ["rollbackTask", "cleanupCreatedTags"],
+  expect: [
+    "mutateTask",
+    "mutateTags",
+    "writeEvents",
+    "rollbackTask",
+    "rollbackTags",
+    "cleanupCreatedTags:tag-1,tag-2",
+  ],
+  assertError: (error) => {
+    assert.match(error.message, /planner_apply_failed_and_rollback_incomplete/);
+    assert.match(error.message, /forced_events_failure/);
+    assert.match(error.message, /rollbackTask: forced_rollbackTask_failure/);
+    assert.match(error.message, /cleanupCreatedTags: forced_cleanupCreatedTags_failure/);
+    assert.ok(Array.isArray(error.rollbackErrors));
+    assert.equal(error.rollbackErrors.length, 2);
+    assert.equal(error.rollbackErrors[0].stage, "rollbackTask");
+    assert.equal(error.rollbackErrors[0].message, "forced_rollbackTask_failure");
+    assert.equal(error.rollbackErrors[1].stage, "cleanupCreatedTags");
+    assert.equal(error.rollbackErrors[1].message, "forced_cleanupCreatedTags_failure");
+    assert.equal(error.cause?.message, "forced_events_failure");
+  },
+});
+
+await runScenario({
+  failAt: "events",
+  failRollbackAt: "cleanupCreatedTags",
+  expect: [
+    "mutateTask",
+    "mutateTags",
+    "writeEvents",
+    "rollbackTask",
+    "rollbackTags",
+    "cleanupCreatedTags:tag-1,tag-2",
+  ],
+  assertError: (error) => {
+    assert.match(error.message, /planner_apply_failed_and_rollback_incomplete/);
+    assert.match(error.message, /forced_events_failure/);
+    assert.match(error.message, /cleanupCreatedTags: forced_cleanupCreatedTags_failure/);
+    assert.ok(Array.isArray(error.rollbackErrors));
+    assert.equal(error.rollbackErrors.length, 1);
+    assert.equal(error.rollbackErrors[0].stage, "cleanupCreatedTags");
+    assert.equal(error.rollbackErrors[0].message, "forced_cleanupCreatedTags_failure");
     assert.equal(error.cause?.message, "forced_events_failure");
   },
 });

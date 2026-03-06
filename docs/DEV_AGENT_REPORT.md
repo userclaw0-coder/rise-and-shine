@@ -1161,3 +1161,30 @@ Date: 2026-03-06 17:23 EST
 
 ### One-line user impact
 - Planner apply rollback protection now has tighter failure-path coverage, reducing risk of silent partial-state corruption during refinement apply errors.
+
+Date: 2026-03-06 17:34 EST
+
+## Iteration update (rollback verification aggregate-failure coverage)
+- **Selected project:** `/home/clawofhank/projects/rise-and-shine` (highest-priority manager packet in `MEMORY.md`: rollback gate continuity hardening).
+- **Task continued:** strengthen rollback verifier to assert aggregate rollback error behavior when multiple rollback stages fail.
+
+### Code changes
+- Updated `scripts/verify-planner-rollback.mjs`:
+  - Added support for multi-stage rollback failure injection (`failRollbackAt` now accepts an array).
+  - Added deterministic scenario that forces both `rollbackTask` and `cleanupCreatedTags` failures during an events-write failure.
+  - Added assertions that combined error output includes both rollback stage failures and preserves original cause.
+
+### Verification evidence
+- `npm run verify:release` ✅
+  - `verify:scoring` ✅
+  - `verify:queue` ✅
+  - `verify:planner` (`verify-planner-apply` + `verify-planner-rollback`) ✅
+  - `verify:refinement-events` ✅
+  - `npm run lint` ✅
+  - `npm run build` ✅
+- Production checks ✅
+  - `https://rise-and-shine-hazel.vercel.app/today?ts=cron-20260306-1731b` rendered expected Today UI; console error-level messages: none.
+  - `https://rise-and-shine-hazel.vercel.app/analytics?ts=cron-20260306-1731` rendered expected Analytics UI; console error-level messages: none.
+
+### One-line user impact
+Planner rollback safeguards now verify multi-failure rollback diagnostics, reducing risk that complex failure paths hide partial-cleanup issues.
