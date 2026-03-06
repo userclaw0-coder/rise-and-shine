@@ -430,7 +430,11 @@ Date: 2026-03-06 11:35 EST
 - Local route build confirms analytics page compiles: `/analytics` ✅
 
 ### Completion proof
-- Pending commit/push in this iteration after report update.
+- commit hash/branch: `565f7c0` on `main` (pushed to `origin/main`).
+
+### Production verification
+- `https://rise-and-shine-hazel.vercel.app/analytics?ts=565f7c0` still served prior deployment chunk `1840879c...` at check time and continued showing existing Recharts `width(-1)/height(-1)` warnings.
+- `https://rise-and-shine-hazel.vercel.app/today?ts=565f7c0` loaded with clean console ✅
 
 ### Next step
-- Push this corrective commit, then verify production `/analytics` console is clean; if warnings persist, add visibility/IntersectionObserver gate as final fallback.
+- Re-check `/analytics` once Vercel serves the new deployment for `565f7c0`; if warnings still reproduce on the new chunk, add visibility/IntersectionObserver render gate as immediate follow-up fix.
