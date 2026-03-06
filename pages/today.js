@@ -22,6 +22,11 @@ import {
   computeTaskScore,
   getWorkoutPlanForDate,
 } from "../lib/scoring";
+import {
+  buildQueueCandidates,
+  buildQueueFromChosen,
+  shouldRefillAfterCompletion,
+} from "../lib/today-queue";
 
 function getTodayDateStr() {
   const now = new Date();
@@ -56,35 +61,6 @@ function buildLastCompletedMap(events) {
     }
   }
   return map;
-}
-
-/** Build queue payload for daily_plans from chosen outcomes (slot/type/task_id). */
-function buildQueueFromChosen(chosen) {
-  const types = ["Quick Win", "High Leverage", "Progress"];
-  return (chosen || []).slice(0, 3).map((entry, idx) => ({
-    slot: idx + 1,
-    type: types[idx] || "Progress",
-    task_id: entry.task.id,
-  }));
-}
-
-function normalizeTag(tag) {
-  if (!tag) return "";
-  return String(tag).trim().toLowerCase().replace(/\s+/g, "-");
-}
-
-function hasBlockedOrWaitingTag(task) {
-  const tags = (task?.tags || [])
-    .map((t) => {
-      if (!t) return "";
-      if (typeof t === "string") return normalizeTag(t);
-      if (t.name) return normalizeTag(t.name);
-      if (t.tag?.name) return normalizeTag(t.tag.name);
-      return "";
-    })
-    .filter(Boolean);
-  const set = new Set(tags);
-  return set.has("blocked") || set.has("waiting");
 }
 
 export default function TodayPage() {
@@ -231,19 +207,10 @@ export default function TodayPage() {
         setDailyPlan(plan);
 
         const tasks = tasksRes.data || [];
-        const dailySet = new Set(
+        const candidates = buildQueueCandidates(
+          tasks,
           (loadedItems || []).map((it) => it.task?.id).filter(Boolean)
         );
-        const candidates = tasks.filter((t) => {
-          const catName =
-            typeof t.category === "string"
-              ? t.category
-              : t.category?.name ?? null;
-          if (catName === "Daily Repeat") return false;
-          if (dailySet.has(t.id)) return false;
-          if (hasBlockedOrWaitingTag(t)) return false;
-          return t.status === "todo" || t.status === "doing";
-        });
         const tasksById = new Map(candidates.map((t) => [t.id, t]));
 
         const queue = (plan?.queue && Array.isArray(plan.queue)) ? plan.queue : [];
@@ -322,14 +289,7 @@ export default function TodayPage() {
 
   async function refillQueue() {
     if (!user || !dailyPlan || isRefilling) return;
-    const dailySet = new Set(dailyTemplateTaskIds);
-    const candidates = (backlogTasks || []).filter((t) => {
-      const catName = typeof t.category === "string" ? t.category : t.category?.name ?? null;
-      if (catName === "Daily Repeat") return false;
-      if (dailySet.has(t.id)) return false;
-      if (hasBlockedOrWaitingTag(t)) return false;
-      return t.status === "todo" || t.status === "doing";
-    });
+    const candidates = buildQueueCandidates(backlogTasks || [], dailyTemplateTaskIds);
     if (candidates.length === 0) {
       setQueueEntries([]);
       return;
@@ -375,10 +335,12 @@ export default function TodayPage() {
       const nextCompletionMap = { ...completionMap, [taskId]: !isCompleted };
       setCompletionMap(nextCompletionMap);
       if (
-        !isCompleted &&
-        queueTaskIds.length === 3 &&
-        queueTaskIds.includes(taskId) &&
-        queueTaskIds.every((id) => !!nextCompletionMap[id])
+        shouldRefillAfterCompletion({
+          taskId,
+          wasCompleted: isCompleted,
+          queueTaskIds,
+          completionMap: nextCompletionMap,
+        })
       ) {
         await refillQueue();
       }
