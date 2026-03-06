@@ -507,3 +507,35 @@ Date: 2026-03-06 12:01 EST
   - `https://rise-and-shine-hazel.vercel.app/analytics?ts=542320c` loads and analytics panels render; console clean in check pass ✅
   - `https://rise-and-shine-hazel.vercel.app/today?ts=542320c` loads; console clean ✅
 - No runtime errors observed; no corrective commit required this iteration.
+
+Date: 2026-03-06 12:24 EST
+
+## Iteration update (queue lifecycle deterministic verification fixtures)
+
+### Task executed
+- Added queue lifecycle verification coverage and extracted Today queue lifecycle helpers into a shared module.
+
+### Files changed
+- `lib/today-queue.js` (new)
+- `scripts/verify-queue-lifecycle.mjs` (new)
+- `pages/today.js`
+- `package.json`
+
+### Checks run + results
+- `npm run verify:scoring` ✅ passed
+- `npm run verify:queue` ✅ passed (`verify-queue-lifecycle: OK`)
+- `npm run lint` ✅ passed
+- `npm run build` ✅ passed
+
+### Completion proof
+- commit hash/branch: `46c5fcd` on `main` (pushed to `origin/main`).
+- Completion proof line: `46c5fcd main`.
+
+### User impact
+- Queue eligibility and refill-trigger behavior now have explicit deterministic regression checks, reducing risk of future Next-3 lifecycle regressions.
+
+### Deployment verification note
+- Production checks completed:
+  - `https://rise-and-shine-hazel.vercel.app/today?ts=46c5fcd` loads with Next 3 Actions and clean console ✅
+  - `https://rise-and-shine-hazel.vercel.app/analytics?ts=46c5fcd` loads planner analytics panels and clean console ✅
+- No runtime errors observed; no corrective commit required this iteration.
