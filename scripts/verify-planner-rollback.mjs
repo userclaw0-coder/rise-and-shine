@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 
 import { applyPlannerMutationWithRollback } from "../lib/planner-apply-transaction.js";
 
-async function runScenario({ failAt, expect }) {
+async function runScenario({ failAt, failRollbackAt, expect, assertError }) {
   const calls = [];
 
   const failIf = (stage) => {
@@ -10,6 +10,14 @@ async function runScenario({ failAt, expect }) {
       throw new Error(`forced_${stage}_failure`);
     }
   };
+
+  const failRollbackIf = (stage) => {
+    if (failRollbackAt === stage) {
+      throw new Error(`forced_${stage}_failure`);
+    }
+  };
+
+  let caughtError;
 
   try {
     await applyPlannerMutationWithRollback({
@@ -29,24 +37,33 @@ async function runScenario({ failAt, expect }) {
       },
       rollbackTask: async () => {
         calls.push("rollbackTask");
+        failRollbackIf("rollbackTask");
       },
       rollbackTags: async () => {
         calls.push("rollbackTags");
+        failRollbackIf("rollbackTags");
       },
       cleanupCreatedTags: async (ids) => {
         calls.push(`cleanupCreatedTags:${ids.join(",")}`);
+        failRollbackIf("cleanupCreatedTags");
       },
     });
 
-    if (failAt) {
-      assert.fail(`Expected failure at ${failAt}`);
+    if (failAt || failRollbackAt) {
+      assert.fail(`Expected failure at ${failAt || failRollbackAt}`);
     }
   } catch (error) {
-    if (!failAt) throw error;
-    assert.match(error.message, new RegExp(`forced_${failAt}_failure`));
+    caughtError = error;
+    if (!failAt && !failRollbackAt) throw error;
+    if (assertError) {
+      assertError(error);
+    } else {
+      assert.match(error.message, new RegExp(`forced_${failAt}_failure`));
+    }
   }
 
   assert.deepEqual(calls, expect, `unexpected call order for failAt=${failAt || "none"}`);
+  return caughtError;
 }
 
 await runScenario({
@@ -74,6 +91,29 @@ await runScenario({
     "rollbackTags",
     "cleanupCreatedTags:tag-1,tag-2",
   ],
+});
+
+await runScenario({
+  failAt: "events",
+  failRollbackAt: "rollbackTask",
+  expect: [
+    "mutateTask",
+    "mutateTags",
+    "writeEvents",
+    "rollbackTask",
+    "rollbackTags",
+    "cleanupCreatedTags:tag-1,tag-2",
+  ],
+  assertError: (error) => {
+    assert.match(error.message, /planner_apply_failed_and_rollback_incomplete/);
+    assert.match(error.message, /forced_events_failure/);
+    assert.match(error.message, /rollbackTask: forced_rollbackTask_failure/);
+    assert.ok(Array.isArray(error.rollbackErrors));
+    assert.equal(error.rollbackErrors.length, 1);
+    assert.equal(error.rollbackErrors[0].stage, "rollbackTask");
+    assert.equal(error.rollbackErrors[0].message, "forced_rollbackTask_failure");
+    assert.equal(error.cause?.message, "forced_events_failure");
+  },
 });
 
 console.log("verify-planner-rollback: OK");

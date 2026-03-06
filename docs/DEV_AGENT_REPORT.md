@@ -1050,3 +1050,24 @@ Date: 2026-03-06 16:40 EST
 
 ### One-line user impact
 Planner rollback hardening is now backed by a fresh full release gate pass and clean production smoke checks, reducing risk of hidden regressions.
+
+Date: 2026-03-06 16:50 EST
+
+## Iteration update (rollback-path resilience hardening)
+- **Selected project:** `/home/clawofhank/projects/rise-and-shine` (highest-priority manager packet in MEMORY.md: planner rollback failure-path hardening).
+- **Task continued:** strengthen rollback execution so cleanup stages still run even if an earlier rollback step throws.
+
+### Code changes
+- Hardened `lib/planner-apply-transaction.js` rollback handling to execute all rollback/cleanup stages independently and aggregate rollback-stage failures.
+- Added structured rollback failure metadata (`rollbackErrors`) and preserved original mutation failure as `cause` for faster incident debugging.
+- Extended `scripts/verify-planner-rollback.mjs` with a deterministic scenario that forces `rollbackTask` failure and verifies continued execution of later cleanup steps plus combined error shape.
+
+### Verification evidence
+- `npm run verify:planner` ✅
+- `npm run build` ✅
+- Production checks ✅
+  - `https://rise-and-shine-hazel.vercel.app/today?ts=cron-20260306-1650b` rendered; console error-level messages: none.
+  - `https://rise-and-shine-hazel.vercel.app/analytics?ts=cron-20260306-1650` rendered; console error-level messages: none.
+
+### One-line user impact
+Planner apply failure handling is now more fault-tolerant and diagnosable, reducing risk of silent partial rollback issues during edge-case failures.
