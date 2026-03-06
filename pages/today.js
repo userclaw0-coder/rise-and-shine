@@ -15,6 +15,7 @@ import {
   createTask,
   setTaskTags,
   getUserProfile,
+  updateTask,
 } from "../lib/db";
 import {
   MODES,
@@ -330,20 +331,44 @@ export default function TodayPage() {
     const effectiveTaskId = isWorkoutSynthetic ? workoutTaskId : taskId;
     const value = isWorkoutSynthetic ? { date: taskId.replace("workout-", "") } : null;
     if (!effectiveTaskId) return;
+
     const res = await logTaskEvent(user.id, effectiveTaskId, nextType, value);
-    if (!res.error) {
-      const nextCompletionMap = { ...completionMap, [taskId]: !isCompleted };
-      setCompletionMap(nextCompletionMap);
-      if (
-        shouldRefillAfterCompletion({
-          taskId,
-          wasCompleted: isCompleted,
-          queueTaskIds,
-          completionMap: nextCompletionMap,
-        })
-      ) {
-        await refillQueue();
+    if (res.error) return;
+
+    // Keep task status aligned with completion behavior for queue tasks.
+    if (!isWorkoutSynthetic) {
+      await updateTask(user.id, effectiveTaskId, {
+        status: nextType === "completed" ? "archived" : "todo",
+      });
+    }
+
+    const optimisticMap = { ...completionMap, [taskId]: !isCompleted };
+    setCompletionMap(optimisticMap);
+
+    // Re-check completion from DB to avoid race conditions from rapid checkbox clicks.
+    const ids = (queueTaskIds || []).filter(Boolean);
+    if (ids.length === 3) {
+      const fresh = await getTaskEventsForTasksOnDate(user.id, ids, todayStr);
+      if (!fresh.error) {
+        const refreshedMap = buildCompletionMap(fresh.data || [], workoutTaskId);
+        const merged = { ...optimisticMap, ...refreshedMap };
+        setCompletionMap(merged);
+        if (!isCompleted && ids.every((id) => !!merged[id])) {
+          await refillQueue();
+          return;
+        }
       }
+    }
+
+    if (
+      shouldRefillAfterCompletion({
+        taskId,
+        wasCompleted: isCompleted,
+        queueTaskIds,
+        completionMap: optimisticMap,
+      })
+    ) {
+      await refillQueue();
     }
   }
 
