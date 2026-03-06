@@ -384,3 +384,33 @@ Date: 2026-03-06 10:34 EST
 
 ### Next step
 - Move to the next highest-priority backlog item from the report: replace root `README.md` boilerplate with a project-accurate runbook (architecture, env, setup, scripts, and verification flow).
+
+Date: 2026-03-06 11:16 EST
+
+## Iteration update (README runbook + analytics warning corrective pass)
+
+### What changed
+- Replaced root `README.md` boilerplate with a project-accurate runbook:
+  - product overview,
+  - architecture map,
+  - required/optional env vars,
+  - setup + quality gates,
+  - deployment verification checklist,
+  - canonical docs references.
+- Implemented additional analytics chart mount hardening in `pages/analytics.js`:
+  - added `MeasuredChart` wrapper using `ResizeObserver` + measured width/height gate,
+  - charts render only after container dimensions are positive.
+
+### Verification results
+- `npm run lint` ✅ passed
+- `npm run build` ✅ passed
+- Production browser checks:
+  - `/today` renders expected queue/UI ✅
+  - `/analytics` renders expected analytics sections ✅
+  - Console still reports Recharts width/height `-1` warnings from currently served production chunk (`1840879c...`) during immediate post-push check ⚠️
+
+### Completion proof
+- commit hash/branch: `e0f505d` on `main` (pushed to `origin/main`).
+
+### Next step
+- Re-check production analytics console on next tick after deployment propagation; if warning persists on new chunk, implement a deeper chart-init guard (defer to `requestAnimationFrame`/visibility gate).
