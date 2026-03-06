@@ -834,3 +834,35 @@ Date: 2026-03-06 14:35 EST
 
 ### One-line user impact
 Planner refinements are now safer under failure conditions: if a later apply step fails, task/title/effort and tag links are restored instead of leaving partial updates.
+
+Date: 2026-03-06 14:46 EST
+
+## Execution outcomes (Project loop iteration)
+- **Selected project:** `/home/clawofhank/projects/rise-and-shine` (latest highest-priority manager packet in `MEMORY.md`: P3 DB-boundary decomposition prep after P1/P2 security hardening).
+- **Task continued:** P3 — begin bounded extraction from `lib/db.js` for planner/events domain without behavior change.
+
+### Code changes
+- Added new focused module: `lib/db/planner-refinement-events.js`.
+  - Moved planner refinement event range query logic from monolithic `lib/db.js` into this domain module.
+  - Preserved existing query behavior (enum-safe `event_type = "updated"` + value-metadata path).
+- Updated `lib/db.js` to re-export `getPlannerRefinementEventsInRange` from the new module so existing call sites remain unchanged.
+- Added `docs/ARCHITECTURE_NOTES.md` with phased decomposition plan and guardrails for incremental extraction.
+
+### Verification evidence
+- `npm run verify:release` ✅
+  - `verify:scoring` ✅
+  - `verify:queue` ✅
+  - `verify:planner` ✅
+  - `verify:refinement-events` ✅
+  - `npm run lint` ✅
+  - `npm run build` ✅
+- Production checks (post-change):
+  - `https://rise-and-shine-hazel.vercel.app/today?ts=cron-20260306-1445b` rendered expected Today UI; console clean ✅
+  - `https://rise-and-shine-hazel.vercel.app/analytics?ts=cron-20260306-1445` rendered Planner refinement analytics panel; console clean ✅
+
+### Completion proof
+- Commit: pending (local changes staged/ready for commit in this iteration).
+- Branch: `main`
+
+### One-line user impact
+The planner analytics data-access boundary is now cleaner and easier to evolve safely, reducing regression risk as `lib/db.js` is decomposed in small steps.
