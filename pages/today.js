@@ -68,6 +68,25 @@ function buildQueueFromChosen(chosen) {
   }));
 }
 
+function normalizeTag(tag) {
+  if (!tag) return "";
+  return String(tag).trim().toLowerCase().replace(/\s+/g, "-");
+}
+
+function hasBlockedOrWaitingTag(task) {
+  const tags = (task?.tags || [])
+    .map((t) => {
+      if (!t) return "";
+      if (typeof t === "string") return normalizeTag(t);
+      if (t.name) return normalizeTag(t.name);
+      if (t.tag?.name) return normalizeTag(t.tag.name);
+      return "";
+    })
+    .filter(Boolean);
+  const set = new Set(tags);
+  return set.has("blocked") || set.has("waiting");
+}
+
 export default function TodayPage() {
   const { user, isCheckingAuth } = useAuth();
   const [mode, setMode] = useState("Strategic Push");
@@ -222,6 +241,7 @@ export default function TodayPage() {
               : t.category?.name ?? null;
           if (catName === "Daily Repeat") return false;
           if (dailySet.has(t.id)) return false;
+          if (hasBlockedOrWaitingTag(t)) return false;
           return t.status === "todo" || t.status === "doing";
         });
         const tasksById = new Map(candidates.map((t) => [t.id, t]));
@@ -235,8 +255,9 @@ export default function TodayPage() {
           })
           .filter(Boolean);
 
-        const needsRefill = plan && resolved.length < 3 && candidates.length > 0;
-        if (needsRefill) {
+        const hasPersistedQueue = Array.isArray(plan?.queue) && plan.queue.length > 0;
+        const shouldSeedInitialQueue = plan && !hasPersistedQueue && candidates.length > 0;
+        if (shouldSeedInitialQueue) {
           const chosen = chooseKeyOutcomes(candidates, {
             mode,
             todayStr,
@@ -306,6 +327,7 @@ export default function TodayPage() {
       const catName = typeof t.category === "string" ? t.category : t.category?.name ?? null;
       if (catName === "Daily Repeat") return false;
       if (dailySet.has(t.id)) return false;
+      if (hasBlockedOrWaitingTag(t)) return false;
       return t.status === "todo" || t.status === "doing";
     });
     if (candidates.length === 0) {
@@ -350,12 +372,13 @@ export default function TodayPage() {
     if (!effectiveTaskId) return;
     const res = await logTaskEvent(user.id, effectiveTaskId, nextType, value);
     if (!res.error) {
-      setCompletionMap((prev) => ({ ...prev, [taskId]: !isCompleted }));
+      const nextCompletionMap = { ...completionMap, [taskId]: !isCompleted };
+      setCompletionMap(nextCompletionMap);
       if (
         !isCompleted &&
         queueTaskIds.length === 3 &&
         queueTaskIds.includes(taskId) &&
-        queueTaskIds.every((id) => id === taskId || !!completionMap[id])
+        queueTaskIds.every((id) => !!nextCompletionMap[id])
       ) {
         await refillQueue();
       }
@@ -411,12 +434,67 @@ export default function TodayPage() {
     }));
   }
 
-  function handleApproveRefinement(item, index) {
-    const payload = { task_id: item.task_id, suggested_title: item.suggested_title, suggested_tags_add: item.suggested_tags_add, suggested_effort_minutes: item.suggested_effort_minutes };
-    console.log("Apply refinement (placeholder): POST /api/planner/apply", payload);
-    setAppliedMessage("Applied.");
-    setTimeout(() => setAppliedMessage(""), 2000);
-    dismissRefinement(index);
+  async function handleApproveRefinement(item, index) {
+    if (!user) return;
+    const payload = {
+      user_id: user.id,
+      task_id: item.task_id,
+      suggested_title: item.suggested_title,
+      suggested_tags_add: item.suggested_tags_add,
+      suggested_effort_minutes: item.suggested_effort_minutes,
+    };
+
+    try {
+      const res = await fetch("/api/planner/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok) {
+        setError(data?.error || "Failed to apply refinement.");
+        return;
+      }
+
+      const taskUpdate = data.task || {};
+      const tagNames = Array.isArray(data.tags) ? data.tags : null;
+
+      setQueueEntries((prev) =>
+        prev.map((e) => {
+          if (e.task?.id !== item.task_id) return e;
+          return {
+            ...e,
+            task: {
+              ...e.task,
+              title: taskUpdate.title ?? e.task.title,
+              effort_hours: taskUpdate.effort_hours ?? e.task.effort_hours,
+              tags:
+                tagNames != null
+                  ? tagNames.map((name) => ({ tag: { name } }))
+                  : e.task.tags,
+            },
+          };
+        })
+      );
+
+      setBacklogTasks((prev) =>
+        (prev || []).map((t) => {
+          if (t.id !== item.task_id) return t;
+          return {
+            ...t,
+            title: taskUpdate.title ?? t.title,
+            effort_hours: taskUpdate.effort_hours ?? t.effort_hours,
+            tags: tagNames != null ? tagNames.map((name) => ({ tag: { name } })) : t.tags,
+          };
+        })
+      );
+
+      setAppliedMessage("Applied.");
+      setTimeout(() => setAppliedMessage(""), 2000);
+      dismissRefinement(index);
+    } catch {
+      setError("Failed to apply refinement.");
+    }
   }
 
   function dismissSubtask(index) {
