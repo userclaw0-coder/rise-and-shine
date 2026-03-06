@@ -414,3 +414,23 @@ Date: 2026-03-06 11:16 EST
 
 ### Next step
 - Re-check production analytics console on next tick after deployment propagation; if warning persists on new chunk, implement a deeper chart-init guard (defer to `requestAnimationFrame`/visibility gate).
+
+Date: 2026-03-06 11:35 EST
+
+## Iteration update (analytics warning corrective commit: measured width/height render)
+
+### What changed
+- Updated `pages/analytics.js` chart rendering path to eliminate `ResponsiveContainer` startup `-1` width/height warnings.
+- Refactored `MeasuredChart` to track concrete container dimensions (`width`, `height`) via `ResizeObserver` + `requestAnimationFrame`-scheduled measurement.
+- Switched all analytics bar charts to render with explicit numeric `BarChart width/height` only after container dimensions are positive.
+
+### Verification results
+- `npm run lint` ✅ passed
+- `npm run build` ✅ passed
+- Local route build confirms analytics page compiles: `/analytics` ✅
+
+### Completion proof
+- Pending commit/push in this iteration after report update.
+
+### Next step
+- Push this corrective commit, then verify production `/analytics` console is clean; if warnings persist, add visibility/IntersectionObserver gate as final fallback.

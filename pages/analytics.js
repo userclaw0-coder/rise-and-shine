@@ -7,15 +7,7 @@ import {
   getWeeklyReviewWeeks,
   getPlannerRefinementEventsInRange,
 } from "../lib/db";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 
 function dateStr(d) {
   return d.toISOString().slice(0, 10);
@@ -27,28 +19,45 @@ function addDays(d, n) {
   return out;
 }
 
-function MeasuredChart({ children }) {
+function MeasuredChart({ height = 220, renderChart }) {
   const containerRef = useRef(null);
-  const [ready, setReady] = useState(false);
+  const [size, setSize] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
     if (!containerRef.current) return;
 
+    let rafId = 0;
     const update = () => {
       const rect = containerRef.current?.getBoundingClientRect();
-      setReady(Boolean(rect && rect.width > 0 && rect.height > 0));
+      const next = {
+        width: Math.max(0, Math.floor(rect?.width || 0)),
+        height: Math.max(0, Math.floor(rect?.height || 0)),
+      };
+      setSize((prev) =>
+        prev.width === next.width && prev.height === next.height ? prev : next
+      );
     };
 
-    update();
-    const observer = new ResizeObserver(update);
+    const scheduleUpdate = () => {
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(update);
+    };
+
+    scheduleUpdate();
+    const observer = new ResizeObserver(scheduleUpdate);
     observer.observe(containerRef.current);
 
-    return () => observer.disconnect();
+    return () => {
+      cancelAnimationFrame(rafId);
+      observer.disconnect();
+    };
   }, []);
 
+  const ready = size.width > 0 && size.height > 0;
+
   return (
-    <div style={{ width: "100%", minWidth: 0, height: 220 }} ref={containerRef}>
-      {ready ? children : null}
+    <div style={{ width: "100%", minWidth: 0, height }} ref={containerRef}>
+      {ready ? renderChart(size) : null}
     </div>
   );
 }
@@ -260,17 +269,17 @@ export default function AnalyticsPage() {
           <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
             7-day momentum (tasks completed per day)
           </h2>
-          <MeasuredChart>
-            <ResponsiveContainer width="100%" height="100%" minWidth={280} minHeight={180}>
-              <BarChart data={sevenDayData}>
+          <MeasuredChart
+            renderChart={({ width, height }) => (
+              <BarChart width={width} height={height} data={sevenDayData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="date" tick={{ fontSize: 10 }} />
                 <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
                 <Tooltip />
                 <Bar dataKey="count" fill="#111827" radius={[4, 4, 0, 0]} />
               </BarChart>
-            </ResponsiveContainer>
-          </MeasuredChart>
+            )}
+          />
         </section>
 
         <section
@@ -285,17 +294,17 @@ export default function AnalyticsPage() {
           <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
             30-day momentum
           </h2>
-          <MeasuredChart>
-            <ResponsiveContainer width="100%" height="100%" minWidth={280} minHeight={180}>
-              <BarChart data={thirtyDayData}>
+          <MeasuredChart
+            renderChart={({ width, height }) => (
+              <BarChart width={width} height={height} data={thirtyDayData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="date" tick={{ fontSize: 9 }} />
                 <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
                 <Tooltip />
                 <Bar dataKey="count" fill="#374151" radius={[4, 4, 0, 0]} />
               </BarChart>
-            </ResponsiveContainer>
-          </MeasuredChart>
+            )}
+          />
         </section>
 
         <section
@@ -310,17 +319,17 @@ export default function AnalyticsPage() {
           <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
             Completion time of day (UTC hour)
           </h2>
-          <MeasuredChart>
-            <ResponsiveContainer width="100%" height="100%" minWidth={280} minHeight={180}>
-              <BarChart data={hourHistogram}>
+          <MeasuredChart
+            renderChart={({ width, height }) => (
+              <BarChart width={width} height={height} data={hourHistogram}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="hour" tick={{ fontSize: 10 }} />
                 <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
                 <Tooltip />
                 <Bar dataKey="count" fill="#059669" radius={[4, 4, 0, 0]} />
               </BarChart>
-            </ResponsiveContainer>
-          </MeasuredChart>
+            )}
+          />
         </section>
 
         <section
