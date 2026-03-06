@@ -766,3 +766,38 @@ Date: 2026-03-06 14:02 EST
 
 ### User impact
 - Production confidence is restored: both core pages now render cleanly, so users can rely on Today + Analytics without the earlier enum error interruption.
+
+Date: 2026-03-06 14:29 EST
+
+## Execution outcomes (Project loop iteration)
+- **Selected project:** `/home/clawofhank/projects/rise-and-shine` (per latest highest-priority manager packet in `MEMORY.md`: planner API trust-boundary hardening).
+- **Task continued:** P1 — enforce server-derived identity for planner mutating/read endpoints (`/api/planner/apply`, `/api/planner/ai-refine`, `/api/plan/refill`).
+
+### Code changes
+- Added `lib/api-auth.js` with shared bearer-token auth resolution via Supabase `auth.getUser(token)`.
+- Updated `/api/planner/apply` to:
+  - require authenticated user,
+  - reject mismatched `user_id` body values,
+  - scope all reads/writes/events to server-derived `userId`.
+- Updated `/api/planner/ai-refine` to:
+  - require authenticated user,
+  - reject mismatched `user_id` body values,
+  - scope all planner/query/cache operations to server-derived `userId`.
+- Updated `/api/plan/refill` to:
+  - require authenticated user,
+  - reject mismatched `user_id` body values,
+  - scope all plan/task/tag/event operations to server-derived `userId`.
+- Error handling now preserves auth status (`401/403`) rather than collapsing to generic 500 for auth failures.
+
+### Verification evidence
+- `npm run lint` ✅
+- `npm run build` ✅
+- `npm run verify:release` ✅ (`verify:scoring`, `verify:queue`, `verify:planner`, `verify:refinement-events`, lint, build)
+
+### Completion proof
+- Commit: (pending in this entry; see latest git commit below after push)
+- Branch: `main`
+- Checks: all release gates green in this iteration.
+
+### One-line user impact
+Planner API routes now trust authenticated server identity instead of raw client `user_id`, closing a spoofing path and improving data integrity/security.

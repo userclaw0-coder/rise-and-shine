@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { chooseKeyOutcomes } from "../../../lib/scoring";
+import { getAuthenticatedUserId } from "../../../lib/api-auth";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -19,16 +20,29 @@ export default async function handler(req, res) {
   try {
     if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
 
-    const { user_id, date, mode, force, base_category_weights, quick_win_minutes } = req.body || {};
-    if (!user_id) return res.status(400).json({ error: "user_id required" });
+    const authenticatedUserId = await getAuthenticatedUserId(req);
 
+    const {
+      user_id: requestedUserId,
+      date,
+      mode,
+      force,
+      base_category_weights,
+      quick_win_minutes,
+    } = req.body || {};
+
+    if (requestedUserId && requestedUserId !== authenticatedUserId) {
+      return res.status(403).json({ error: "user_id does not match authenticated user" });
+    }
+
+    const userId = authenticatedUserId;
     const today = date || new Date().toISOString().slice(0, 10);
     const chosenMode = mode || "Strategic Push";
 
     const { data: plan, error: planErr } = await supabase
       .from("daily_plans")
       .select("*")
-      .eq("user_id", user_id)
+      .eq("user_id", userId)
       .eq("date", today)
       .maybeSingle();
     if (planErr) throw planErr;
@@ -38,23 +52,28 @@ export default async function handler(req, res) {
       return res.json({ ok: true, date: today, queue: existingQueue, reused: true });
     }
 
-    const [{ data: tasks, error: tasksErr }, { data: categories, error: catsErr }, { data: tagLinks, error: linksErr }, { data: tagRows, error: tagsErr }, { data: completedEvents, error: compErr }] =
-      await Promise.all([
-        supabase
-          .from("tasks")
-          .select("id,title,priority,effort_hours,due_date,status,parent_task_id,category_id,subcategory_id")
-          .eq("user_id", user_id)
-          .in("status", ["todo", "doing"]),
-        supabase.from("categories").select("id,name").eq("user_id", user_id),
-        supabase.from("task_tags").select("task_id, tag_id").eq("user_id", user_id),
-        supabase.from("tags").select("id,name").eq("user_id", user_id),
-        supabase
-          .from("task_events")
-          .select("task_id,created_at,event_type")
-          .eq("user_id", user_id)
-          .eq("event_type", "completed")
-          .order("created_at", { ascending: false }),
-      ]);
+    const [
+      { data: tasks, error: tasksErr },
+      { data: categories, error: catsErr },
+      { data: tagLinks, error: linksErr },
+      { data: tagRows, error: tagsErr },
+      { data: completedEvents, error: compErr },
+    ] = await Promise.all([
+      supabase
+        .from("tasks")
+        .select("id,title,priority,effort_hours,due_date,status,parent_task_id,category_id,subcategory_id")
+        .eq("user_id", userId)
+        .in("status", ["todo", "doing"]),
+      supabase.from("categories").select("id,name").eq("user_id", userId),
+      supabase.from("task_tags").select("task_id, tag_id").eq("user_id", userId),
+      supabase.from("tags").select("id,name").eq("user_id", userId),
+      supabase
+        .from("task_events")
+        .select("task_id,created_at,event_type")
+        .eq("user_id", userId)
+        .eq("event_type", "completed")
+        .order("created_at", { ascending: false }),
+    ]);
 
     if (tasksErr) throw tasksErr;
     if (catsErr) throw catsErr;
@@ -99,7 +118,7 @@ export default async function handler(req, res) {
 
     const newQueue = buildQueueFromChosen(chosen);
     const payload = {
-      user_id,
+      user_id: userId,
       date: today,
       mode: chosenMode,
       queue: newQueue,
@@ -114,6 +133,6 @@ export default async function handler(req, res) {
 
     return res.json({ ok: true, date: today, queue: newQueue, reused: false });
   } catch (e) {
-    return res.status(500).json({ error: e.message || String(e) });
+    return res.status(e.status || 500).json({ error: e.message || String(e) });
   }
 }

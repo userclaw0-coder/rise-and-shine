@@ -4,6 +4,7 @@ import {
   mergePlannerTagNames,
   normalizeIncomingTags,
 } from "../../../lib/planner-apply";
+import { getAuthenticatedUserId } from "../../../lib/api-auth";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -14,21 +15,28 @@ export default async function handler(req, res) {
   try {
     if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
 
+    const authenticatedUserId = await getAuthenticatedUserId(req);
+
     const {
-      user_id,
+      user_id: requestedUserId,
       task_id,
       suggested_title,
       suggested_effort_minutes,
       suggested_tags_add,
     } = req.body || {};
 
-    if (!user_id) return res.status(400).json({ error: "user_id required" });
+    if (requestedUserId && requestedUserId !== authenticatedUserId) {
+      return res.status(403).json({ error: "user_id does not match authenticated user" });
+    }
+
+    const userId = authenticatedUserId;
+
     if (!task_id) return res.status(400).json({ error: "task_id required" });
 
     const { data: existingTask, error: taskErr } = await supabase
       .from("tasks")
       .select("id,title,effort_hours")
-      .eq("user_id", user_id)
+      .eq("user_id", userId)
       .eq("id", task_id)
       .maybeSingle();
 
@@ -45,7 +53,7 @@ export default async function handler(req, res) {
       const { data, error } = await supabase
         .from("tasks")
         .update(updates)
-        .eq("user_id", user_id)
+        .eq("user_id", userId)
         .eq("id", task_id)
         .select("id,title,effort_hours")
         .single();
@@ -61,7 +69,7 @@ export default async function handler(req, res) {
       const { data: existingLinks, error: linkErr } = await supabase
         .from("task_tags")
         .select("tag_id")
-        .eq("user_id", user_id)
+        .eq("user_id", userId)
         .eq("task_id", task_id);
       if (linkErr) throw linkErr;
 
@@ -71,7 +79,7 @@ export default async function handler(req, res) {
         const { data: rows, error: tagsErr } = await supabase
           .from("tags")
           .select("id,name")
-          .eq("user_id", user_id)
+          .eq("user_id", userId)
           .in("id", existingTagIds);
         if (tagsErr) throw tagsErr;
         existingTagRows = rows || [];
@@ -88,7 +96,7 @@ export default async function handler(req, res) {
         const { data: found, error: foundErr } = await supabase
           .from("tags")
           .select("id")
-          .eq("user_id", user_id)
+          .eq("user_id", userId)
           .ilike("name", name)
           .limit(1)
           .maybeSingle();
@@ -99,7 +107,7 @@ export default async function handler(req, res) {
         }
         const { data: created, error: createErr } = await supabase
           .from("tags")
-          .insert({ user_id, name })
+          .insert({ user_id: userId, name })
           .select("id")
           .single();
         if (createErr) throw createErr;
@@ -109,12 +117,12 @@ export default async function handler(req, res) {
       const { error: clearErr } = await supabase
         .from("task_tags")
         .delete()
-        .eq("user_id", user_id)
+        .eq("user_id", userId)
         .eq("task_id", task_id);
       if (clearErr) throw clearErr;
 
       if (ensuredIds.length > 0) {
-        const links = ensuredIds.map((tag_id) => ({ user_id, task_id, tag_id }));
+        const links = ensuredIds.map((tag_id) => ({ user_id: userId, task_id, tag_id }));
         const { error: insErr } = await supabase.from("task_tags").insert(links);
         if (insErr) throw insErr;
       }
@@ -122,7 +130,7 @@ export default async function handler(req, res) {
 
     await supabase.from("task_events").insert([
       {
-        user_id,
+        user_id: userId,
         task_id,
         event_type: "updated",
         value: {
@@ -136,7 +144,7 @@ export default async function handler(req, res) {
         },
       },
       {
-        user_id,
+        user_id: userId,
         task_id,
         event_type: "updated",
         value: {
@@ -154,6 +162,6 @@ export default async function handler(req, res) {
       tags: finalTagNames,
     });
   } catch (e) {
-    return res.status(500).json({ error: e.message || String(e) });
+    return res.status(e.status || 500).json({ error: e.message || String(e) });
   }
 }

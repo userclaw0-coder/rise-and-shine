@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
+import { getAuthenticatedUserId } from "../../../lib/api-auth";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -34,16 +35,19 @@ export default async function handler(req, res) {
   try {
     if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
 
-    const { user_id, date } = req.body;
-    if (!user_id) return res.status(400).json({ error: "user_id required" });
+    const authenticatedUserId = await getAuthenticatedUserId(req);
+    const { user_id: requestedUserId, date } = req.body || {};
+    if (requestedUserId && requestedUserId !== authenticatedUserId) {
+      return res.status(403).json({ error: "user_id does not match authenticated user" });
+    }
 
+    const userId = authenticatedUserId;
     const today = date || new Date().toISOString().slice(0, 10);
 
-    // 1) Load daily plan
     const { data: plan, error: planErr } = await supabase
       .from("daily_plans")
       .select("*")
-      .eq("user_id", user_id)
+      .eq("user_id", userId)
       .eq("date", today)
       .maybeSingle();
 
@@ -57,11 +61,10 @@ export default async function handler(req, res) {
     const mode = plan.mode || "Strategic Push";
     const queueHash = hashQueue(mode, plan.queue);
 
-    // 2) Cache check: if already refined for this exact queue, return cached
     const { data: cached, error: cacheErr } = await supabase
       .from("planner_cache")
       .select("ai_output")
-      .eq("user_id", user_id)
+      .eq("user_id", userId)
       .eq("date", today)
       .eq("queue_hash", queueHash)
       .maybeSingle();
@@ -71,36 +74,33 @@ export default async function handler(req, res) {
       return res.json({ ok: true, cached: true, queue_hash: queueHash, ai: cached.ai_output });
     }
 
-    // 3) Pull only the 3 tasks in the queue (tiny context)
     const taskIds = plan.queue.map((q) => q.task_id);
     const { data: tasks, error: tasksErr } = await supabase
       .from("tasks")
       .select("id,title,priority,effort_hours,due_date,status,parent_task_id,category_id,subcategory_id")
-      .eq("user_id", user_id)
+      .eq("user_id", userId)
       .in("id", taskIds);
 
     if (tasksErr) throw tasksErr;
 
-    // Categories name map
     const { data: cats, error: catsErr } = await supabase
       .from("categories")
       .select("id,name")
-      .eq("user_id", user_id);
+      .eq("user_id", userId);
     if (catsErr) throw catsErr;
     const catMap = Object.fromEntries((cats || []).map((c) => [c.id, c.name]));
 
-    // Tags for those tasks only
     const { data: tagLinks, error: tlErr } = await supabase
       .from("task_tags")
       .select("task_id, tag_id")
-      .eq("user_id", user_id)
+      .eq("user_id", userId)
       .in("task_id", taskIds);
     if (tlErr) throw tlErr;
 
     const { data: tagRows, error: trErr } = await supabase
       .from("tags")
       .select("id,name")
-      .eq("user_id", user_id);
+      .eq("user_id", userId);
     if (trErr) throw trErr;
     const tagMap = Object.fromEntries((tagRows || []).map((t) => [t.id, t.name]));
 
@@ -127,14 +127,12 @@ export default async function handler(req, res) {
       };
     });
 
-    // 4) Human needs (optional): latest weekly snapshot if you’ve implemented it; otherwise omit
-    // If you don't have human_needs_weekly table yet, this will just be null.
     let needs = null;
     try {
       const { data: hn } = await supabase
         .from("human_needs_weekly")
         .select("*")
-        .eq("user_id", user_id)
+        .eq("user_id", userId)
         .order("week_start", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -143,7 +141,6 @@ export default async function handler(req, res) {
       needs = null;
     }
 
-    // 5) Build a *small* instruction + input payload (cost control)
     const instructions = `
 You are Rise & Shine — a calm operator planning assistant.
 Return ONLY valid JSON with:
@@ -191,7 +188,6 @@ Keep responses concise.
       },
     };
 
-    // 6) Call OpenAI (Responses API)
     const response = await openai.responses.create({
       model: MODEL,
       instructions,
@@ -202,16 +198,14 @@ Keep responses concise.
     const parsed = safeJsonParse(text);
 
     if (!parsed) {
-      // Store raw output for debugging, but return error
       return res.status(500).json({
         error: "AI returned non-JSON output. Try again or adjust model.",
         raw: text.slice(0, 2000),
       });
     }
 
-    // 7) Cache result (so you don’t pay again)
     await supabase.from("planner_cache").insert({
-      user_id,
+      user_id: userId,
       date: today,
       mode,
       queue_hash: queueHash,
@@ -220,6 +214,6 @@ Keep responses concise.
 
     return res.json({ ok: true, cached: false, queue_hash: queueHash, ai: parsed });
   } catch (e) {
-    return res.status(500).json({ error: e.message || String(e) });
+    return res.status(e.status || 500).json({ error: e.message || String(e) });
   }
 }
