@@ -282,3 +282,31 @@ Date: 2026-03-06 09:05 EST
 
 ### Next step
 - Add lightweight onboarding helper copy/examples per step (especially six-needs strategy/pattern fields) to improve completion quality while preserving current validation constraints.
+
+Date: 2026-03-06 09:27 EST
+
+## Iteration update (onboarding helper copy/examples)
+
+### What changed
+- Updated `pages/onboarding.js` with guidance-focused helper copy and examples to improve completion quality without changing persistence schema.
+- Added per-need strategy/risk placeholders for the Six Needs step via `NEED_EXAMPLES`.
+- Added contextual tip box in Six Needs step encouraging behavior-based inputs.
+- Added structured Brain Dump prompt box clarifying tasks vs projects vs ideas.
+- Added practical example placeholders for:
+  - Brain dump raw text
+  - Structured tasks/projects/ideas
+  - Resources and constraints
+
+### Verification results
+- `npm run lint` ✅ passed
+- `npm run build` ✅ passed
+- Production browser checks:
+  - `/analytics` renders "Planner refinement analytics (last 30 days)" panel ✅
+  - `/onboarding` renders updated Six Needs helper tip and per-need example placeholders ✅
+- Browser console errors during checks: none observed on tested pages ✅
+
+### Completion proof
+- commit hash/branch: `9f3a64c` on `main` (pushed to `origin/main`).
+
+### Next step
+- Continue onboarding polish with optional microcopy for Steps 1/2/5/6 and compact mobile layout tuning for Step 3 cards.
