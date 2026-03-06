@@ -252,3 +252,33 @@ Date: 2026-03-06 08:44 EST
 
 ### Next step
 - Continue onboarding parity polish by adding field-level validation and UX guardrails for six-needs + structured brain-dump inputs (while keeping current persistence schema intact).
+
+Date: 2026-03-06 09:05 EST
+
+## Iteration update (onboarding validation + UX guardrails)
+
+### What changed
+- Added step-level onboarding validation in `pages/onboarding.js`:
+  - Step 1 requires at least one identity phrase.
+  - Step 2 requires at least one life-domain note or desired outcome.
+  - Step 3 (Six needs) enforces score range (1–10) and requires a current strategy for each need.
+  - Step 4 requires a raw brain dump or structured tasks/projects/ideas input.
+  - Step 5 validates available hours when provided (0–168).
+  - Step 6 requires at least one strategic-focus item or immediate step.
+- Added inline validation error list UI to surface actionable issues before progressing.
+- Updated Next-step behavior to block progression when current step is invalid.
+- Updated Complete Onboarding behavior to validate all steps before final submission.
+
+### Verification results
+- `npm run lint` ✅ passed
+- `npm run build` ✅ passed
+- Production verification via browser:
+  - `/onboarding` loads and shows 6-step flow; step progression works ✅
+  - `/analytics` loads and planner refinement analytics panel present ✅
+  - Browser console errors (onboarding + analytics): none observed ✅
+
+### Completion proof
+- commit hash/branch: `7b6eee2` on `main` (pushed to `origin/main`).
+
+### Next step
+- Add lightweight onboarding helper copy/examples per step (especially six-needs strategy/pattern fields) to improve completion quality while preserving current validation constraints.
