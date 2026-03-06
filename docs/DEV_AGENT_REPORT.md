@@ -964,3 +964,25 @@ Date: 2026-03-06 16:12 EST
 
 ### One-line user impact
 Iteration evidence stays cleaner because local n8n config template artifacts no longer show up as distracting working-tree noise.
+
+## Execution outcomes (planner apply rollback hardening)
+- **Selected project:** `/home/clawofhank/projects/rise-and-shine` (highest-priority manager packet: planner apply atomicity/failure-safety hardening).
+- **Task continued:** Reduce partial-write side effects in `/api/planner/apply` failure paths.
+
+### Code changes
+- Updated `pages/api/planner/apply.js` to track planner-created tag IDs during apply mutations.
+- Extended rollback path to delete newly created tags when downstream mutation steps fail, preventing orphan planner tags from persisting after a failed apply.
+- Kept existing task/task-tag rollback behavior intact.
+
+### Verification evidence
+- `npm run verify:planner` ✅
+- `npm run build` ✅
+
+### Completion proof
+- Commit: pending (this iteration)
+- Branch: `main`
+
+### One-line user impact
+Failed planner refinements now clean up newly created tags automatically, reducing hidden data drift and making apply behavior safer under partial failures.
+
+Date: 2026-03-06 16:24 EST

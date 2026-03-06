@@ -82,6 +82,7 @@ export default async function handler(req, res) {
 
     let taskMutated = false;
     let tagsMutated = false;
+    const createdTagIds = [];
 
     try {
       if (Object.keys(updates).length > 0) {
@@ -136,6 +137,7 @@ export default async function handler(req, res) {
             .single();
           if (createErr) throw createErr;
           ensuredIds.push(created.id);
+          createdTagIds.push(created.id);
         }
 
         const { error: clearErr } = await supabase
@@ -187,6 +189,13 @@ export default async function handler(req, res) {
       }
       if (tagsMutated) {
         await restoreTaskTags({ userId, taskId: task_id, originalTagIds });
+      }
+      if (createdTagIds.length > 0) {
+        await supabase
+          .from("tags")
+          .delete()
+          .eq("user_id", userId)
+          .in("id", createdTagIds);
       }
       throw mutationErr;
     }
