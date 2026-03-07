@@ -1283,3 +1283,34 @@ Date: 2026-03-06 19:08 EST
 
 ### User impact (one line)
 - Planner refinement apply now has a direct path to true DB-atomic writes, reducing partial-write risk and making apply behavior more reliable under failure.
+
+Date: 2026-03-06 19:15 EST
+
+## Iteration update (planner apply RPC atomicity guardrail + verifier)
+- **Selected project:** `/home/clawofhank/projects/rise-and-shine` (highest-priority manager packet in `MEMORY.md`: DB-boundary atomic planner-apply objective).
+- **Task continued:** harden atomic apply path by making RPC availability behavior explicit and verifiable.
+
+### What changed
+1. Added deterministic RPC-path verifier: `scripts/verify-planner-rpc.mjs`
+   - Covers success path normalization.
+   - Covers RPC-unavailable fallback classification.
+   - Covers non-availability RPC error propagation.
+2. Extended planner gate wiring in `package.json`:
+   - `verify:planner` now runs `verify-planner-rpc` in addition to apply + rollback verifiers.
+3. Added strict atomicity guardrail in `pages/api/planner/apply.js`:
+   - New env-controlled mode `PLANNER_APPLY_RPC_REQUIRED=true` returns `503` (`planner_apply_rpc_required`) when atomic RPC is unavailable.
+   - Keeps existing rollback fallback only when strict mode is not enabled.
+4. Exported `isRpcUnavailable` from `lib/planner-apply-rpc.js` for deterministic verification coverage.
+
+### Local verification
+- `npm run verify:planner` ✅
+  - `verify-planner-apply: OK`
+  - `verify-planner-rollback: OK`
+  - `verify-planner-rpc: OK`
+- `npm run build` ✅
+
+### Completion proof
+- Pending commit/push for this iteration after report append.
+
+### User impact
+Planner refinement apply now has a stricter, test-backed path toward true DB-atomic writes, reducing the chance of silently relying on fallback behavior in environments that require hard atomic guarantees.

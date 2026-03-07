@@ -102,6 +102,14 @@ export default async function handler(req, res) {
       });
     }
 
+    const requireRpcAtomic = process.env.PLANNER_APPLY_RPC_REQUIRED === "true";
+    if (requireRpcAtomic) {
+      return res.status(503).json({
+        error: "Atomic planner apply RPC is required but unavailable",
+        code: "planner_apply_rpc_required",
+      });
+    }
+
     await applyPlannerMutationWithRollback({
       mutateTask: async () => {
         if (Object.keys(updates).length === 0) return { mutated: false };
