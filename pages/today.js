@@ -385,7 +385,7 @@ export default function TodayPage() {
       const res = await fetch("/api/planner/ai-refine", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: user.id, date: todayStr }),
+        body: JSON.stringify({ date: todayStr }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -440,7 +440,6 @@ export default function TodayPage() {
   async function handleApproveRefinement(item, index) {
     if (!user) return;
     const payload = {
-      user_id: user.id,
       task_id: item.task_id,
       suggested_title: item.suggested_title,
       suggested_tags_add: item.suggested_tags_add,

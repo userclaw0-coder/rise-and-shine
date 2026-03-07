@@ -23,17 +23,12 @@ export default async function handler(req, res) {
     const authenticatedUserId = await getAuthenticatedUserId(req);
 
     const {
-      user_id: requestedUserId,
       date,
       mode,
       force,
       base_category_weights,
       quick_win_minutes,
     } = req.body || {};
-
-    if (requestedUserId && requestedUserId !== authenticatedUserId) {
-      return res.status(403).json({ error: "user_id does not match authenticated user" });
-    }
 
     const userId = authenticatedUserId;
     const today = date || new Date().toISOString().slice(0, 10);

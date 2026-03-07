@@ -36,10 +36,7 @@ export default async function handler(req, res) {
     if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
 
     const authenticatedUserId = await getAuthenticatedUserId(req);
-    const { user_id: requestedUserId, date } = req.body || {};
-    if (requestedUserId && requestedUserId !== authenticatedUserId) {
-      return res.status(403).json({ error: "user_id does not match authenticated user" });
-    }
+    const { date } = req.body || {};
 
     const userId = authenticatedUserId;
     const today = date || new Date().toISOString().slice(0, 10);

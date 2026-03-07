@@ -1457,3 +1457,144 @@ Owner: Research Agent
 
 ### One-line user impact
 Production planner apply can no longer silently fall back to rollback-mode writes due to env misconfiguration, reducing partial-write risk.
+
+Date: 2026-03-07 01:49 EST
+Owner: Research Agent
+
+## Architecture Review (scheduled cron pass, project-specific)
+
+### 1) Repo and architecture inspection
+- Reviewed runtime topology and planner mutation stack:
+  - `pages/api/planner/apply.js` (RPC-first + fallback orchestration)
+  - `pages/api/planner/ai-refine.js`, `pages/api/plan/refill.js`
+  - `lib/db.js` coupling footprint and planner policy modules
+- Verified architecture direction is improving (auth-boundary hardening + rollback/rpc verification), but structural simplification is still pending.
+
+### 2) Weaknesses / risks
+1. `lib/db.js` remains a high-coupling module across domains.
+2. Planner apply endpoint complexity remains high due to multi-mode write orchestration.
+3. Shared mutating-route contract is not yet fully centralized.
+4. Runtime fallback usage is not yet a first-class operational metric.
+
+### 3) Proposed improvements
+- Complete DB domain extraction with compatibility exports.
+- Drive planner writes toward RPC-atomic-only in production-like environments.
+- Standardize mutating API wrapper for auth/ownership/validation/errors.
+- Add write-mode observability and fallback deprecation milestones.
+
+### 4) Concrete development task packet
+- **Task RAS-ARCH-20260307-1 (M):** Decompose `lib/db.js` into bounded domain modules.
+- **Task RAS-ARCH-20260307-2 (M):** Add mode-aware planner integration tests with strict invariants.
+- **Task RAS-ARCH-20260307-3 (S):** Migrate planner mutating endpoints to one policy wrapper.
+- **Task RAS-ARCH-20260307-4 (S):** Add `write_mode` telemetry and fallback-alert threshold.
+
+### Code-change boundary
+- No production code modified in this architecture review pass.
+- Documentation updated only (project-specific recommendations).
+
+## Dev Iteration — 2026-03-07 02:56 EST
+- Project: `rise-and-shine`
+- Objective packet: harden atomic planner-apply policy by preventing rollback fallback in production-like preview runtimes.
+
+### Changes shipped
+- Updated `lib/planner-apply-policy.js` with `isProductionLikeRuntime(...)`.
+- Enforced `isPlannerApplyRpcRequired(...)` for `NODE_ENV=production` **and** `VERCEL_ENV=preview|production`.
+- Expanded `scripts/verify-planner-policy.mjs` coverage for production-like runtime detection and override protection.
+
+### Local verification (completion proof)
+- `npm run verify:planner` ✅
+- `npm run build` ✅
+
+### Commit-proof
+- Commit: `957af94`
+- Branch: `main`
+- Push: `origin/main` updated (`3dd2e39 -> 957af94`)
+
+### One-line user impact
+Preview deployments now fail closed to atomic RPC writes, preventing silent rollback-mode planner writes before production release.
+
+---
+
+Date: 2026-03-07 03:49 EST
+Owner: Research Agent
+
+## Architecture review (independent)
+
+### Current architecture snapshot
+- Next.js Pages Router monolith with planner-critical API routes and Supabase service-role orchestration.
+- Strong deterministic verification scripts are present and valuable.
+- Core risk has shifted from feature completeness to maintainability + operational safety.
+
+### Highest-priority risks found
+1. `lib/db.js` remains multi-domain and highly coupled.
+2. Planner writes have dual execution semantics (RPC-atomic + rollback fallback), increasing divergence risk.
+3. AI/refinement endpoints lack explicit abuse/cost controls.
+4. Ingestion endpoint can run without auth if token is not configured.
+
+### Recommended architecture moves
+- Finish bounded-context extraction for data access.
+- Establish planner write-mode invariants with integration tests.
+- Add endpoint-level rate controls + conservative default model strategy.
+- Fail closed for ingest auth in production.
+
+### Suggested implementation task list
+- **RAS-AR-1:** Split `lib/db.js` into `lib/db/{tasks,events,planner,profile}.js` with compatibility layer.
+- **RAS-AR-2:** Add integration suite for planner apply invariants across write modes.
+- **RAS-AR-3:** Implement request throttling for planner APIs and add telemetry for retry/429 rates.
+- **RAS-AR-4:** Require ingest token outside local dev and document deployment requirement in README/env template.
+
+### No production code changes
+- This iteration produced documentation-only recommendations.
+
+Date: 2026-03-07 05:49 EST
+Owner: Research Agent
+
+## Architecture review (project-specific, independent)
+
+### 1) Repo/architecture inspection
+- Next.js Pages Router monolith with planner-critical write paths in `pages/api/planner/*` and shared data surface in `lib/db.js`.
+- Verification posture is strong (`verify:release`, planner/queue/refinement script suite).
+- Architecture risk has shifted from missing safeguards to complexity/convergence risk.
+
+### 2) Weaknesses / risks
+1. `lib/db.js` remains a multi-domain coupling hotspot.
+2. Planner dual write-mode behavior can drift without strict mode-level conformance checks.
+3. Route-level mutation policy can diverge if guard/validation patterns are not centralized.
+4. Write-mode observability is still weaker than required for controlled fallback retirement.
+
+### 3) Proposed improvements
+- Finish domain extraction from `lib/db.js` into bounded modules.
+- Keep RPC atomic path as steady state in production-like runtimes; time-box fallback.
+- Standardize mutating API contracts through one shared policy wrapper.
+- Add explicit write-mode telemetry and anomaly thresholds.
+
+### 4) Concrete task packet
+- **RS-AR-20260307-A (M):** Extract `tasks/tags/events/profile/planning` modules from `lib/db.js` with compatibility facade.
+- **RS-AR-20260307-B (M):** Add planner mode-conformance integration suite (rpc strict + fallback invariant assertions).
+- **RS-AR-20260307-C (S):** Introduce shared mutating-route policy wrapper and migrate planner routes.
+- **RS-AR-20260307-D (S):** Add `write_mode` metrics and fallback alerting in production-like deploys.
+
+### Code-change boundary
+- This review iteration is documentation/planning only; no production code modified.
+
+Date: 2026-03-07 06:47 EST
+
+## Iteration update (planner identity trust-boundary tightening)
+
+### What changed
+- Removed request-body `user_id` handling from planner APIs and now derive identity only from authenticated server context in:
+  - `pages/api/planner/apply.js`
+  - `pages/api/planner/ai-refine.js`
+  - `pages/api/plan/refill.js`
+- Updated `pages/today.js` planner API calls to stop sending client `user_id` in request payloads.
+
+### Verification results (local-first)
+- `npm run verify:planner` ✅
+- `npm run verify:release` ✅ (includes `verify:scoring`, `verify:queue`, `verify:planner`, `verify:refinement-events`, `lint`, `build`)
+
+### Completion proof
+- Branch: `main`
+- Files changed: planner API routes + today UI payloads + this report entry.
+
+### User impact
+Planner refine/apply/refill flows no longer rely on client-supplied identity fields, reducing spoofing risk and making planner mutations consistently server-auth scoped.

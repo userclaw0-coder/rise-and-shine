@@ -39,16 +39,11 @@ export default async function handler(req, res) {
     const authenticatedUserId = await getAuthenticatedUserId(req);
 
     const {
-      user_id: requestedUserId,
       task_id,
       suggested_title,
       suggested_effort_minutes,
       suggested_tags_add,
     } = req.body || {};
-
-    if (requestedUserId && requestedUserId !== authenticatedUserId) {
-      return res.status(403).json({ error: "user_id does not match authenticated user" });
-    }
 
     const userId = authenticatedUserId;
 
