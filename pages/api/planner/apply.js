@@ -68,6 +68,17 @@ export default async function handler(req, res) {
 
     const originalTagIds = (initialTagLinks || []).map((r) => r.tag_id).filter(Boolean);
 
+    let existingTagNames = [];
+    if (originalTagIds.length > 0) {
+      const { data: rows, error: tagsErr } = await supabase
+        .from("tags")
+        .select("id,name")
+        .eq("user_id", userId)
+        .in("id", originalTagIds);
+      if (tagsErr) throw tagsErr;
+      existingTagNames = (rows || []).map((r) => r.name).filter(Boolean);
+    }
+
     const updates = buildPlannerTaskUpdates({
       suggested_title,
       suggested_effort_minutes,
@@ -76,7 +87,7 @@ export default async function handler(req, res) {
     const incomingTags = normalizeIncomingTags(suggested_tags_add);
 
     let updatedTask = existingTask;
-    let finalTagNames = [];
+    let finalTagNames = [...existingTagNames];
 
     const rpcResult = await tryApplyPlannerMutationRpc({
       supabase,
@@ -125,21 +136,7 @@ export default async function handler(req, res) {
       mutateTags: async () => {
         if (incomingTags.length === 0) return { mutated: false, createdTagIds: [] };
 
-        let existingTagRows = [];
-        if (originalTagIds.length > 0) {
-          const { data: rows, error: tagsErr } = await supabase
-            .from("tags")
-            .select("id,name")
-            .eq("user_id", userId)
-            .in("id", originalTagIds);
-          if (tagsErr) throw tagsErr;
-          existingTagRows = rows || [];
-        }
-
-        finalTagNames = mergePlannerTagNames(
-          existingTagRows.map((r) => r.name),
-          incomingTags
-        );
+        finalTagNames = mergePlannerTagNames(existingTagNames, incomingTags);
 
         const ensuredIds = [];
         const createdTagIds = [];

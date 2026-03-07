@@ -1598,3 +1598,25 @@ Date: 2026-03-07 06:47 EST
 
 ### User impact
 Planner refine/apply/refill flows no longer rely on client-supplied identity fields, reducing spoofing risk and making planner mutations consistently server-auth scoped.
+
+Date: 2026-03-07 08:25 EST
+
+## Iteration update (planner apply fallback tag-preservation fix)
+
+### What changed
+- Fixed a fallback-path data integrity bug in `pages/api/planner/apply.js`.
+- The endpoint now preloads existing task tag names before mutation and defaults response `tags` to that existing set.
+- In rollback-fallback mode, when `suggested_tags_add` is empty, the API now preserves and returns current tags instead of returning an empty array.
+- Tag merge logic still remains additive when new tags are provided.
+
+### Verification results (local-first)
+- `npm run verify:planner` ✅
+- `npm run build` ✅
+
+### Completion proof
+- Branch: `main`
+- Code files changed: `pages/api/planner/apply.js`
+- Checks run: `verify:planner`, `build`
+
+### User impact
+Applying a planner refinement without new tags no longer wipes visible tag context in fallback mode, keeping Today/Backlog task metadata consistent.
