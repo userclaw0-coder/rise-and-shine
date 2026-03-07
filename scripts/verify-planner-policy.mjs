@@ -13,7 +13,7 @@ assert.equal(
 );
 assert.equal(
   isPlannerApplyRpcRequired({ NODE_ENV: "production", PLANNER_APPLY_RPC_REQUIRED: "false" }),
-  false
+  true
 );
 
 console.log("verify-planner-policy: OK");

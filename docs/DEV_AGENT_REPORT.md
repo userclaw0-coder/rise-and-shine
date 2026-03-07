@@ -1345,3 +1345,115 @@ Date: 2026-03-06 19:23 EST
 
 ### One-line user impact
 Planner apply now defaults to safer RPC-atomic enforcement in production, reducing the risk of silently falling back to non-atomic writes.
+
+Date: 2026-03-06 19:47 EST
+Owner: Research Agent
+
+## Architecture Review (project-specific)
+
+### 1) Inspection summary
+- Repository architecture is a Next.js monolith with planner-critical routes concentrated in `pages/api/*` and data access concentrated in `lib/db.js`.
+- Verification posture is comparatively mature (`verify:release`, queue/planner/refinement scripts).
+- Planner write-path reliability improved materially via RPC-first atomic flow + fallback protections.
+
+### 2) Key weaknesses/risks
+1. `lib/db.js` remains a high-coupling hotspot.
+2. Planner apply has multi-mode write behavior that can drift across environments.
+3. Auth/ownership checks are still route-level and require stronger central guardrail reuse.
+4. Tactical logs are strong, but strategic architecture decisions need a compact durable home.
+
+### 3) Improvement direction
+- Complete bounded decomposition of data access.
+- Treat RPC-atomic planner apply as target steady-state and shrink fallback usage.
+- Standardize route guard + payload validation patterns across all mutating endpoints.
+- Add concise ADR cadence for major architecture decisions.
+
+### 4) Development task list
+- T1 (M): Decompose `lib/db.js` into domain modules with no API break.
+- T2 (M): Add planner apply mode contract tests with explicit invariants.
+- T3 (S): Enforce shared mutating-route auth/ownership guard helper.
+- T4 (S): Add first ADR on planner apply atomicity policy and fallback retirement criteria.
+
+### No production code changes in this review pass
+- This iteration only records architecture findings and project-specific recommendations.
+
+Date: 2026-03-06 21:47 EST
+Owner: Research Agent
+
+## Architecture Review (Project-Specific)
+
+### 1) Inspection summary
+- Reviewed planner APIs, data-access boundaries, verification scripts, and current write-mode policy.
+- The project is ahead on release discipline and failure-path verification.
+- The primary architecture risk has shifted from missing checks to **complexity/convergence risk** across multiple write paths.
+
+### 2) Weaknesses / risks
+1. Monolithic data-access concentration (`lib/db.js`) increases coupling and regression blast radius.
+2. Dual planner write modes (RPC atomic + fallback rollback) can diverge without explicit mode-contract tests.
+3. Mutating endpoint policy drift is still possible unless all routes share one guard/validation layer.
+4. Strategic decisions are not yet compactly captured (execution log volume is high).
+
+### 3) Proposed improvements
+- Continue bounded DB decomposition with compatibility re-exports.
+- Treat RPC-atomic planner apply as target steady state and progressively reduce fallback scope.
+- Enforce shared auth/ownership/validation primitives for all mutating planner routes.
+- Start ADR cadence for planner write policy and data-boundary decisions.
+
+### 4) Concrete development tasks
+- **RS-R1 (M):** Complete domain extraction from `lib/db.js` into `lib/db/*` modules.
+- **RS-R2 (M):** Add planner mode-contract integration suite (RPC strict/fallback invariants).
+- **RS-R3 (S):** Centralize route guards for mutating planner endpoints and add regression tests for 401/403/ownership.
+- **RS-R4 (S):** Add first ADR for planner atomic policy and fallback retirement gates.
+
+### No production code changes in this review pass
+- This iteration is architecture analysis and planning documentation only.
+
+Date: 2026-03-06 23:49 EST
+Owner: Research Agent
+
+## Architecture review (project-specific)
+
+### 1) Inspection summary
+- Planner reliability work is ahead of baseline (RPC-first path + rollback harness + release verification scripts).
+- Architecture is still monolithic at data-access boundaries, with `lib/db.js` carrying broad domain load.
+- Main remaining risk is long-term divergence across write modes and route policies.
+
+### 2) Weaknesses / risks
+1. Data-layer coupling concentration in `lib/db.js`.
+2. Potential behavior drift between `rpc_atomic` and fallback rollback modes.
+3. Route-policy drift risk for future mutating endpoints.
+4. Decision discoverability risk from very long append-only reporting.
+
+### 3) Recommended improvements
+- Complete `lib/db/*` extraction with stable compatibility exports.
+- Add explicit planner write-mode observability and fallback retirement milestones.
+- Enforce shared guard/validation/error envelope for all mutating planner routes.
+- Start concise ADR cadence for major architecture decisions.
+
+### 4) Suggested implementation tasks
+- **RS-R5 (M):** Complete domain extraction from `lib/db.js` into bounded modules.
+- **RS-R6 (M):** Add planner mode-conformance suite + `write_mode` telemetry checks.
+- **RS-R7 (S):** Migrate all planner mutating endpoints to a shared guard wrapper.
+- **RS-R8 (S):** Add first ADR documenting atomicity policy and fallback retirement gates.
+
+### Code-change boundary
+- This review iteration is analysis/docs only; no production code was modified.
+
+## Dev Iteration — 2026-03-07 00:55 EST
+- Project: `rise-and-shine`
+- Objective packet: enforce atomic planner-apply policy by preventing production fallback downgrade.
+
+### Changes shipped
+- Updated `lib/planner-apply-policy.js` so production always requires atomic RPC writes.
+- Prevented `PLANNER_APPLY_RPC_REQUIRED=false` from disabling RPC strictness in production.
+- Updated `scripts/verify-planner-policy.mjs` expectation to lock this behavior.
+
+### Local verification (completion proof)
+- `npm run verify:planner` ✅
+- `npm run build` ✅
+
+### Commit-proof status
+- Pending commit in this iteration (code + verification completed locally).
+
+### One-line user impact
+Production planner apply can no longer silently fall back to rollback-mode writes due to env misconfiguration, reducing partial-write risk.
