@@ -6,6 +6,7 @@ import {
 } from "../../../lib/planner-apply";
 import { applyPlannerMutationWithRollback } from "../../../lib/planner-apply-transaction";
 import { tryApplyPlannerMutationRpc } from "../../../lib/planner-apply-rpc";
+import { isPlannerApplyRpcRequired } from "../../../lib/planner-apply-policy";
 import { getAuthenticatedUserId } from "../../../lib/api-auth";
 
 const supabase = createClient(
@@ -102,7 +103,7 @@ export default async function handler(req, res) {
       });
     }
 
-    const requireRpcAtomic = process.env.PLANNER_APPLY_RPC_REQUIRED === "true";
+    const requireRpcAtomic = isPlannerApplyRpcRequired(process.env);
     if (requireRpcAtomic) {
       return res.status(503).json({
         error: "Atomic planner apply RPC is required but unavailable",

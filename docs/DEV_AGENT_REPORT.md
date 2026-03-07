@@ -1314,3 +1314,34 @@ Date: 2026-03-06 19:15 EST
 
 ### User impact
 Planner refinement apply now has a stricter, test-backed path toward true DB-atomic writes, reducing the chance of silently relying on fallback behavior in environments that require hard atomic guarantees.
+
+Date: 2026-03-06 19:23 EST
+
+## Iteration update (planner RPC atomicity policy default hardening)
+- **Selected project:** `/home/clawofhank/projects/rise-and-shine` (highest-priority manager packet in `MEMORY.md`: DB-boundary atomic planner-apply objective).
+- **Task continued:** tighten atomicity enforcement posture so RPC atomic writes are required by default in production, while retaining explicit override controls.
+
+### Code changes
+- Added `lib/planner-apply-policy.js`:
+  - `parseBooleanEnv(...)` for robust env bool parsing (`true/false/1/0/yes/no/on/off`).
+  - `isPlannerApplyRpcRequired(...)` policy function:
+    - honors explicit `PLANNER_APPLY_RPC_REQUIRED`,
+    - defaults to `true` in production, `false` otherwise.
+- Updated `pages/api/planner/apply.js` to use policy helper instead of direct string comparison for strict RPC mode.
+- Added deterministic verifier `scripts/verify-planner-policy.mjs` and wired it into `verify:planner`.
+
+### Verification evidence
+- `npm run verify:release` ✅
+  - `verify:scoring` ✅
+  - `verify:queue` ✅
+  - `verify:planner` ✅ (`verify-planner-apply`, `verify-planner-rollback`, `verify-planner-rpc`, `verify-planner-policy`)
+  - `verify:refinement-events` ✅
+  - `npm run lint` ✅
+  - `npm run build` ✅
+
+### Completion proof
+- Commit: included in this iteration commit on `main`
+- Branch: `main`
+
+### One-line user impact
+Planner apply now defaults to safer RPC-atomic enforcement in production, reducing the risk of silently falling back to non-atomic writes.
