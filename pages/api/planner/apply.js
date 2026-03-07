@@ -5,6 +5,7 @@ import {
   normalizeIncomingTags,
 } from "../../../lib/planner-apply";
 import { applyPlannerMutationWithRollback } from "../../../lib/planner-apply-transaction";
+import { tryApplyPlannerMutationRpc } from "../../../lib/planner-apply-rpc";
 import { getAuthenticatedUserId } from "../../../lib/api-auth";
 
 const supabase = createClient(
@@ -80,6 +81,26 @@ export default async function handler(req, res) {
 
     let updatedTask = existingTask;
     let finalTagNames = [];
+
+    const rpcResult = await tryApplyPlannerMutationRpc({
+      supabase,
+      userId,
+      taskId: task_id,
+      updates,
+      incomingTags,
+    });
+
+    if (rpcResult.applied) {
+      updatedTask = rpcResult.task || existingTask;
+      finalTagNames = Array.isArray(rpcResult.tags) ? rpcResult.tags : [];
+
+      return res.json({
+        ok: true,
+        task: updatedTask,
+        tags: finalTagNames,
+        write_mode: "rpc_atomic",
+      });
+    }
 
     await applyPlannerMutationWithRollback({
       mutateTask: async () => {
@@ -204,6 +225,7 @@ export default async function handler(req, res) {
       ok: true,
       task: updatedTask,
       tags: finalTagNames,
+      write_mode: "rollback_fallback",
     });
   } catch (e) {
     return res.status(e.status || 500).json({ error: e.message || String(e) });

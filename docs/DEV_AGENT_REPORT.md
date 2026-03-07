@@ -1219,3 +1219,67 @@ Date: 2026-03-06 17:38 EST
 
 ### One-line user impact
 Users keep a stable planner experience with rollback safety checks and fresh production health evidence confirming no visible regressions.
+
+Date: 2026-03-06 17:47 EST
+Owner: Research Agent
+
+## Architecture review refresh (independent pass)
+
+### 1) Repo + architecture inspection
+- Next.js monolith (Pages Router) with Supabase-backed planner/task domains.
+- Strong release gate discipline (`verify:release`) and recent rollback-hardening progress.
+- Data + domain concerns still concentrated in `lib/db.js` and route handlers.
+
+### 2) Weaknesses / risks
+1. Monolithic data layer coupling remains high.
+2. Planner apply path still depends on compensating rollback rather than DB-native transactions.
+3. Route-level auth/ownership policy can regress without centralized guardrail usage.
+4. Very long append-only execution log risks signal loss for strategic architecture decisions.
+
+### 3) Proposed improvements
+- Complete bounded DB module decomposition with stable exports.
+- Replace rollback choreography with atomic planner apply transaction/RPC.
+- Consolidate API policy enforcement into shared auth/ownership primitives and contract tests.
+- Maintain concise ADRs for architecture decisions; keep this file tactical.
+
+### 4) Concrete development tasks (recommended order)
+- **T1 (M):** Extract task/tag/event/profile accessors from `lib/db.js` into `lib/db/*`.
+- **T2 (M):** Implement atomic planner apply at DB boundary; remove compensating rollback branching.
+- **T3 (S):** Add planner API contract suite (401/403/ownership + mutation invariants).
+- **T4 (S):** Start ADR cadence (`docs/adr/`) and summarize monthly architecture state in one short doc.
+
+### One-line impact
+This path lowers regression risk while simplifying planner mutation reliability and long-term maintainability.
+
+Date: 2026-03-06 19:08 EST
+
+## Iteration update (planner apply DB-boundary atomic path)
+
+### Project selection rationale
+- Selected **rise-and-shine** per latest manager packet in `MEMORY.md` prioritizing DB-boundary atomic planner-apply delivery.
+
+### What changed
+1. Added RPC-first atomic write path helper: `lib/planner-apply-rpc.js`
+   - Calls `apply_planner_refinement_atomic` via Supabase RPC.
+   - Detects RPC-unavailable conditions and allows controlled fallback.
+   - Normalizes RPC response to `{ task, tags }`.
+
+2. Updated `pages/api/planner/apply.js`
+   - Planner apply now attempts DB-boundary atomic RPC first.
+   - Returns `write_mode: "rpc_atomic"` on RPC success.
+   - Preserves existing rollback-based path as compatibility fallback when RPC function is unavailable.
+   - Returns `write_mode: "rollback_fallback"` when fallback path is used.
+
+3. Added SQL function spec for atomic planner apply: `db/PLANNER_APPLY_ATOMIC.sql`
+   - Defines `public.apply_planner_refinement_atomic(...)` for all-or-nothing task/title-effort/tag/event apply behavior.
+   - Encapsulates mutation steps in one Postgres function transaction boundary.
+
+### Verification (local-first)
+- `npm run verify:planner` ✅
+- `npm run build` ✅
+
+### Completion proof
+- Pending commit on `main` (code + SQL + report updated this iteration).
+
+### User impact (one line)
+- Planner refinement apply now has a direct path to true DB-atomic writes, reducing partial-write risk and making apply behavior more reliable under failure.
