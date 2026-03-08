@@ -17,13 +17,21 @@ rsync -a \
   --exclude 'background/How started - where going_files' \
   "$SRC_DIR/" "$DEST/"
 
+# Preserve full git refs history (branches/tags) for rollback/fallback.
+git -C "$SRC_DIR" bundle create "$DEST/repo.bundle" --all
+
 # Keep a machine-readable manifest for verification.
 {
   echo "timestamp=$STAMP"
   echo "source=$SRC_DIR"
   echo "dest=$DEST"
   echo "host=$(hostname)"
+  echo "branch=$(git -C \"$SRC_DIR\" rev-parse --abbrev-ref HEAD)"
+  echo "head=$(git -C \"$SRC_DIR\" rev-parse HEAD)"
   echo "files=$(find "$DEST" -type f | wc -l)"
 } > "$DEST/BACKUP_MANIFEST.txt"
+
+# Keep most recent 21 backups
+(ls -1dt "$BACKUP_ROOT"/* 2>/dev/null || true) | tail -n +22 | xargs -r rm -rf
 
 echo "Backup complete: $DEST"
