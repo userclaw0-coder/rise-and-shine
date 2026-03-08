@@ -382,9 +382,19 @@ export default function TodayPage() {
     setAiError("");
     setAiSuggestions(null);
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) {
+        setAiError("Auth session missing. Please refresh and sign in again.");
+        return;
+      }
+
       const res = await fetch("/api/planner/ai-refine", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ date: todayStr }),
       });
       const data = await res.json().catch(() => ({}));
@@ -449,9 +459,19 @@ export default function TodayPage() {
     await logRefinementEvent("accept", item);
 
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) {
+        setError("Auth session missing. Please refresh and sign in again.");
+        return;
+      }
+
       const res = await fetch("/api/planner/apply", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));

@@ -1691,3 +1691,23 @@ Date: 2026-03-08 14:49 EDT
 
 ### User impact
 AI enrichment should time out less often on deployed runs, and users now get visible progress feedback while large backlog enrichment runs are processing.
+
+Date: 2026-03-08 16:38 EDT
+
+## Iteration update (Backlog AI score visibility + Today planner auth fix)
+
+### What changed
+- Updated `pages/backlog.js` to compute and display a numeric AI-priority score per root backlog task using the current scoring model.
+- Backlog root tasks now sort descending by that computed AI-priority score so relative ranking is visible immediately.
+- Updated `pages/today.js` so planner requests now include the authenticated bearer token for:
+  - `/api/planner/ai-refine`
+  - `/api/planner/apply`
+- This repairs the `Authentication required` failure shown when clicking **Refine these 3 with AI** after the server-side auth tightening.
+
+### Verification results
+- `npm run verify:task-enrichment` ✅
+- `npm run lint` ✅
+- `npm run build` ✅
+
+### User impact
+Backlog now exposes a comparable AI-priority score for each task, and Today AI refinement should work again for authenticated users.

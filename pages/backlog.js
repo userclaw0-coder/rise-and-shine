@@ -14,6 +14,7 @@ import {
 } from "../lib/db";
 import { isMissingPrioritizationMetadata } from "../lib/task-enrichment";
 import { supabase } from "../lib/supabaseClient";
+import { computeTaskScore } from "../lib/scoring";
 
 const STATUS_FILTERS = [
   { value: "todo_doing", label: "Todo & Doing" },
@@ -203,7 +204,7 @@ export default function BacklogPage() {
     const q = normalize(search);
     const tagNeedle = normalize(tagFilter);
 
-    return rootTasks.filter((t) => {
+    const filtered = rootTasks.filter((t) => {
       const titleMatch = !q || normalize(t.title).includes(q);
 
       let statusOk = true;
@@ -231,6 +232,24 @@ export default function BacklogPage() {
 
       return titleMatch && statusOk && categoryOk && subcategoryOk && tagOk;
     });
+
+    return filtered
+      .map((t) => {
+        const scoring = computeTaskScore({
+          ...t,
+          tags: extractTagNames(t),
+        });
+        return {
+          ...t,
+          _aiPriorityScore: scoring.score,
+        };
+      })
+      .sort((a, b) => {
+        if ((b._aiPriorityScore ?? 0) !== (a._aiPriorityScore ?? 0)) {
+          return (b._aiPriorityScore ?? 0) - (a._aiPriorityScore ?? 0);
+        }
+        return String(a.title || "").localeCompare(String(b.title || ""));
+      });
   }, [
     rootTasks,
     search,
@@ -447,7 +466,7 @@ export default function BacklogPage() {
             display: "grid",
             gridTemplateColumns: isCompact
               ? "minmax(0, 1fr)"
-              : "minmax(0, 3fr) minmax(0, 1.5fr) minmax(0, 1.1fr) 80px 120px 120px",
+              : "minmax(0, 3fr) minmax(0, 1.5fr) 110px minmax(0, 1.1fr) 80px 120px 120px",
             gap: 8,
             alignItems: isCompact ? "stretch" : "center",
             padding: isCompact ? "10px 0" : "6px 0",
@@ -547,6 +566,27 @@ export default function BacklogPage() {
                 ))}
             </select>
           </div>
+
+          {!isCompact && (
+            <div style={{ display: "flex", alignItems: "center" }}>
+              <div
+                title="AI priority score derived from current prioritization model"
+                style={{
+                  minWidth: 82,
+                  textAlign: "center",
+                  fontSize: 12,
+                  padding: "6px 8px",
+                  borderRadius: 999,
+                  border: "1px solid #dbeafe",
+                  background: "#eff6ff",
+                  color: "#1d4ed8",
+                  fontWeight: 600,
+                }}
+              >
+                {Number.isFinite(task._aiPriorityScore) ? task._aiPriorityScore.toFixed(1) : "—"}
+              </div>
+            </div>
+          )}
 
           <div style={{ display: "flex", gap: 4, flexWrap: isCompact ? "wrap" : "nowrap" }}>
             <select
@@ -754,7 +794,7 @@ export default function BacklogPage() {
                 color: "#6b7280",
               }}
             >
-              Manage non-daily tasks, tags, and subtasks.
+              Manage non-daily tasks, tags, subtasks, and AI-scored priority order.
             </p>
           </div>
         </div>
