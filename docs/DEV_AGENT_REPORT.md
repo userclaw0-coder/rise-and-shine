@@ -1770,3 +1770,27 @@ Date: 2026-03-08 17:05 EDT
 
 ### User impact
 Backlog layout should render cleanly, and Today AI Planner should now return usable fallback suggestions even when the AI response is imperfect or slow.
+
+Date: 2026-03-08 17:54 EDT
+
+## State sync (Rise-and-Shine stabilization lane closure)
+
+### Closure assessment
+- The 2026-03-08 custom-edit/stabilization pass is complete enough to treat Rise-and-Shine as operationally usable and safe to move out of the active cleanup lane.
+- Production-critical surfaces repaired during this pass include:
+  - Backlog AI enrichment
+  - Backlog AI score visibility/sort
+  - Backlog completion + subcategory editing
+  - Today planner refine/apply auth path
+  - Production atomic planner RPC availability
+
+### Remaining open priorities (not blockers for lane switch)
+- Better “why this task now” rationale quality in Today queue presentation.
+- Subtask orchestration UX and promotion flow.
+- Progress-to-outcome visibility improvements.
+- `lib/db.js` decomposition and broader planner/AI observability hardening.
+
+### Operational recommendation
+- Mark Rise-and-Shine stabilization lane as closed for now.
+- Keep `main` as the best current source of operational truth.
+- Move the Project North cleanup/alignment pass to CodexWellWishes next.
