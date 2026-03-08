@@ -425,8 +425,8 @@ export default function TodayPage() {
         suggested_subtasks_to_create: Array.isArray(ai.suggested_subtasks_to_create) ? ai.suggested_subtasks_to_create : [],
         automation_opportunities: Array.isArray(ai.automation_opportunities) ? ai.automation_opportunities : [],
       });
-    } catch {
-      setAiError("AI suggestions unavailable. Please try again.");
+    } catch (e) {
+      setAiError(e?.message || "AI suggestions unavailable. Please try again.");
       setAiSuggestions(null);
     } finally {
       setAiLoading(false);
