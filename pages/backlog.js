@@ -500,7 +500,7 @@ export default function BacklogPage() {
             display: "grid",
             gridTemplateColumns: isCompact
               ? "minmax(0, 1fr)"
-              : "minmax(0, 3fr) minmax(0, 1.5fr) 110px minmax(0, 1.1fr) 80px 120px 120px",
+              : "minmax(0, 3fr) minmax(220px, 2fr) 110px minmax(150px, 1.2fr) 90px 130px 140px",
             gap: 8,
             alignItems: isCompact ? "stretch" : "center",
             padding: isCompact ? "10px 0" : "6px 0",
@@ -1469,7 +1469,7 @@ export default function BacklogPage() {
                 style={{
                   display: "grid",
                   gridTemplateColumns:
-                    "minmax(0, 3fr) minmax(0, 1.5fr) 110px minmax(0, 1.1fr) 80px 120px 120px",
+                    "minmax(0, 3fr) minmax(220px, 2fr) 110px minmax(150px, 1.2fr) 90px 130px 140px",
                   gap: 8,
                   fontSize: 11,
                   fontWeight: 500,

@@ -1751,3 +1751,22 @@ Date: 2026-03-08 16:58 EDT
 
 ### User impact
 Backlog completion checkboxes should now persist and log status changes without throwing enum errors.
+
+Date: 2026-03-08 17:05 EDT
+
+## Iteration update (Planner graceful fallback + backlog layout spacing)
+
+### What changed
+- Adjusted backlog table column widths so the AI score column no longer crowds/subimposes over the category/subcategory column.
+- Updated `pages/api/planner/ai-refine.js` to degrade gracefully instead of failing hard when the model times out or returns non-JSON:
+  - tolerant cache write via upsert
+  - deterministic fallback planner response when AI output is unusable
+  - explicit `ai_status` returned to the client
+- Updated `pages/today.js` to surface fallback status instead of only the generic unavailable message.
+
+### Verification results
+- `npm run lint` ✅
+- `npm run build` ✅
+
+### User impact
+Backlog layout should render cleanly, and Today AI Planner should now return usable fallback suggestions even when the AI response is imperfect or slow.

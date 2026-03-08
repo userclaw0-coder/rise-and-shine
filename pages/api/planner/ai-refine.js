@@ -48,6 +48,29 @@ function withTimeout(promise, timeoutMs) {
   });
 }
 
+function buildFallbackPlannerResponse(queueTasks) {
+  const taskRefinements = (queueTasks || []).map((task) => {
+    const tags = Array.isArray(task.tags) ? task.tags : [];
+    const extraTags = [];
+    if ((task.effort_hours ?? 0) > 0 && task.effort_hours <= 0.5 && !tags.includes('quick-win')) extraTags.push('quick-win');
+    if (/email|call|follow up|review|confirm|send/i.test(String(task.title || '')) && !tags.includes('quick-win')) extraTags.push('quick-win');
+    if (/plan|brief|system|automation|brand|strategy/i.test(String(task.title || '')) && !tags.includes('high-leverage')) extraTags.push('high-leverage');
+    if (task.due_date && !tags.includes('urgent')) extraTags.push('urgent');
+    return {
+      task_id: task.id,
+      suggested_title: String(task.title || '').trim(),
+      suggested_tags_add: Array.from(new Set(extraTags)).slice(0, 3),
+      suggested_effort_minutes: Math.max(15, Math.round(((task.effort_hours || 0.5) * 60) / 5) * 5),
+    };
+  });
+
+  return {
+    task_refinements: taskRefinements,
+    suggested_subtasks_to_create: [],
+    automation_opportunities: [],
+  };
+}
+
 export default async function handler(req, res) {
   try {
     if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
@@ -214,26 +237,31 @@ Keep responses concise.
     const text = response.output_text || "";
     const parsed = safeJsonParse(text);
 
-    if (!parsed) {
-      return res.status(500).json({
-        error: "AI returned non-JSON output. Try again.",
-        raw: text.slice(0, 2000),
-      });
-    }
+    const finalOutput = parsed || buildFallbackPlannerResponse(queueTasks);
+    const aiStatus = parsed ? "ok" : "fallback:non_json";
 
-    await supabase.from("planner_cache").insert({
+    const { error: cacheWriteErr } = await supabase.from("planner_cache").upsert({
       user_id: userId,
       date: today,
       mode,
       queue_hash: queueHash,
-      ai_output: parsed,
-    });
+      ai_output: finalOutput,
+    }, { onConflict: "user_id,date,queue_hash" });
+    if (cacheWriteErr) throw cacheWriteErr;
 
-    return res.json({ ok: true, cached: false, queue_hash: queueHash, ai: parsed });
+    return res.json({ ok: true, cached: false, queue_hash: queueHash, ai: finalOutput, ai_status: aiStatus });
   } catch (e) {
     const message = e?.message || String(e);
+    if (message === "planner_ai_timeout") {
+      return res.json({
+        ok: true,
+        cached: false,
+        ai_status: "fallback:timeout",
+        ai: buildFallbackPlannerResponse([]),
+      });
+    }
     return res.status(e.status || 500).json({
-      error: message === "planner_ai_timeout" ? "AI planning timed out. Please try again." : message,
+      error: message,
     });
   }
 }

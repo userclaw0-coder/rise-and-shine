@@ -411,6 +411,9 @@ export default function TodayPage() {
         return;
       }
       setAiCached(!!data.cached);
+      if (data.ai_status && data.ai_status !== 'ok') {
+        setAiError(`Planner fallback used: ${data.ai_status.replace('fallback:', '')}.`);
+      }
       setAiSuggestions({
         task_refinements: Array.isArray(ai.task_refinements) ? ai.task_refinements : [],
         suggested_subtasks_to_create: Array.isArray(ai.suggested_subtasks_to_create) ? ai.suggested_subtasks_to_create : [],
