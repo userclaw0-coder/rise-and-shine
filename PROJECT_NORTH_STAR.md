@@ -1,57 +1,45 @@
 # PROJECT_NORTH_STAR — Rise-and-Shine
 
 ## Vision
-Use AI to help people get the hang of life and consistently do what makes sense.
+Help AI-curious people improve life execution by giving clear next actions and practical AI leverage guidance they can apply immediately.
 
 ## Primary User
-Individual operator improving daily life execution **and onboarding AI leverage into their world** through their first personal interactive AI dashboard.
+- Primary: AI-curious builders/operators who want better daily execution and output.
+- Expanded: General public in self-improvement/self-help who want structured guidance and practical AI onboarding.
 
 ## Core Value
-AI-guided task capture and prioritization + next-best-3 + consistency loops + vision clarity.
+Fast onboarding into an AI-guided execution loop: identify the next 3 high-impact actions, break them into bite-size subtasks, and surface where AI can help now and for repeatable future workflows.
 
 ## MVP Done When
 User can:
-- onboard and define tasks/needs/vision
-- capture tasks quickly
-- execute daily queue
-- identify beginner AI leverage opportunities (chat-based AI or API in app)
+- complete onboarding and define outcomes/tasks/needs/vision
+- receive an outcome-aligned Next 3 action set
+- see each Next 3 action broken into actionable subtasks
+- identify at least one explicit AI-leverage path during onboarding + first planning cycle
+- capture/add tasks quickly and review category/project pages
+- execute the daily queue and complete weekly review flow
 - review meaningful analytics
 - view an inspirational AI-generated vision board integrating their photo
-- add tasks easily and review category/project pages
-- complete weekly review flow
 
-## Not Now
-Business CRM/sales/enterprise operator workflows.
-
-## 30-Day Win
-Stable daily execution loop with clear completion/consistency gains.
-
-## Marketing Strategy Alignment (2026-03-08)
-
-### Positioning
-An AI-guided life execution system for AI-curious people who want clarity on what to do next—and how to use AI to do it better.
-
-### Ideal Customer Profile (ICP)
-- Primary: AI-curious builders/operators who want better life execution and output.
-- Expanded: General public in self-improvement/self-help seeking structured guidance and practical AI onboarding.
-
-### Core Marketing Promise
-Get onboarded fast, identify your next 3 high-impact actions, break them into bite-size subtasks, and learn where AI can help now and in repetitive workflows over time.
-
-### Activation North-Star Event
+## Activation North-Star Event
 User completes onboarding and receives:
 1. Outcome-aligned Next 3 tasks.
 2. Actionable subtask breakdown for each task.
 3. At least one explicit AI-leverage suggestion path.
 
-### Offer Structure
+## Offer Structure
 - Free + trial entry includes full onboarding, first Next 3 tasks, subtask breakdown, and AI leverage suggestions.
 - Trial window: 7 days.
 - Post-trial: upsell to full subscription for ongoing planning, execution support, and deeper AI leverage.
 
-### Deferred (Intentionally Not Finalized Yet)
-- 14-day KPI target matrix.
-- Experiment matrix and growth test sequencing.
+## Not Now
+Business CRM/sales/enterprise operator workflows.
+
+## 30-Day Win
+Stable onboarding-to-Next-3 execution loop with clear completion/consistency gains and visible AI-leverage adoption in early users.
+
+## Change Note (2026-03-08)
+Marketing strategy decisions were integrated directly into canonical sections (Vision/Primary User/Core Value/MVP/Activation/Offer) to avoid parallel narratives and source-of-truth drift.
 
 ---
 
