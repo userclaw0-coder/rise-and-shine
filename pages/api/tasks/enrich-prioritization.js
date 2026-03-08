@@ -1,0 +1,312 @@
+import OpenAI from "openai";
+import { createClient } from "@supabase/supabase-js";
+import { getAuthenticatedUserId } from "../../../lib/api-auth";
+import {
+  buildHeuristicEnrichment,
+  sanitizeAiEnrichment,
+  isMissingPrioritizationMetadata,
+  mergeTagNames,
+  computeTaskPatch,
+  ENRICHMENT_TAGS,
+  normalizeTagList,
+} from "../../../lib/task-enrichment";
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
+
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const MODEL = process.env.ENRICHMENT_MODEL || process.env.PLANNER_MODEL || "gpt-5.2-mini";
+const MAX_TASKS = 25;
+const AI_TIMEOUT_MS = 8000;
+
+function withTimeout(promise, timeoutMs) {
+  let timeoutId = null;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error("enrichment_ai_timeout")), timeoutMs);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeoutId) clearTimeout(timeoutId);
+  });
+}
+
+function safeJsonParse(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+async function ensureTagIds(userId, names) {
+  const normalizedNames = normalizeTagList(names);
+  const ids = [];
+
+  for (const name of normalizedNames) {
+    const { data: existing, error: existingErr } = await supabase
+      .from("tags")
+      .select("id")
+      .eq("user_id", userId)
+      .ilike("name", name)
+      .limit(1)
+      .maybeSingle();
+    if (existingErr) throw existingErr;
+
+    if (existing?.id) {
+      ids.push(existing.id);
+      continue;
+    }
+
+    const { data: created, error: createErr } = await supabase
+      .from("tags")
+      .insert({ user_id: userId, name })
+      .select("id")
+      .single();
+    if (createErr) throw createErr;
+
+    ids.push(created.id);
+  }
+
+  return ids;
+}
+
+async function fetchAiEnrichments(tasks) {
+  if (!Array.isArray(tasks) || tasks.length === 0) return { rows: [], error: null };
+
+  const input = {
+    task_count: tasks.length,
+    allowed_tags: ENRICHMENT_TAGS,
+    tasks: tasks.map((t) => ({
+      task_id: t.id,
+      title: t.title,
+      priority: t.priority,
+      effort_hours: t.effort_hours,
+      due_date: t.due_date,
+      status: t.status,
+      tags: normalizeTagList(t.tags || []),
+      category: t.category || "Unknown",
+    })),
+    output_schema: {
+      enrichments: [
+        {
+          task_id: "uuid",
+          priority: "Critical|High|Medium|Low",
+          effort_bucket: "XS|S|M|L",
+          tags_add: ["quick-win|high-leverage|urgent|blocked|waiting"],
+          rationale: "string",
+        },
+      ],
+    },
+  };
+
+  const instructions = `You enrich task prioritization metadata. Return ONLY valid JSON matching the schema. Keep rationale under 180 chars. Be conservative and practical.`;
+
+  try {
+    const response = await withTimeout(
+      openai.responses.create({
+        model: MODEL,
+        instructions,
+        input: JSON.stringify(input),
+      }),
+      AI_TIMEOUT_MS
+    );
+
+    const parsed = safeJsonParse(response.output_text || "");
+    if (!parsed || !Array.isArray(parsed.enrichments)) {
+      return { rows: [], error: "invalid_ai_json" };
+    }
+
+    return { rows: parsed.enrichments, error: null };
+  } catch (error) {
+    return { rows: [], error: error?.message || "ai_error" };
+  }
+}
+
+export default async function handler(req, res) {
+  try {
+    if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
+
+    const userId = await getAuthenticatedUserId(req);
+
+    const requestedLimit = Number(req.body?.limit ?? MAX_TASKS);
+    const limit = Number.isFinite(requestedLimit)
+      ? Math.max(1, Math.min(MAX_TASKS, Math.floor(requestedLimit)))
+      : MAX_TASKS;
+
+    const apply = req.body?.apply === true;
+    const dryRun = apply ? false : req.body?.dry_run !== false;
+
+    const { data: tasks, error: tasksErr } = await supabase
+      .from("tasks")
+      .select("id,title,priority,effort_hours,due_date,status,category_id")
+      .eq("user_id", userId)
+      .in("status", ["todo", "doing"])
+      .order("created_at", { ascending: false })
+      .limit(limit * 3);
+    if (tasksErr) throw tasksErr;
+
+    const taskIds = (tasks || []).map((t) => t.id);
+
+    const [{ data: categories, error: catErr }, { data: links, error: linksErr }, { data: tags, error: tagsErr }] =
+      await Promise.all([
+        supabase.from("categories").select("id,name").eq("user_id", userId),
+        taskIds.length > 0
+          ? supabase.from("task_tags").select("task_id,tag_id").eq("user_id", userId).in("task_id", taskIds)
+          : Promise.resolve({ data: [], error: null }),
+        supabase.from("tags").select("id,name").eq("user_id", userId),
+      ]);
+
+    if (catErr) throw catErr;
+    if (linksErr) throw linksErr;
+    if (tagsErr) throw tagsErr;
+
+    const categoryMap = Object.fromEntries((categories || []).map((c) => [c.id, c.name]));
+    const tagMap = Object.fromEntries((tags || []).map((t) => [t.id, t.name]));
+    const tagsByTask = {};
+
+    for (const link of links || []) {
+      const tagName = tagMap[link.tag_id];
+      if (!tagName) continue;
+      tagsByTask[link.task_id] = tagsByTask[link.task_id] || [];
+      tagsByTask[link.task_id].push(tagName);
+    }
+
+    const enrichedTasks = (tasks || []).map((task) => ({
+      ...task,
+      category: categoryMap[task.category_id] || "Unknown",
+      tags: tagsByTask[task.id] || [],
+    }));
+
+    const candidates = enrichedTasks.filter(isMissingPrioritizationMetadata).slice(0, limit);
+
+    if (candidates.length === 0) {
+      return res.json({
+        ok: true,
+        dry_run: dryRun,
+        apply,
+        processed: 0,
+        cap: limit,
+        report: { updated: [], skipped: [], errors: [] },
+        notes: ["No tasks missing prioritization metadata."],
+      });
+    }
+
+    const aiResult = await fetchAiEnrichments(candidates);
+    const aiByTaskId = Object.fromEntries(
+      (aiResult.rows || [])
+        .map((row) => {
+          const task = candidates.find((t) => t.id === row.task_id);
+          if (!task) return null;
+          return [task.id, sanitizeAiEnrichment(row, task)];
+        })
+        .filter(Boolean)
+    );
+
+    const report = {
+      updated: [],
+      skipped: [],
+      errors: [],
+    };
+
+    for (const task of candidates) {
+      try {
+        const aiSuggestion = aiByTaskId[task.id] || null;
+        const fallbackSuggestion = buildHeuristicEnrichment(task);
+
+        const enrichment = {
+          task_id: task.id,
+          priority: aiSuggestion?.priority || fallbackSuggestion.priority,
+          effort_bucket: aiSuggestion?.effort_bucket || fallbackSuggestion.effort_bucket,
+          tags_add: mergeTagNames([], [
+            ...(aiSuggestion?.tags_add || []),
+            ...(fallbackSuggestion.tags_add || []),
+          ]).filter((t) => ENRICHMENT_TAGS.includes(t)),
+          rationale: aiSuggestion?.rationale || fallbackSuggestion.rationale,
+          source: aiSuggestion ? "ai+heuristic" : "heuristic",
+        };
+
+        const patch = computeTaskPatch(task, enrichment);
+        const finalTags = mergeTagNames(task.tags || [], enrichment.tags_add || []);
+        const hasTagChanges = finalTags.length > normalizeTagList(task.tags || []).length;
+
+        if (Object.keys(patch).length === 0 && !hasTagChanges) {
+          report.skipped.push({
+            task_id: task.id,
+            title: task.title,
+            reason: "No missing fields to enrich",
+          });
+          continue;
+        }
+
+        if (!dryRun && apply) {
+          if (Object.keys(patch).length > 0) {
+            const { error: updErr } = await supabase
+              .from("tasks")
+              .update(patch)
+              .eq("user_id", userId)
+              .eq("id", task.id);
+            if (updErr) throw updErr;
+          }
+
+          if (hasTagChanges) {
+            const tagIds = await ensureTagIds(userId, finalTags);
+            const existingTagIds = new Set(
+              (links || [])
+                .filter((l) => l.task_id === task.id)
+                .map((l) => l.tag_id)
+            );
+            const newLinks = tagIds
+              .filter((tagId) => !existingTagIds.has(tagId))
+              .map((tag_id) => ({ user_id: userId, task_id: task.id, tag_id }));
+            if (newLinks.length > 0) {
+              const { error: linkErr } = await supabase.from("task_tags").insert(newLinks);
+              if (linkErr) throw linkErr;
+            }
+          }
+
+          await supabase.from("task_events").insert({
+            user_id: userId,
+            task_id: task.id,
+            event_type: "updated",
+            value: {
+              source: "task_enrichment_mvp",
+              mode: "apply",
+              applied_patch: patch,
+              tags_added: (enrichment.tags_add || []).filter((tag) => !normalizeTagList(task.tags || []).includes(tag)),
+              rationale: enrichment.rationale,
+            },
+          });
+        }
+
+        report.updated.push({
+          task_id: task.id,
+          title: task.title,
+          patch,
+          tags_before: normalizeTagList(task.tags || []),
+          tags_after: finalTags,
+          enrichment,
+        });
+      } catch (error) {
+        report.errors.push({
+          task_id: task.id,
+          title: task.title,
+          error: error?.message || String(error),
+        });
+      }
+    }
+
+    return res.json({
+      ok: true,
+      dry_run: dryRun,
+      apply,
+      processed: candidates.length,
+      cap: limit,
+      ai_status: aiResult.error ? `fallback:${aiResult.error}` : "ok",
+      report,
+    });
+  } catch (e) {
+    return res.status(e.status || 500).json({ error: e.message || String(e) });
+  }
+}

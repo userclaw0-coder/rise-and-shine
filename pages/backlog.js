@@ -12,6 +12,7 @@ import {
   getAllTags,
   createCategory,
 } from "../lib/db";
+import { supabase } from "../lib/supabaseClient";
 
 const STATUS_FILTERS = [
   { value: "todo_doing", label: "Todo & Doing" },
@@ -85,6 +86,9 @@ export default function BacklogPage() {
   const [modalSubcategoryId, setModalSubcategoryId] = useState("");
   const [modalTagsText, setModalTagsText] = useState("");
   const [addingTask, setAddingTask] = useState(false);
+
+  const [enriching, setEnriching] = useState(false);
+  const [enrichReport, setEnrichReport] = useState(null);
 
   useEffect(() => {
     if (!user) return;
@@ -325,6 +329,53 @@ export default function BacklogPage() {
     if (!listRes.error) setCategories(listRes.data || []);
     setNewCategoryName("");
     setAddingCategory(false);
+  }
+
+  async function runPrioritizationEnrichment(apply = false) {
+    if (!user || enriching) return;
+    setEnriching(true);
+    setError("");
+
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data?.session?.access_token;
+      if (!token) {
+        setError("Auth session missing. Please refresh and sign in again.");
+        return;
+      }
+
+      const res = await fetch("/api/tasks/enrich-prioritization", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ apply, dry_run: !apply, limit: 25 }),
+      });
+
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok || !payload?.ok) {
+        setError(payload?.error || "Failed to run enrichment.");
+        return;
+      }
+
+      setEnrichReport(payload);
+
+      if (apply) {
+        const tasksRes = await getBacklogTasks(user.id, { includeArchived: true });
+        if (!tasksRes.error) {
+          const refreshed = (tasksRes.data || []).map((t) => ({
+            ...t,
+            _tagsText: makeTagText(t),
+          }));
+          setTasks(refreshed);
+        }
+      }
+    } catch (e) {
+      setError(e?.message || "Failed to run enrichment.");
+    } finally {
+      setEnriching(false);
+    }
   }
 
   function renderTaskRow(task, depth) {
@@ -961,6 +1012,7 @@ export default function BacklogPage() {
             display: "flex",
             gap: 8,
             alignItems: "center",
+            flexWrap: "wrap",
           }}
         >
           <button
@@ -980,7 +1032,68 @@ export default function BacklogPage() {
           >
             + Add task
           </button>
+          <button
+            type="button"
+            onClick={() => runPrioritizationEnrichment(false)}
+            disabled={enriching}
+            style={{
+              fontSize: 13,
+              padding: "8px 14px",
+              borderRadius: 999,
+              border: "1px solid #2563eb",
+              background: "#eff6ff",
+              color: "#1d4ed8",
+              cursor: enriching ? "not-allowed" : "pointer",
+              opacity: enriching ? 0.6 : 1,
+            }}
+          >
+            {enriching ? "Enriching…" : "AI Enrich (dry run)"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (window.confirm("Apply enrichment updates to missing task metadata now?")) {
+                runPrioritizationEnrichment(true);
+              }
+            }}
+            disabled={enriching}
+            style={{
+              fontSize: 13,
+              padding: "8px 14px",
+              borderRadius: 999,
+              border: "1px solid #059669",
+              background: "#ecfdf5",
+              color: "#047857",
+              cursor: enriching ? "not-allowed" : "pointer",
+              opacity: enriching ? 0.6 : 1,
+            }}
+          >
+            Apply enrichment
+          </button>
+          <span style={{ fontSize: 12, color: "#6b7280" }}>
+            Fills missing priority/effort/tags only.
+          </span>
         </div>
+
+        {enrichReport && (
+          <div
+            style={{
+              marginBottom: 10,
+              border: "1px solid #e5e7eb",
+              borderRadius: 12,
+              padding: "8px 10px",
+              background: "#f9fafb",
+              fontSize: 12,
+              color: "#374151",
+            }}
+          >
+            <strong>{enrichReport.apply ? "Enrichment applied" : "Dry-run preview"}</strong>
+            {` · processed ${enrichReport.processed || 0} (cap ${enrichReport.cap || 25})`}
+            {` · updated ${(enrichReport.report?.updated || []).length}`}
+            {` · skipped ${(enrichReport.report?.skipped || []).length}`}
+            {` · errors ${(enrichReport.report?.errors || []).length}`}
+          </div>
+        )}
 
         <Modal
           title="Add task"
