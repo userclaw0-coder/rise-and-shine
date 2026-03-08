@@ -10,8 +10,8 @@ Primary Promise:
 “What is the most efficient way to move from where I am to where I want to be — and how can AI help me get there faster and more reliably?”
 
 Target User:
-- Primary: AI-curious builders/operators whose work and personal life overlap and who want AI-guided planning and leverage.
-- Expanded: General self-improvement users who want structured guidance, practical AI onboarding, and clearer next actions.
+- Primary: General self-improvement users who want structured guidance, practical AI onboarding, and clearer next actions.
+- Secondary: AI-curious builders/operators whose work and personal life overlap and who want AI-guided planning and leverage.
 
 Core System Components:
 
