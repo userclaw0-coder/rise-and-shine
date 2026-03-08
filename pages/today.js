@@ -397,9 +397,15 @@ export default function TodayPage() {
         },
         body: JSON.stringify({ date: todayStr }),
       });
-      const data = await res.json().catch(() => ({}));
+      const responseText = await res.text();
+      let data = {};
+      try {
+        data = responseText ? JSON.parse(responseText) : {};
+      } catch {
+        data = { raw_text: responseText };
+      }
       if (!res.ok) {
-        const msg = data.error || (data.raw ? "AI returned non-JSON output. Try again." : "AI suggestions unavailable. Please try again.");
+        const msg = data.error || data.raw_text || (data.raw ? "AI returned non-JSON output. Try again." : `AI suggestions unavailable (${res.status}).`);
         setAiError(msg);
         setAiSuggestions(null);
         return;
