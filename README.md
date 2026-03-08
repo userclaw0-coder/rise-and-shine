@@ -4,6 +4,17 @@ Personal execution OS for daily momentum: capture tasks, rank next actions, run 
 
 Production: https://rise-and-shine-hazel.vercel.app
 
+## Positioning (canonical)
+Rise-and-Shine is an AI-guided life execution system for AI-curious people who want clear next actions and practical AI leverage guidance they can apply immediately.
+
+### Who this is for
+- Primary: AI-curious builders/operators improving daily execution and output.
+- Expanded: general self-improvement users who want structured guidance and practical AI onboarding.
+
+### Entry offer
+- Free + 7-day trial: full onboarding, first Next-3 action set, subtask breakdown, and AI leverage suggestions.
+- Post-trial: subscription for ongoing planning, execution support, and deeper AI leverage.
+
 ## What this app does
 
 - **Today queue (Next-3):** surfaces the best three actions from backlog using weighted scoring.

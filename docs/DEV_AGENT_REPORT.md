@@ -3,6 +3,11 @@
 Date: 2026-03-06 06:12 EST
 Owner: Rise-and-Shine Dev Agent
 
+## Path/reference conventions (added 2026-03-08)
+- Prefer repo-root-relative paths (e.g., `docs/SCHEMA_ALIGNMENT.md`, `README.md`, `PROJECT_NORTH_STAR.md`).
+- Treat older absolute/external references in historical entries as archival context, not current canonical navigation.
+- Canonical strategy narrative lives in `PROJECT_NORTH_STAR.md`; avoid parallel strategy blocks in other docs.
+
 ## Current status snapshot
 
 ### What is implemented (confirmed in docs + code)
