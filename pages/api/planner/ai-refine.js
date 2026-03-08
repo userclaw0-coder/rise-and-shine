@@ -14,6 +14,7 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 // PLANNER_MODEL=gpt-4.1-mini (or similar cheap model you have access to)
 // If unset, this defaults to gpt-5.2 (may be overkill).
 const MODEL = process.env.PLANNER_MODEL || "gpt-4.1-mini";
+const AI_TIMEOUT_MS = 25000;
 
 function hashQueue(mode, queue) {
   const payload = JSON.stringify({
@@ -27,8 +28,24 @@ function safeJsonParse(text) {
   try {
     return JSON.parse(text);
   } catch {
-    return null;
+    const match = String(text || "").match(/\{[\s\S]*\}$/);
+    if (!match) return null;
+    try {
+      return JSON.parse(match[0]);
+    } catch {
+      return null;
+    }
   }
+}
+
+function withTimeout(promise, timeoutMs) {
+  let timeoutId = null;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error("planner_ai_timeout")), timeoutMs);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeoutId) clearTimeout(timeoutId);
+  });
 }
 
 export default async function handler(req, res) {
@@ -185,18 +202,21 @@ Keep responses concise.
       },
     };
 
-    const response = await openai.responses.create({
-      model: MODEL,
-      instructions,
-      input: JSON.stringify(input),
-    });
+    const response = await withTimeout(
+      openai.responses.create({
+        model: MODEL,
+        instructions,
+        input: JSON.stringify(input),
+      }),
+      AI_TIMEOUT_MS
+    );
 
     const text = response.output_text || "";
     const parsed = safeJsonParse(text);
 
     if (!parsed) {
       return res.status(500).json({
-        error: "AI returned non-JSON output. Try again or adjust model.",
+        error: "AI returned non-JSON output. Try again.",
         raw: text.slice(0, 2000),
       });
     }
@@ -211,6 +231,9 @@ Keep responses concise.
 
     return res.json({ ok: true, cached: false, queue_hash: queueHash, ai: parsed });
   } catch (e) {
-    return res.status(e.status || 500).json({ error: e.message || String(e) });
+    const message = e?.message || String(e);
+    return res.status(e.status || 500).json({
+      error: message === "planner_ai_timeout" ? "AI planning timed out. Please try again." : message,
+    });
   }
 }

@@ -1711,3 +1711,25 @@ Date: 2026-03-08 16:38 EDT
 
 ### User impact
 Backlog now exposes a comparable AI-priority score for each task, and Today AI refinement should work again for authenticated users.
+
+Date: 2026-03-08 16:55 EDT
+
+## Iteration update (Backlog completion controls + subcategory editing + planner hardening)
+
+### What changed
+- Added explicit **AI score** column header in `pages/backlog.js` to match the displayed numeric score.
+- Added backlog row checkboxes to mark tasks complete/incomplete via `updateTaskStatusWithEvent`, so completion is persisted and logged.
+- Replaced backlog subcategory dropdown with editable text input + datalist suggestions from the selected category.
+- Added `ensureSubcategory(...)` in `lib/db.js` so new subcategories can be created on blur and then attached to the task.
+- Hardened `pages/api/planner/ai-refine.js`:
+  - 25s timeout
+  - better JSON parsing tolerance
+  - clearer timeout/non-JSON error reporting
+
+### Verification results
+- `npm run verify:task-enrichment` ✅
+- `npm run lint` ✅
+- `npm run build` ✅
+
+### User impact
+Backlog is now more actionable (visible AI score header, completion checkboxes, editable subcategories), and Today AI refinement should fail more transparently and less often.
