@@ -1625,3 +1625,30 @@ Date: 2026-03-07 08:25 EST
 
 ### User impact
 Applying a planner refinement without new tags no longer wipes visible tag context in fallback mode, keeping Today/Backlog task metadata consistent.
+
+Date: 2026-03-08 14:15 EDT
+
+## Iteration update (AI enrichment: full-run processing + inspectable preview)
+
+### What changed
+- Updated `pages/api/tasks/enrich-prioritization.js` to process **all eligible backlog tasks** instead of stopping at a hard 25-task cap.
+- Kept AI calls conservative by batching them server-side in chunks of 25 while aggregating one full enrichment run.
+- Added richer response metadata:
+  - `total_eligible`
+  - `batch_size`
+  - `batches`
+  - `ai_status`
+- Updated `pages/backlog.js` so dry-run/apply results are now inspectable in the UI:
+  - shows processed count vs total eligible
+  - shows AI status (`ok` vs fallback reason)
+  - shows a preview list of updated tasks with patch details, tags before/after, rationale, and source
+  - shows error rows when present
+- Updated the backlog helper text to clarify enrichment now runs across all eligible backlog tasks.
+
+### Verification results
+- `npm run verify:task-enrichment` ✅
+- `npm run lint` ✅
+- `npm run build` ✅
+
+### User impact
+AI Enrich now runs across the full eligible backlog and gives visible, inspectable feedback so you can confirm whether real AI enrichment or fallback heuristics were used.

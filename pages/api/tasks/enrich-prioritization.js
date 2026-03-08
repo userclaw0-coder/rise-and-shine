@@ -18,7 +18,7 @@ const supabase = createClient(
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const MODEL = process.env.ENRICHMENT_MODEL || process.env.PLANNER_MODEL || "gpt-5.2-mini";
-const MAX_TASKS = 25;
+const AI_BATCH_SIZE = 25;
 const AI_TIMEOUT_MS = 8000;
 
 function withTimeout(promise, timeoutMs) {
@@ -38,6 +38,55 @@ function safeJsonParse(text) {
   } catch {
     return null;
   }
+}
+
+async function fetchAllCandidateTasks(userId) {
+  const allTasks = [];
+  let from = 0;
+  const pageSize = 1000;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("tasks")
+      .select("id,title,priority,effort_hours,due_date,status,category_id")
+      .eq("user_id", userId)
+      .in("status", ["todo", "doing"])
+      .order("created_at", { ascending: false })
+      .range(from, from + pageSize - 1);
+
+    if (error) throw error;
+    const rows = data || [];
+    allTasks.push(...rows);
+    if (rows.length < pageSize) break;
+    from += pageSize;
+  }
+
+  return allTasks;
+}
+
+async function fetchAiEnrichmentsInBatches(tasks) {
+  if (!Array.isArray(tasks) || tasks.length === 0) {
+    return { rows: [], error: null, batches: 0, batchSize: AI_BATCH_SIZE };
+  }
+
+  const rows = [];
+  const errors = [];
+
+  for (let i = 0; i < tasks.length; i += AI_BATCH_SIZE) {
+    const batch = tasks.slice(i, i + AI_BATCH_SIZE);
+    const result = await fetchAiEnrichments(batch);
+    rows.push(...(result.rows || []));
+    if (result.error) {
+      errors.push(`batch_${Math.floor(i / AI_BATCH_SIZE) + 1}:${result.error}`);
+    }
+  }
+
+  return {
+    rows,
+    error: errors.length > 0 ? errors.join(",") : null,
+    batches: Math.ceil(tasks.length / AI_BATCH_SIZE),
+    batchSize: AI_BATCH_SIZE,
+  };
 }
 
 async function ensureTagIds(userId, names) {
@@ -130,23 +179,15 @@ export default async function handler(req, res) {
 
     const userId = await getAuthenticatedUserId(req);
 
-    const requestedLimit = Number(req.body?.limit ?? MAX_TASKS);
-    const limit = Number.isFinite(requestedLimit)
-      ? Math.max(1, Math.min(MAX_TASKS, Math.floor(requestedLimit)))
-      : MAX_TASKS;
+    const requestedLimit = Number(req.body?.limit);
+    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? Math.floor(requestedLimit)
+      : null;
 
     const apply = req.body?.apply === true;
     const dryRun = apply ? false : req.body?.dry_run !== false;
 
-    const { data: tasks, error: tasksErr } = await supabase
-      .from("tasks")
-      .select("id,title,priority,effort_hours,due_date,status,category_id")
-      .eq("user_id", userId)
-      .in("status", ["todo", "doing"])
-      .order("created_at", { ascending: false })
-      .limit(limit * 3);
-    if (tasksErr) throw tasksErr;
-
+    const tasks = await fetchAllCandidateTasks(userId);
     const taskIds = (tasks || []).map((t) => t.id);
 
     const [{ data: categories, error: catErr }, { data: links, error: linksErr }, { data: tags, error: tagsErr }] =
@@ -179,7 +220,8 @@ export default async function handler(req, res) {
       tags: tagsByTask[task.id] || [],
     }));
 
-    const candidates = enrichedTasks.filter(isMissingPrioritizationMetadata).slice(0, limit);
+    const missingTasks = enrichedTasks.filter(isMissingPrioritizationMetadata);
+    const candidates = limit ? missingTasks.slice(0, limit) : missingTasks;
 
     if (candidates.length === 0) {
       return res.json({
@@ -187,13 +229,15 @@ export default async function handler(req, res) {
         dry_run: dryRun,
         apply,
         processed: 0,
-        cap: limit,
+        cap: limit || null,
+        total_eligible: missingTasks.length,
+        batch_size: AI_BATCH_SIZE,
         report: { updated: [], skipped: [], errors: [] },
         notes: ["No tasks missing prioritization metadata."],
       });
     }
 
-    const aiResult = await fetchAiEnrichments(candidates);
+    const aiResult = await fetchAiEnrichmentsInBatches(candidates);
     const aiByTaskId = Object.fromEntries(
       (aiResult.rows || [])
         .map((row) => {
@@ -302,7 +346,10 @@ export default async function handler(req, res) {
       dry_run: dryRun,
       apply,
       processed: candidates.length,
-      cap: limit,
+      cap: limit || null,
+      total_eligible: missingTasks.length,
+      batch_size: aiResult.batchSize || AI_BATCH_SIZE,
+      batches: aiResult.batches || 0,
       ai_status: aiResult.error ? `fallback:${aiResult.error}` : "ok",
       report,
     });
