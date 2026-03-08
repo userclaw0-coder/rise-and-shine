@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../components/DashboardLayout";
 import SectionCard from "../components/SectionCard";
 import { useAuth } from "../hooks/useAuth";
+import { supabase } from "../lib/supabaseClient";
 import {
   getTemplates,
   getTemplateItems,
