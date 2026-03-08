@@ -13,7 +13,7 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 // Pick a cheaper model via env for low cost (recommended):
 // PLANNER_MODEL=gpt-4.1-mini (or similar cheap model you have access to)
 // If unset, this defaults to gpt-5.2 (may be overkill).
-const MODEL = process.env.PLANNER_MODEL || "gpt-5.2";
+const MODEL = process.env.PLANNER_MODEL || "gpt-4.1-mini";
 
 function hashQueue(mode, queue) {
   const payload = JSON.stringify({

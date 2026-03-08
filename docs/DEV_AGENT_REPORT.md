@@ -1652,3 +1652,21 @@ Date: 2026-03-08 14:15 EDT
 
 ### User impact
 AI Enrich now runs across the full eligible backlog and gives visible, inspectable feedback so you can confirm whether real AI enrichment or fallback heuristics were used.
+
+Date: 2026-03-08 14:44 EDT
+
+## Iteration update (AI model default fix + cleaner fallback reporting)
+
+### What changed
+- Fixed invalid default model names that were causing deployed AI enrichment/planner requests to fail:
+  - `pages/api/tasks/enrich-prioritization.js` now defaults to `gpt-4.1-mini`
+  - `pages/api/planner/ai-refine.js` now defaults to `gpt-4.1-mini`
+- Cleaned up enrichment batch fallback reporting so repeated per-batch model errors are summarized instead of dumped verbatim into the backlog UI.
+
+### Verification results
+- `npm run verify:task-enrichment` ✅
+- `npm run lint` ✅
+- `npm run build` ✅
+
+### User impact
+Deployed AI enrichment should now call a valid model by default, and any future fallback errors should be much easier to read and debug.
