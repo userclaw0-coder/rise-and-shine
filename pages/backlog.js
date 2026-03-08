@@ -63,6 +63,24 @@ function parseTagText(text) {
     .filter((t) => t.length > 0);
 }
 
+function formatEnrichmentPatch(patch) {
+  const parts = [];
+  if (patch?.priority) parts.push(`priority → ${patch.priority}`);
+  if (patch?.effort_hours != null) parts.push(`effort → ${patch.effort_hours}h`);
+  return parts.length > 0 ? parts.join(" · ") : "tags only";
+}
+
+function formatEnrichmentStatus(report) {
+  if (!report) return null;
+  if (report.ai_status === "ok") {
+    return `AI ok · ${report.batches || 0} batch${report.batches === 1 ? "" : "es"} of ${report.batch_size || 25}`;
+  }
+  if (typeof report.ai_status === "string" && report.ai_status.startsWith("fallback:")) {
+    return `Fallback used · ${report.ai_status.slice("fallback:".length)}`;
+  }
+  return report.ai_status || null;
+}
+
 export default function BacklogPage() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -350,7 +368,7 @@ export default function BacklogPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ apply, dry_run: !apply, limit: 25 }),
+        body: JSON.stringify({ apply, dry_run: !apply }),
       });
 
       const payload = await res.json().catch(() => ({}));
@@ -1071,7 +1089,7 @@ export default function BacklogPage() {
             Apply enrichment
           </button>
           <span style={{ fontSize: 12, color: "#6b7280" }}>
-            Fills missing priority/effort/tags only.
+            Fills missing priority/effort/tags only across all eligible backlog tasks.
           </span>
         </div>
 
@@ -1081,17 +1099,77 @@ export default function BacklogPage() {
               marginBottom: 10,
               border: "1px solid #e5e7eb",
               borderRadius: 12,
-              padding: "8px 10px",
+              padding: "10px 12px",
               background: "#f9fafb",
               fontSize: 12,
               color: "#374151",
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
             }}
           >
-            <strong>{enrichReport.apply ? "Enrichment applied" : "Dry-run preview"}</strong>
-            {` · processed ${enrichReport.processed || 0} (cap ${enrichReport.cap || 25})`}
-            {` · updated ${(enrichReport.report?.updated || []).length}`}
-            {` · skipped ${(enrichReport.report?.skipped || []).length}`}
-            {` · errors ${(enrichReport.report?.errors || []).length}`}
+            <div>
+              <strong>{enrichReport.apply ? "Enrichment applied" : "Dry-run preview"}</strong>
+              {` · processed ${enrichReport.processed || 0}`}
+              {typeof enrichReport.total_eligible === "number" ? ` of ${enrichReport.total_eligible} eligible` : ""}
+              {` · updated ${(enrichReport.report?.updated || []).length}`}
+              {` · skipped ${(enrichReport.report?.skipped || []).length}`}
+              {` · errors ${(enrichReport.report?.errors || []).length}`}
+            </div>
+
+            {formatEnrichmentStatus(enrichReport) && (
+              <div style={{ color: enrichReport.ai_status === "ok" ? "#065f46" : "#92400e" }}>
+                {formatEnrichmentStatus(enrichReport)}
+              </div>
+            )}
+
+            {(enrichReport.report?.updated || []).length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ fontWeight: 600 }}>Preview of updates</div>
+                {(enrichReport.report?.updated || []).slice(0, 12).map((row) => (
+                  <div
+                    key={row.task_id}
+                    style={{
+                      border: "1px solid #e5e7eb",
+                      borderRadius: 10,
+                      padding: "8px 10px",
+                      background: "#ffffff",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 3,
+                    }}
+                  >
+                    <div style={{ fontWeight: 500 }}>{row.title}</div>
+                    <div style={{ color: "#4b5563" }}>{formatEnrichmentPatch(row.patch)}</div>
+                    <div style={{ color: "#6b7280" }}>
+                      tags: {(row.tags_before || []).join(", ") || "none"} → {(row.tags_after || []).join(", ") || "none"}
+                    </div>
+                    {row.enrichment?.rationale && (
+                      <div style={{ color: "#6b7280" }}>why: {row.enrichment.rationale}</div>
+                    )}
+                    {row.enrichment?.source && (
+                      <div style={{ color: "#6b7280" }}>source: {row.enrichment.source}</div>
+                    )}
+                  </div>
+                ))}
+                {(enrichReport.report?.updated || []).length > 12 && (
+                  <div style={{ color: "#6b7280" }}>
+                    Showing first 12 of {(enrichReport.report?.updated || []).length} updated tasks.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {(enrichReport.report?.errors || []).length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <div style={{ fontWeight: 600, color: "#991b1b" }}>Errors</div>
+                {(enrichReport.report?.errors || []).slice(0, 5).map((row) => (
+                  <div key={row.task_id} style={{ color: "#991b1b" }}>
+                    {row.title}: {row.error}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
