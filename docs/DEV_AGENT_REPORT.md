@@ -1733,3 +1733,21 @@ Date: 2026-03-08 16:55 EDT
 
 ### User impact
 Backlog is now more actionable (visible AI score header, completion checkboxes, editable subcategories), and Today AI refinement should fail more transparently and less often.
+
+Date: 2026-03-08 16:58 EDT
+
+## Iteration update (Backlog completion event mapping fix)
+
+### What changed
+- Fixed backlog status-event logging in `lib/db.js` so completion/in-progress changes map to valid `task_events.event_type` values.
+- Specifically:
+  - `done` -> `completed`
+  - `doing` -> `started`
+- This resolves the enum error triggered by backlog completion checkboxes.
+
+### Verification results
+- `npm run lint` ✅
+- `npm run build` ✅
+
+### User impact
+Backlog completion checkboxes should now persist and log status changes without throwing enum errors.
