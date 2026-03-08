@@ -18,8 +18,8 @@ const supabase = createClient(
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const MODEL = process.env.ENRICHMENT_MODEL || process.env.PLANNER_MODEL || "gpt-4.1-mini";
-const AI_BATCH_SIZE = 25;
-const AI_TIMEOUT_MS = 8000;
+const AI_BATCH_SIZE = 10;
+const AI_TIMEOUT_MS = 25000;
 
 function withTimeout(promise, timeoutMs) {
   let timeoutId = null;

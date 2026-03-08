@@ -1670,3 +1670,24 @@ Date: 2026-03-08 14:44 EDT
 
 ### User impact
 Deployed AI enrichment should now call a valid model by default, and any future fallback errors should be much easier to read and debug.
+
+Date: 2026-03-08 14:49 EDT
+
+## Iteration update (AI enrichment timeout hardening + progress UI)
+
+### What changed
+- Reduced enrichment AI batch size from 25 to 10 in `pages/api/tasks/enrich-prioritization.js`.
+- Increased enrichment AI timeout from 8s to 25s to better fit Vercel/API response reality.
+- Added in-flight processing UI in `pages/backlog.js`:
+  - estimated progress bar
+  - estimated percent complete
+  - visible note showing approximate eligible task count and batch size
+- Progress indicator resets automatically after completion.
+
+### Verification results
+- `npm run verify:task-enrichment` ✅
+- `npm run lint` ✅
+- `npm run build` ✅
+
+### User impact
+AI enrichment should time out less often on deployed runs, and users now get visible progress feedback while large backlog enrichment runs are processing.

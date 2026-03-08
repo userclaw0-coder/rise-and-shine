@@ -12,6 +12,7 @@ import {
   getAllTags,
   createCategory,
 } from "../lib/db";
+import { isMissingPrioritizationMetadata } from "../lib/task-enrichment";
 import { supabase } from "../lib/supabaseClient";
 
 const STATUS_FILTERS = [
@@ -107,6 +108,8 @@ export default function BacklogPage() {
 
   const [enriching, setEnriching] = useState(false);
   const [enrichReport, setEnrichReport] = useState(null);
+  const [enrichmentStartedAt, setEnrichmentStartedAt] = useState(null);
+  const [enrichmentProgressPct, setEnrichmentProgressPct] = useState(0);
 
   useEffect(() => {
     if (!user) return;
@@ -165,6 +168,36 @@ export default function BacklogPage() {
     () => (tasks || []).filter((t) => !t.parent_task_id),
     [tasks]
   );
+
+  const estimatedEligibleCount = useMemo(
+    () => (tasks || []).filter((t) => isMissingPrioritizationMetadata({
+      priority: t.priority,
+      effort_hours: t.effort_hours,
+      tags: extractTagNames(t),
+    })).length,
+    [tasks]
+  );
+
+  useEffect(() => {
+    if (!enriching) {
+      setEnrichmentProgressPct(0);
+      return undefined;
+    }
+
+    const estimatedBatches = Math.max(1, Math.ceil((estimatedEligibleCount || 1) / 10));
+    const estimatedTotalMs = estimatedBatches * 5000;
+
+    const tick = () => {
+      if (!enrichmentStartedAt) return;
+      const elapsed = Date.now() - enrichmentStartedAt;
+      const pct = Math.min(95, Math.max(8, Math.round((elapsed / estimatedTotalMs) * 100)));
+      setEnrichmentProgressPct(pct);
+    };
+
+    tick();
+    const id = setInterval(tick, 300);
+    return () => clearInterval(id);
+  }, [enriching, enrichmentStartedAt, estimatedEligibleCount]);
 
   const filteredRootTasks = useMemo(() => {
     const q = normalize(search);
@@ -352,6 +385,8 @@ export default function BacklogPage() {
   async function runPrioritizationEnrichment(apply = false) {
     if (!user || enriching) return;
     setEnriching(true);
+    setEnrichmentStartedAt(Date.now());
+    setEnrichmentProgressPct(8);
     setError("");
 
     try {
@@ -377,6 +412,7 @@ export default function BacklogPage() {
         return;
       }
 
+      setEnrichmentProgressPct(100);
       setEnrichReport(payload);
 
       if (apply) {
@@ -393,6 +429,7 @@ export default function BacklogPage() {
       setError(e?.message || "Failed to run enrichment.");
     } finally {
       setEnriching(false);
+      setTimeout(() => setEnrichmentProgressPct(0), 800);
     }
   }
 
@@ -1092,6 +1129,41 @@ export default function BacklogPage() {
             Fills missing priority/effort/tags only across all eligible backlog tasks.
           </span>
         </div>
+
+        {enriching && (
+          <div
+            style={{
+              marginBottom: 10,
+              border: "1px solid #dbeafe",
+              borderRadius: 12,
+              padding: "10px 12px",
+              background: "#eff6ff",
+              fontSize: 12,
+              color: "#1e3a8a",
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+              <strong>Processing enrichment…</strong>
+              <span>estimated {enrichmentProgressPct}%</span>
+            </div>
+            <div style={{ height: 10, background: "#dbeafe", borderRadius: 999, overflow: "hidden" }}>
+              <div
+                style={{
+                  width: `${enrichmentProgressPct}%`,
+                  height: "100%",
+                  background: "linear-gradient(90deg, #2563eb, #60a5fa)",
+                  transition: "width 240ms ease",
+                }}
+              />
+            </div>
+            <div>
+              Running across approximately {estimatedEligibleCount || 0} eligible backlog tasks in AI batches of 10.
+            </div>
+          </div>
+        )}
 
         {enrichReport && (
           <div
