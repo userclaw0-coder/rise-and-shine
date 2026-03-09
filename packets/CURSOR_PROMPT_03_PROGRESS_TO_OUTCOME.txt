@@ -1,0 +1,38 @@
+You are implementing a narrow Rise-and-Shine product slice inside the assigned worktree only.
+
+Read and follow these files first:
+1. /home/clawofhank/.openclaw/workspace/PROJECT_NORTH_CONTROL_PANEL.md
+2. /home/clawofhank/.openclaw/workspace/CURSOR_OPERATING_MODEL.md
+3. /home/clawofhank/rise-and-shine/packets/CURSOR_PACKET_03_PROGRESS_TO_OUTCOME.md
+4. /home/clawofhank/rise-and-shine/CURRENT_STATE_SNAPSHOT.md
+5. /home/clawofhank/rise-and-shine/docs/PROJECT_SPEC.md
+
+Working rules:
+- Work only in this worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-progress-to-outcome-visibility
+- Do not modify other repos or other branches.
+- Start from develop and do not touch main.
+- Do not expand scope beyond this packet.
+- Preserve planner/auth/apply stability.
+- Keep validation local-first.
+
+Primary objective:
+Add a clear progress-to-outcome signal on an existing surface so users can better understand how current actions connect to meaningful progress.
+
+Before coding:
+- briefly state your implementation plan in 3-6 bullets
+- identify any ambiguity you are resolving conservatively
+
+Then implement the packet.
+
+Before finishing:
+- run exactly:
+  - npm run lint
+  - npm run build
+
+Completion report required:
+- branch name
+- commit hash
+- summary of changes
+- verification commands run
+- verification results
+- known risks / follow-ups
