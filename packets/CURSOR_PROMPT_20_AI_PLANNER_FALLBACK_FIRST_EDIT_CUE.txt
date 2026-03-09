@@ -1,0 +1,16 @@
+Implement `CURSOR_PACKET_20_AI_PLANNER_FALLBACK_FIRST_EDIT_CUE.md` exactly as scoped.
+
+Rules:
+- Work only in the rise-and-shine repo/worktree for this packet.
+- Base from `develop` on branch `feat/ai-planner-fallback-first-edit-cue`.
+- Keep the change narrow and user-facing.
+- Do not broaden into onboarding/planner architecture/auth work.
+- Run required verification before finishing.
+
+Return a completion report with:
+1. branch name
+2. commit hash
+3. concise summary of changes
+4. verification commands run
+5. verification results
+6. risks / follow-ups
