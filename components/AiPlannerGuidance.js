@@ -112,10 +112,10 @@ function getFallbackReasonCopy(aiStatus, aiError) {
     const rawReason = aiStatus.slice("fallback:".length).replace(/[-_]+/g, " ").trim();
 
     if (!rawReason) {
-      return "The planner couldn’t complete the full AI pass this time, so it used a calmer backup review path instead. These suggestions are still safe starting points to review, edit, and use. Your tasks were not changed automatically, and you can retry later if you want another pass.";
+      return "The planner couldn’t complete the full AI pass this time, so it used a calmer backup review path instead. These suggestions are safe starting points — you can review them, edit them to fit your day, and then apply only what feels useful. Your tasks were not changed automatically, and you can retry later if you want another pass.";
     }
 
-    return `${humanizePlannerReason(rawReason)} Instead of forcing a shaky result through, the planner used a calmer backup review path. These suggestions are still safe starting points to review, edit, and use. Your tasks were not changed automatically, and you can retry later if you want another pass.`;
+    return `${humanizePlannerReason(rawReason)} Instead of forcing a shaky result through, the planner used a calmer backup review path. These suggestions are safe starting points — you can review them, edit them to fit your day, and then apply only what feels useful. Your tasks were not changed automatically, and you can retry later if you want another pass.`;
   }
 
   return humanizePlannerReason(aiError);
@@ -152,7 +152,7 @@ const PHASE_CONTENT = {
   fallback: {
     label: "Safer backup path used",
     hint: "The planner couldn’t finish the full AI pass cleanly this time, so it kept going with a safer backup review path instead.",
-    detail: "You can treat the suggestions below as safe starting points: review them, tweak them, or use them as-is. Nothing in your tasks changes unless you explicitly approve it.",
+    detail: "You can treat the suggestions below as safe starting points: review them, edit them to fit your day, or use them as-is. Nothing in your tasks changes unless you explicitly approve it.",
     icon: "◇",
     color: "#92400e",
     bg: "#fffbeb",
