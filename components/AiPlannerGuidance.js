@@ -245,7 +245,7 @@ export default function AiPlannerGuidance({
           )}
           {phase === "fallback" && (
             <div style={{ marginTop: 6, fontSize: 12, fontWeight: 500, color: "#92400e" }}>
-              Progress matters more than polishing — one good-enough next step is enough to get moving. No need to perfect the suggestion first; pick one and go.
+              This is a good first win — act on one suggestion now, then refine further when you like. Progress matters more than polishing; pick one and go.
             </div>
           )}
         </div>
