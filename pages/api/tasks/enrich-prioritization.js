@@ -17,9 +17,9 @@ const supabase = createClient(
 );
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const MODEL = process.env.ENRICHMENT_MODEL || process.env.PLANNER_MODEL || "gpt-5.2-mini";
-const AI_BATCH_SIZE = 25;
-const AI_TIMEOUT_MS = 8000;
+const MODEL = process.env.ENRICHMENT_MODEL || process.env.PLANNER_MODEL || "gpt-4.1-mini";
+const AI_BATCH_SIZE = 10;
+const AI_TIMEOUT_MS = 25000;
 
 function withTimeout(promise, timeoutMs) {
   let timeoutId = null;
@@ -81,9 +81,14 @@ async function fetchAiEnrichmentsInBatches(tasks) {
     }
   }
 
+  const uniqueErrors = Array.from(new Set(errors));
+  const summarizedError = uniqueErrors.length > 0
+    ? `${uniqueErrors.length} batch error${uniqueErrors.length === 1 ? "" : "s"}: ${uniqueErrors.slice(0, 3).join(" | ")}`
+    : null;
+
   return {
     rows,
-    error: errors.length > 0 ? errors.join(",") : null,
+    error: summarizedError,
     batches: Math.ceil(tasks.length / AI_BATCH_SIZE),
     batchSize: AI_BATCH_SIZE,
   };

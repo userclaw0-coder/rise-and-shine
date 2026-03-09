@@ -1652,3 +1652,145 @@ Date: 2026-03-08 14:15 EDT
 
 ### User impact
 AI Enrich now runs across the full eligible backlog and gives visible, inspectable feedback so you can confirm whether real AI enrichment or fallback heuristics were used.
+
+Date: 2026-03-08 14:44 EDT
+
+## Iteration update (AI model default fix + cleaner fallback reporting)
+
+### What changed
+- Fixed invalid default model names that were causing deployed AI enrichment/planner requests to fail:
+  - `pages/api/tasks/enrich-prioritization.js` now defaults to `gpt-4.1-mini`
+  - `pages/api/planner/ai-refine.js` now defaults to `gpt-4.1-mini`
+- Cleaned up enrichment batch fallback reporting so repeated per-batch model errors are summarized instead of dumped verbatim into the backlog UI.
+
+### Verification results
+- `npm run verify:task-enrichment` ✅
+- `npm run lint` ✅
+- `npm run build` ✅
+
+### User impact
+Deployed AI enrichment should now call a valid model by default, and any future fallback errors should be much easier to read and debug.
+
+Date: 2026-03-08 14:49 EDT
+
+## Iteration update (AI enrichment timeout hardening + progress UI)
+
+### What changed
+- Reduced enrichment AI batch size from 25 to 10 in `pages/api/tasks/enrich-prioritization.js`.
+- Increased enrichment AI timeout from 8s to 25s to better fit Vercel/API response reality.
+- Added in-flight processing UI in `pages/backlog.js`:
+  - estimated progress bar
+  - estimated percent complete
+  - visible note showing approximate eligible task count and batch size
+- Progress indicator resets automatically after completion.
+
+### Verification results
+- `npm run verify:task-enrichment` ✅
+- `npm run lint` ✅
+- `npm run build` ✅
+
+### User impact
+AI enrichment should time out less often on deployed runs, and users now get visible progress feedback while large backlog enrichment runs are processing.
+
+Date: 2026-03-08 16:38 EDT
+
+## Iteration update (Backlog AI score visibility + Today planner auth fix)
+
+### What changed
+- Updated `pages/backlog.js` to compute and display a numeric AI-priority score per root backlog task using the current scoring model.
+- Backlog root tasks now sort descending by that computed AI-priority score so relative ranking is visible immediately.
+- Updated `pages/today.js` so planner requests now include the authenticated bearer token for:
+  - `/api/planner/ai-refine`
+  - `/api/planner/apply`
+- This repairs the `Authentication required` failure shown when clicking **Refine these 3 with AI** after the server-side auth tightening.
+
+### Verification results
+- `npm run verify:task-enrichment` ✅
+- `npm run lint` ✅
+- `npm run build` ✅
+
+### User impact
+Backlog now exposes a comparable AI-priority score for each task, and Today AI refinement should work again for authenticated users.
+
+Date: 2026-03-08 16:55 EDT
+
+## Iteration update (Backlog completion controls + subcategory editing + planner hardening)
+
+### What changed
+- Added explicit **AI score** column header in `pages/backlog.js` to match the displayed numeric score.
+- Added backlog row checkboxes to mark tasks complete/incomplete via `updateTaskStatusWithEvent`, so completion is persisted and logged.
+- Replaced backlog subcategory dropdown with editable text input + datalist suggestions from the selected category.
+- Added `ensureSubcategory(...)` in `lib/db.js` so new subcategories can be created on blur and then attached to the task.
+- Hardened `pages/api/planner/ai-refine.js`:
+  - 25s timeout
+  - better JSON parsing tolerance
+  - clearer timeout/non-JSON error reporting
+
+### Verification results
+- `npm run verify:task-enrichment` ✅
+- `npm run lint` ✅
+- `npm run build` ✅
+
+### User impact
+Backlog is now more actionable (visible AI score header, completion checkboxes, editable subcategories), and Today AI refinement should fail more transparently and less often.
+
+Date: 2026-03-08 16:58 EDT
+
+## Iteration update (Backlog completion event mapping fix)
+
+### What changed
+- Fixed backlog status-event logging in `lib/db.js` so completion/in-progress changes map to valid `task_events.event_type` values.
+- Specifically:
+  - `done` -> `completed`
+  - `doing` -> `started`
+- This resolves the enum error triggered by backlog completion checkboxes.
+
+### Verification results
+- `npm run lint` ✅
+- `npm run build` ✅
+
+### User impact
+Backlog completion checkboxes should now persist and log status changes without throwing enum errors.
+
+Date: 2026-03-08 17:05 EDT
+
+## Iteration update (Planner graceful fallback + backlog layout spacing)
+
+### What changed
+- Adjusted backlog table column widths so the AI score column no longer crowds/subimposes over the category/subcategory column.
+- Updated `pages/api/planner/ai-refine.js` to degrade gracefully instead of failing hard when the model times out or returns non-JSON:
+  - tolerant cache write via upsert
+  - deterministic fallback planner response when AI output is unusable
+  - explicit `ai_status` returned to the client
+- Updated `pages/today.js` to surface fallback status instead of only the generic unavailable message.
+
+### Verification results
+- `npm run lint` ✅
+- `npm run build` ✅
+
+### User impact
+Backlog layout should render cleanly, and Today AI Planner should now return usable fallback suggestions even when the AI response is imperfect or slow.
+
+Date: 2026-03-08 17:54 EDT
+
+## State sync (Rise-and-Shine stabilization lane closure)
+
+### Closure assessment
+- The 2026-03-08 custom-edit/stabilization pass is complete enough to treat Rise-and-Shine as operationally usable and safe to move out of the active cleanup lane.
+- Production-critical surfaces repaired during this pass include:
+  - Backlog AI enrichment
+  - Backlog AI score visibility/sort
+  - Backlog completion + subcategory editing
+  - Today planner refine/apply auth path
+  - Production atomic planner RPC availability
+
+### Remaining open priorities (not blockers for lane switch)
+- Better “why this task now” rationale quality in Today queue presentation.
+- Subtask orchestration UX and promotion flow.
+- Progress-to-outcome visibility improvements.
+- `lib/db.js` decomposition and broader planner/AI observability hardening.
+
+### Operational recommendation
+- Mark Rise-and-Shine stabilization lane as closed for now.
+- Keep `main` as the best current source of operational truth.
+- Move the Project North cleanup/alignment pass to CodexWellWishes next.

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../components/DashboardLayout";
 import SectionCard from "../components/SectionCard";
 import { useAuth } from "../hooks/useAuth";
+import { supabase } from "../lib/supabaseClient";
 import {
   getTemplates,
   getTemplateItems,
@@ -382,14 +383,30 @@ export default function TodayPage() {
     setAiError("");
     setAiSuggestions(null);
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) {
+        setAiError("Auth session missing. Please refresh and sign in again.");
+        return;
+      }
+
       const res = await fetch("/api/planner/ai-refine", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ date: todayStr }),
       });
-      const data = await res.json().catch(() => ({}));
+      const responseText = await res.text();
+      let data = {};
+      try {
+        data = responseText ? JSON.parse(responseText) : {};
+      } catch {
+        data = { raw_text: responseText };
+      }
       if (!res.ok) {
-        const msg = data.error || (data.raw ? "AI returned non-JSON output. Try again." : "AI suggestions unavailable. Please try again.");
+        const msg = data.error || data.raw_text || (data.raw ? "AI returned non-JSON output. Try again." : `AI suggestions unavailable (${res.status}).`);
         setAiError(msg);
         setAiSuggestions(null);
         return;
@@ -401,13 +418,16 @@ export default function TodayPage() {
         return;
       }
       setAiCached(!!data.cached);
+      if (data.ai_status && data.ai_status !== 'ok') {
+        setAiError(`Planner fallback used: ${data.ai_status.replace('fallback:', '')}.`);
+      }
       setAiSuggestions({
         task_refinements: Array.isArray(ai.task_refinements) ? ai.task_refinements : [],
         suggested_subtasks_to_create: Array.isArray(ai.suggested_subtasks_to_create) ? ai.suggested_subtasks_to_create : [],
         automation_opportunities: Array.isArray(ai.automation_opportunities) ? ai.automation_opportunities : [],
       });
-    } catch {
-      setAiError("AI suggestions unavailable. Please try again.");
+    } catch (e) {
+      setAiError(e?.message || "AI suggestions unavailable. Please try again.");
       setAiSuggestions(null);
     } finally {
       setAiLoading(false);
@@ -449,9 +469,19 @@ export default function TodayPage() {
     await logRefinementEvent("accept", item);
 
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) {
+        setError("Auth session missing. Please refresh and sign in again.");
+        return;
+      }
+
       const res = await fetch("/api/planner/apply", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));

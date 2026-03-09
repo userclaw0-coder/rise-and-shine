@@ -13,7 +13,8 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 // Pick a cheaper model via env for low cost (recommended):
 // PLANNER_MODEL=gpt-4.1-mini (or similar cheap model you have access to)
 // If unset, this defaults to gpt-5.2 (may be overkill).
-const MODEL = process.env.PLANNER_MODEL || "gpt-5.2";
+const MODEL = process.env.PLANNER_MODEL || "gpt-4.1-mini";
+const AI_TIMEOUT_MS = 25000;
 
 function hashQueue(mode, queue) {
   const payload = JSON.stringify({
@@ -27,8 +28,47 @@ function safeJsonParse(text) {
   try {
     return JSON.parse(text);
   } catch {
-    return null;
+    const match = String(text || "").match(/\{[\s\S]*\}$/);
+    if (!match) return null;
+    try {
+      return JSON.parse(match[0]);
+    } catch {
+      return null;
+    }
   }
+}
+
+function withTimeout(promise, timeoutMs) {
+  let timeoutId = null;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error("planner_ai_timeout")), timeoutMs);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeoutId) clearTimeout(timeoutId);
+  });
+}
+
+function buildFallbackPlannerResponse(queueTasks) {
+  const taskRefinements = (queueTasks || []).map((task) => {
+    const tags = Array.isArray(task.tags) ? task.tags : [];
+    const extraTags = [];
+    if ((task.effort_hours ?? 0) > 0 && task.effort_hours <= 0.5 && !tags.includes('quick-win')) extraTags.push('quick-win');
+    if (/email|call|follow up|review|confirm|send/i.test(String(task.title || '')) && !tags.includes('quick-win')) extraTags.push('quick-win');
+    if (/plan|brief|system|automation|brand|strategy/i.test(String(task.title || '')) && !tags.includes('high-leverage')) extraTags.push('high-leverage');
+    if (task.due_date && !tags.includes('urgent')) extraTags.push('urgent');
+    return {
+      task_id: task.id,
+      suggested_title: String(task.title || '').trim(),
+      suggested_tags_add: Array.from(new Set(extraTags)).slice(0, 3),
+      suggested_effort_minutes: Math.max(15, Math.round(((task.effort_hours || 0.5) * 60) / 5) * 5),
+    };
+  });
+
+  return {
+    task_refinements: taskRefinements,
+    suggested_subtasks_to_create: [],
+    automation_opportunities: [],
+  };
 }
 
 export default async function handler(req, res) {
@@ -185,32 +225,43 @@ Keep responses concise.
       },
     };
 
-    const response = await openai.responses.create({
-      model: MODEL,
-      instructions,
-      input: JSON.stringify(input),
-    });
+    const response = await withTimeout(
+      openai.responses.create({
+        model: MODEL,
+        instructions,
+        input: JSON.stringify(input),
+      }),
+      AI_TIMEOUT_MS
+    );
 
     const text = response.output_text || "";
     const parsed = safeJsonParse(text);
 
-    if (!parsed) {
-      return res.status(500).json({
-        error: "AI returned non-JSON output. Try again or adjust model.",
-        raw: text.slice(0, 2000),
-      });
-    }
+    const finalOutput = parsed || buildFallbackPlannerResponse(queueTasks);
+    const aiStatus = parsed ? "ok" : "fallback:non_json";
 
-    await supabase.from("planner_cache").insert({
+    const { error: cacheWriteErr } = await supabase.from("planner_cache").upsert({
       user_id: userId,
       date: today,
       mode,
       queue_hash: queueHash,
-      ai_output: parsed,
-    });
+      ai_output: finalOutput,
+    }, { onConflict: "user_id,date,queue_hash" });
+    if (cacheWriteErr) throw cacheWriteErr;
 
-    return res.json({ ok: true, cached: false, queue_hash: queueHash, ai: parsed });
+    return res.json({ ok: true, cached: false, queue_hash: queueHash, ai: finalOutput, ai_status: aiStatus });
   } catch (e) {
-    return res.status(e.status || 500).json({ error: e.message || String(e) });
+    const message = e?.message || String(e);
+    if (message === "planner_ai_timeout") {
+      return res.json({
+        ok: true,
+        cached: false,
+        ai_status: "fallback:timeout",
+        ai: buildFallbackPlannerResponse([]),
+      });
+    }
+    return res.status(e.status || 500).json({
+      error: message,
+    });
   }
 }

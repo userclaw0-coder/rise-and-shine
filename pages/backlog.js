@@ -11,8 +11,11 @@ import {
   getCategoriesWithSubcategories,
   getAllTags,
   createCategory,
+  ensureSubcategory,
 } from "../lib/db";
+import { isMissingPrioritizationMetadata } from "../lib/task-enrichment";
 import { supabase } from "../lib/supabaseClient";
+import { computeTaskScore } from "../lib/scoring";
 
 const STATUS_FILTERS = [
   { value: "todo_doing", label: "Todo & Doing" },
@@ -107,6 +110,8 @@ export default function BacklogPage() {
 
   const [enriching, setEnriching] = useState(false);
   const [enrichReport, setEnrichReport] = useState(null);
+  const [enrichmentStartedAt, setEnrichmentStartedAt] = useState(null);
+  const [enrichmentProgressPct, setEnrichmentProgressPct] = useState(0);
 
   useEffect(() => {
     if (!user) return;
@@ -129,6 +134,7 @@ export default function BacklogPage() {
             (tasksRes.data || []).map((t) => ({
               ...t,
               _tagsText: makeTagText(t),
+              _subcategoryText: t?.subcategory?.name || "",
             })) || [];
           setTasks(enriched);
         }
@@ -166,11 +172,41 @@ export default function BacklogPage() {
     [tasks]
   );
 
+  const estimatedEligibleCount = useMemo(
+    () => (tasks || []).filter((t) => isMissingPrioritizationMetadata({
+      priority: t.priority,
+      effort_hours: t.effort_hours,
+      tags: extractTagNames(t),
+    })).length,
+    [tasks]
+  );
+
+  useEffect(() => {
+    if (!enriching) {
+      setEnrichmentProgressPct(0);
+      return undefined;
+    }
+
+    const estimatedBatches = Math.max(1, Math.ceil((estimatedEligibleCount || 1) / 10));
+    const estimatedTotalMs = estimatedBatches * 5000;
+
+    const tick = () => {
+      if (!enrichmentStartedAt) return;
+      const elapsed = Date.now() - enrichmentStartedAt;
+      const pct = Math.min(95, Math.max(8, Math.round((elapsed / estimatedTotalMs) * 100)));
+      setEnrichmentProgressPct(pct);
+    };
+
+    tick();
+    const id = setInterval(tick, 300);
+    return () => clearInterval(id);
+  }, [enriching, enrichmentStartedAt, estimatedEligibleCount]);
+
   const filteredRootTasks = useMemo(() => {
     const q = normalize(search);
     const tagNeedle = normalize(tagFilter);
 
-    return rootTasks.filter((t) => {
+    const filtered = rootTasks.filter((t) => {
       const titleMatch = !q || normalize(t.title).includes(q);
 
       let statusOk = true;
@@ -198,6 +234,24 @@ export default function BacklogPage() {
 
       return titleMatch && statusOk && categoryOk && subcategoryOk && tagOk;
     });
+
+    return filtered
+      .map((t) => {
+        const scoring = computeTaskScore({
+          ...t,
+          tags: extractTagNames(t),
+        });
+        return {
+          ...t,
+          _aiPriorityScore: scoring.score,
+        };
+      })
+      .sort((a, b) => {
+        if ((b._aiPriorityScore ?? 0) !== (a._aiPriorityScore ?? 0)) {
+          return (b._aiPriorityScore ?? 0) - (a._aiPriorityScore ?? 0);
+        }
+        return String(a.title || "").localeCompare(String(b.title || ""));
+      });
   }, [
     rootTasks,
     search,
@@ -256,6 +310,38 @@ export default function BacklogPage() {
     updateTaskLocal(taskId, res.data || patch);
   }
 
+  async function handleSubcategorySave(task) {
+    if (!user) return;
+    const categoryId = task.category_id || null;
+    const name = String(task._subcategoryText || "").trim();
+    if (!categoryId) {
+      setError("Select a category before setting a subcategory.");
+      return;
+    }
+    if (!name) {
+      await handleInlineSave(task.id, { subcategory_id: null });
+      updateTaskLocal(task.id, { subcategory_id: null, subcategory: null, _subcategoryText: "" });
+      return;
+    }
+    const subRes = await ensureSubcategory(user.id, categoryId, name);
+    if (subRes.error) {
+      setError(subRes.error.message || "Failed to save subcategory.");
+      return;
+    }
+    if (!subRes.data?.id) return;
+    const saveRes = await updateTask(user.id, task.id, { subcategory_id: subRes.data.id });
+    if (saveRes.error) {
+      setError(saveRes.error.message || "Failed to save subcategory.");
+      return;
+    }
+    updateTaskLocal(task.id, {
+      ...(saveRes.data || {}),
+      subcategory_id: subRes.data.id,
+      subcategory: { name: subRes.data.name },
+      _subcategoryText: subRes.data.name,
+    });
+  }
+
   async function handleTagsSave(taskId, tagsText) {
     if (!user) return;
     const names = parseTagText(tagsText);
@@ -299,7 +385,7 @@ export default function BacklogPage() {
       setAddingTask(false);
       return;
     }
-    const created = { ...res.data, _tagsText: modalTagsText };
+    const created = { ...res.data, _tagsText: modalTagsText, _subcategoryText: "" };
     if (parseTagText(modalTagsText).length > 0) {
       const tagRes = await setTaskTags(user.id, res.data.id, parseTagText(modalTagsText));
       if (!tagRes.error) {
@@ -325,7 +411,7 @@ export default function BacklogPage() {
       setError(res.error.message);
       return;
     }
-    const created = { ...res.data, _tagsText: "" };
+    const created = { ...res.data, _tagsText: "", _subcategoryText: parent?.subcategory?.name || "" };
     setTasks((prev) => [...prev, created]);
     setCollapsedParents((prev) => ({
       ...prev,
@@ -352,6 +438,8 @@ export default function BacklogPage() {
   async function runPrioritizationEnrichment(apply = false) {
     if (!user || enriching) return;
     setEnriching(true);
+    setEnrichmentStartedAt(Date.now());
+    setEnrichmentProgressPct(8);
     setError("");
 
     try {
@@ -377,6 +465,7 @@ export default function BacklogPage() {
         return;
       }
 
+      setEnrichmentProgressPct(100);
       setEnrichReport(payload);
 
       if (apply) {
@@ -393,6 +482,7 @@ export default function BacklogPage() {
       setError(e?.message || "Failed to run enrichment.");
     } finally {
       setEnriching(false);
+      setTimeout(() => setEnrichmentProgressPct(0), 800);
     }
   }
 
@@ -410,7 +500,7 @@ export default function BacklogPage() {
             display: "grid",
             gridTemplateColumns: isCompact
               ? "minmax(0, 1fr)"
-              : "minmax(0, 3fr) minmax(0, 1.5fr) minmax(0, 1.1fr) 80px 120px 120px",
+              : "minmax(0, 3fr) minmax(220px, 2fr) 110px minmax(150px, 1.2fr) 90px 130px 140px",
             gap: 8,
             alignItems: isCompact ? "stretch" : "center",
             padding: isCompact ? "10px 0" : "6px 0",
@@ -419,6 +509,12 @@ export default function BacklogPage() {
         >
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <div style={{ width: depth * 12 }} />
+            <input
+              type="checkbox"
+              checked={task.status === "done"}
+              onChange={(e) => handleStatusChange(task, e.target.checked ? "done" : "todo")}
+              title="Mark complete"
+            />
             {hasChildren && (
               <button
                 onClick={() => toggleCollapsed(task.id)}
@@ -465,6 +561,8 @@ export default function BacklogPage() {
                 updateTaskLocal(task.id, {
                   category_id: cid,
                   subcategory_id: null,
+                  _subcategoryText: "",
+                  subcategory: null,
                 });
                 handleInlineSave(task.id, { category_id: cid, subcategory_id: null });
               }}
@@ -484,32 +582,52 @@ export default function BacklogPage() {
                 </option>
               ))}
             </select>
-            <select
-              value={task.subcategory_id || ""}
-              onChange={(e) => {
-                const sid = e.target.value || null;
-                updateTaskLocal(task.id, { subcategory_id: sid });
-                handleInlineSave(task.id, { subcategory_id: sid });
-              }}
+            <input
+              type="text"
+              value={task._subcategoryText ?? task?.subcategory?.name ?? ""}
+              placeholder="Subcategory…"
+              onChange={(e) => updateTaskLocal(task.id, { _subcategoryText: e.target.value })}
+              onBlur={() => handleSubcategorySave(task)}
+              list={task.category_id ? `subcategory-options-${task.category_id}` : undefined}
               style={{
                 flex: 1,
                 fontSize: 12,
-                padding: "3px 6px",
+                padding: "3px 8px",
                 borderRadius: 999,
                 border: "1px solid #e5e7eb",
                 background: "#ffffff",
               }}
-            >
-              <option value="">Subcategory…</option>
-              {categories
-                .find((c) => c.id === task.category_id)
-                ?.subcategories?.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-            </select>
+            />
           </div>
+
+          {task.category_id && (
+            <datalist id={`subcategory-options-${task.category_id}`}>
+              {(categories.find((c) => c.id === task.category_id)?.subcategories || []).map((s) => (
+                <option key={s.id} value={s.name} />
+              ))}
+            </datalist>
+          )}
+
+          {!isCompact && (
+            <div style={{ display: "flex", alignItems: "center" }}>
+              <div
+                title="AI priority score derived from current prioritization model"
+                style={{
+                  minWidth: 82,
+                  textAlign: "center",
+                  fontSize: 12,
+                  padding: "6px 8px",
+                  borderRadius: 999,
+                  border: "1px solid #dbeafe",
+                  background: "#eff6ff",
+                  color: "#1d4ed8",
+                  fontWeight: 600,
+                }}
+              >
+                {Number.isFinite(task._aiPriorityScore) ? task._aiPriorityScore.toFixed(1) : "—"}
+              </div>
+            </div>
+          )}
 
           <div style={{ display: "flex", gap: 4, flexWrap: isCompact ? "wrap" : "nowrap" }}>
             <select
@@ -717,7 +835,7 @@ export default function BacklogPage() {
                 color: "#6b7280",
               }}
             >
-              Manage non-daily tasks, tags, and subtasks.
+              Manage non-daily tasks, tags, subtasks, and AI-scored priority order.
             </p>
           </div>
         </div>
@@ -1093,6 +1211,41 @@ export default function BacklogPage() {
           </span>
         </div>
 
+        {enriching && (
+          <div
+            style={{
+              marginBottom: 10,
+              border: "1px solid #dbeafe",
+              borderRadius: 12,
+              padding: "10px 12px",
+              background: "#eff6ff",
+              fontSize: 12,
+              color: "#1e3a8a",
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+              <strong>Processing enrichment…</strong>
+              <span>estimated {enrichmentProgressPct}%</span>
+            </div>
+            <div style={{ height: 10, background: "#dbeafe", borderRadius: 999, overflow: "hidden" }}>
+              <div
+                style={{
+                  width: `${enrichmentProgressPct}%`,
+                  height: "100%",
+                  background: "linear-gradient(90deg, #2563eb, #60a5fa)",
+                  transition: "width 240ms ease",
+                }}
+              />
+            </div>
+            <div>
+              Running across approximately {estimatedEligibleCount || 0} eligible backlog tasks in AI batches of 10.
+            </div>
+          </div>
+        )}
+
         {enrichReport && (
           <div
             style={{
@@ -1316,7 +1469,7 @@ export default function BacklogPage() {
                 style={{
                   display: "grid",
                   gridTemplateColumns:
-                    "minmax(0, 3fr) minmax(0, 1.5fr) minmax(0, 1.1fr) 80px 120px 120px",
+                    "minmax(0, 3fr) minmax(220px, 2fr) 110px minmax(150px, 1.2fr) 90px 130px 140px",
                   gap: 8,
                   fontSize: 11,
                   fontWeight: 500,
@@ -1327,6 +1480,7 @@ export default function BacklogPage() {
               >
                 <div>Title / hierarchy</div>
                 <div>Category / subcategory</div>
+                <div>AI score</div>
                 <div>Priority / effort</div>
                 <div>Due</div>
                 <div>Status / actions</div>
