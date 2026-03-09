@@ -151,8 +151,8 @@ const PHASE_CONTENT = {
   },
   fallback: {
     label: "Safer backup path used",
-    hint: "The planner couldn’t finish the full AI pass cleanly this time, so this backup review is safe to try right now as one small next move.",
-    detail: "Pick a suggestion, tweak it, keep it, or ignore it — you are not locked into anything. Apply only what helps, and nothing in your tasks changes unless you explicitly approve it.",
+    hint: "The planner couldn’t finish the full AI pass this time, so it set up a quick backup review you can try right now.",
+    detail: "Pick any suggestion, tweak it, keep it, or skip it — nothing changes unless you approve it, and you can retry for a fresh pass anytime.",
     icon: "◇",
     color: "#92400e",
     bg: "#fffbeb",
