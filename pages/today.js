@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../components/DashboardLayout";
 import SectionCard from "../components/SectionCard";
+import SubtaskOrchestrator from "../components/SubtaskOrchestrator";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabaseClient";
 import {
@@ -20,6 +21,7 @@ import {
 } from "../lib/db";
 import {
   MODES,
+  buildRationale,
   chooseKeyOutcomes,
   computeTaskScore,
   getWorkoutPlanForDate,
@@ -27,6 +29,7 @@ import {
 import {
   buildQueueCandidates,
   buildQueueFromChosen,
+  promoteSubtaskToQueue,
   shouldRefillAfterCompletion,
 } from "../lib/today-queue";
 
@@ -92,6 +95,7 @@ export default function TodayPage() {
   const [aiError, setAiError] = useState("");
   const [aiCached, setAiCached] = useState(false);
   const [appliedMessage, setAppliedMessage] = useState("");
+  const [subtaskApplying, setSubtaskApplying] = useState(false);
 
   const [profilePrefs, setProfilePrefs] = useState(null);
 
@@ -531,38 +535,6 @@ export default function TodayPage() {
     }
   }
 
-  function dismissSubtask(index) {
-    setAiSuggestions((prev) => ({
-      ...prev,
-      suggested_subtasks_to_create: (prev?.suggested_subtasks_to_create || []).filter((_, i) => i !== index),
-    }));
-  }
-
-  async function handleCreateSubtask(item, index) {
-    if (!user) return;
-    const title = item.title || "New subtask";
-    const effortHours = item.estimated_minutes != null ? item.estimated_minutes / 60 : null;
-    const res = await createTask(user.id, {
-      title,
-      parent_task_id: item.parent_task_id,
-      status: "todo",
-      effort_hours: effortHours ?? undefined,
-    });
-    if (res.error) {
-      setError(res.error.message || "Failed to create subtask");
-      return;
-    }
-    const tagNames = Array.isArray(item.tags) ? item.tags : [];
-    if (tagNames.length > 0 && res.data?.id) {
-      const tagRes = await setTaskTags(user.id, res.data.id, tagNames);
-      if (tagRes?.error) {
-        setError(tagRes.error.message || "Subtask created but tags could not be applied.");
-        return;
-      }
-    }
-    dismissSubtask(index);
-  }
-
   function dismissAutomation(index) {
     setAiSuggestions((prev) => ({
       ...prev,
@@ -574,6 +546,90 @@ export default function TodayPage() {
     const item = (aiSuggestions?.automation_opportunities || [])[index];
     if (item) console.log("Explore automation (placeholder):", item);
     dismissAutomation(index);
+  }
+
+  async function handleApplyOrchestrated(approvedSubtasks) {
+    if (!user || !Array.isArray(approvedSubtasks) || approvedSubtasks.length === 0) return;
+    setSubtaskApplying(true);
+    setError("");
+
+    try {
+      const created = [];
+      for (const sub of approvedSubtasks) {
+        const effortHours = sub.estimated_minutes != null ? sub.estimated_minutes / 60 : null;
+        const res = await createTask(user.id, {
+          title: sub.title,
+          parent_task_id: sub.parent_task_id,
+          status: "todo",
+          effort_hours: effortHours ?? undefined,
+        });
+        if (res.error) {
+          setError(res.error.message || "Failed to create subtask");
+          continue;
+        }
+        const tagNames = Array.isArray(sub.tags) ? sub.tags : [];
+        if (tagNames.length > 0 && res.data?.id) {
+          await setTaskTags(user.id, res.data.id, tagNames);
+        }
+        created.push({ ...res.data, _source: sub });
+      }
+
+      if (created.length === 0) {
+        setSubtaskApplying(false);
+        return;
+      }
+
+      const bestSubtask = created[0];
+      const parentTaskId = bestSubtask._source?.parent_task_id;
+      const currentQueue = dailyPlan?.queue;
+
+      if (bestSubtask.id && parentTaskId && Array.isArray(currentQueue)) {
+        const newQueue = promoteSubtaskToQueue(currentQueue, parentTaskId, bestSubtask.id);
+        if (newQueue && dailyPlan?.id) {
+          const up = await updateDailyPlan(dailyPlan.id, { queue: newQueue });
+          if (!up.error && up.data) {
+            setDailyPlan(up.data);
+            setQueueEntries((prev) =>
+              prev.map((e) => {
+                if (e.task_id !== parentTaskId && e.task?.id !== parentTaskId) return e;
+                return {
+                  ...e,
+                  task: bestSubtask,
+                  task_id: bestSubtask.id,
+                };
+              })
+            );
+          }
+        }
+      }
+
+      const backlogAdditions = created.slice(1);
+      if (backlogAdditions.length > 0) {
+        setBacklogTasks((prev) => [...(prev || []), ...backlogAdditions]);
+      }
+
+      setAiSuggestions((prev) => ({
+        ...prev,
+        suggested_subtasks_to_create: [],
+      }));
+
+      const bestLabel = bestSubtask.title || "subtask";
+      setAppliedMessage(
+        `Created ${created.length} subtask${created.length !== 1 ? "s" : ""}. "${bestLabel}" promoted to Next-3${backlogAdditions.length > 0 ? `; ${backlogAdditions.length} sent to backlog` : ""}.`
+      );
+      setTimeout(() => setAppliedMessage(""), 4000);
+    } catch (e) {
+      setError(e?.message || "Failed to apply subtask orchestration.");
+    } finally {
+      setSubtaskApplying(false);
+    }
+  }
+
+  function handleDismissAllSubtasks() {
+    setAiSuggestions((prev) => ({
+      ...prev,
+      suggested_subtasks_to_create: [],
+    }));
   }
 
   const taskTitleById = useMemo(() => {
@@ -594,13 +650,7 @@ export default function TodayPage() {
         baseCategoryWeights: profilePrefs?.base_category_weights,
         quickWinMinutes: profilePrefs?.quick_win_definition_minutes,
       });
-      const c = scoring.components || {};
-      const bits = [];
-      if (c.isQuickWin) bits.push("quick win");
-      if (c.isHighLeverage) bits.push("high leverage");
-      if ((c.priorityScore || 0) >= 40) bits.push(`priority ${task.priority || "high"}`);
-      if ((c.categoryComponent || 0) > 16) bits.push("strong category fit");
-      reasons.set(task.id, bits.length > 0 ? bits.join(" • ") : "best available fit");
+      reasons.set(task.id, buildRationale(task, scoring, mode));
     }
     return reasons;
   }, [
@@ -765,12 +815,17 @@ export default function TodayPage() {
                       </div>
                       <div
                         style={{
-                          fontSize: 11,
-                          color: "#9ca3af",
-                          marginTop: 2,
+                          fontSize: 12,
+                          color: "#4b5563",
+                          marginTop: 4,
+                          padding: "3px 8px",
+                          background: "#f0fdf4",
+                          borderRadius: 6,
+                          borderLeft: "3px solid #86efac",
+                          lineHeight: 1.4,
                         }}
                       >
-                        Why chosen: {queueReasonByTaskId.get(entry.task.id) || "best available fit"}
+                        {queueReasonByTaskId.get(entry.task.id) || "Best available fit for your current focus"}
                       </div>
                     </div>
                     <div
@@ -901,73 +956,13 @@ export default function TodayPage() {
               </div>
             )}
             {aiSuggestions.suggested_subtasks_to_create && aiSuggestions.suggested_subtasks_to_create.length > 0 && (
-              <div>
-                <h3 style={{ fontSize: 14, fontWeight: 600, margin: "0 0 8px", color: "#374151" }}>
-                  Suggested subtasks
-                </h3>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {(aiSuggestions.suggested_subtasks_to_create || []).map((item, idx) => (
-                    <div
-                      key={`sub-${item.parent_task_id}-${idx}`}
-                      style={{
-                        padding: 12,
-                        borderRadius: 12,
-                        border: "1px solid #e5e7eb",
-                        background: "#f9fafb",
-                      }}
-                    >
-                      <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>
-                        Parent: {taskTitleById.get(item.parent_task_id) ?? item.parent_task_id}
-                      </div>
-                      <div style={{ fontSize: 13, marginBottom: 4 }}>
-                        <strong>{item.title ?? "Untitled subtask"}</strong>
-                      </div>
-                      {item.estimated_minutes != null && (
-                        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>
-                          Estimated: {item.estimated_minutes} min
-                        </div>
-                      )}
-                      {(item.tags?.length > 0) && (
-                        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>
-                          Tags: {item.tags.join(", ")}
-                        </div>
-                      )}
-                      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                        <button
-                          type="button"
-                          onClick={() => handleCreateSubtask(item, idx)}
-                          style={{
-                            fontSize: 12,
-                            padding: "4px 10px",
-                            borderRadius: 999,
-                            border: "1px solid #059669",
-                            background: "#ecfdf5",
-                            color: "#059669",
-                            cursor: "pointer",
-                          }}
-                        >
-                          Create subtask
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => dismissSubtask(idx)}
-                          style={{
-                            fontSize: 12,
-                            padding: "4px 10px",
-                            borderRadius: 999,
-                            border: "1px solid #e5e7eb",
-                            background: "#fff",
-                            color: "#6b7280",
-                            cursor: "pointer",
-                          }}
-                        >
-                          Dismiss
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <SubtaskOrchestrator
+                subtasks={aiSuggestions.suggested_subtasks_to_create}
+                parentTitleById={taskTitleById}
+                onApply={handleApplyOrchestrated}
+                onDismissAll={handleDismissAllSubtasks}
+                applying={subtaskApplying}
+              />
             )}
             {aiSuggestions.automation_opportunities && aiSuggestions.automation_opportunities.length > 0 && (
               <div>
