@@ -990,7 +990,7 @@ export default function TodayPage() {
             AI suggestions loaded from cache
           </p>
         )}
-        {aiError && (
+        {aiError && !String(aiStatus || "").startsWith("fallback:") && (
           <p style={{ fontSize: 13, color: "#b91c1c", margin: "0 0 10px" }}>
             {aiError}
           </p>

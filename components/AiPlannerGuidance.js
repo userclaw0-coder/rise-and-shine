@@ -14,6 +14,71 @@ function getPhase({ aiLoading, aiError, aiStatus, aiSuggestions, queueReady }) {
   return queueReady ? "idle" : "idle-no-queue";
 }
 
+function humanizePlannerReason(reason) {
+  if (!reason || typeof reason !== "string") return "";
+
+  const normalized = reason.trim().toLowerCase();
+
+  if (
+    normalized.includes("auth session missing") ||
+    normalized.includes("sign in again") ||
+    normalized.includes("jwt") ||
+    normalized.includes("token")
+  ) {
+    return "Your session needs to be refreshed before the planner can run.";
+  }
+
+  if (
+    normalized.includes("non-json") ||
+    normalized.includes("raw") ||
+    normalized.includes("parse")
+  ) {
+    return "The planner returned a response we couldn’t safely use this time.";
+  }
+
+  if (
+    normalized.includes("timeout") ||
+    normalized.includes("timed out") ||
+    normalized.includes("slow")
+  ) {
+    return "The planner took too long to respond, so we stopped before changing anything.";
+  }
+
+  if (
+    normalized.includes("rate limit") ||
+    normalized.includes("too many requests") ||
+    normalized.includes("429")
+  ) {
+    return "The planner is busy right now, so it couldn’t finish your request yet.";
+  }
+
+  if (
+    normalized.includes("unavailable") ||
+    normalized.includes("failed") ||
+    normalized.includes("error") ||
+    normalized.includes("500") ||
+    normalized.includes("503")
+  ) {
+    return "The planner ran into a temporary problem, so nothing was changed.";
+  }
+
+  return "The planner hit a temporary issue, and your tasks were left exactly as they were.";
+}
+
+function getFallbackReasonCopy(aiStatus, aiError) {
+  if (typeof aiStatus === "string" && aiStatus.startsWith("fallback:")) {
+    const rawReason = aiStatus.slice("fallback:".length).replace(/[-_]+/g, " ").trim();
+
+    if (!rawReason) {
+      return "The full AI path wasn’t available, so the planner used its safer backup path instead.";
+    }
+
+    return `${humanizePlannerReason(rawReason)} A safer backup path was used instead.`;
+  }
+
+  return humanizePlannerReason(aiError);
+}
+
 const PHASE_CONTENT = {
   "idle-no-queue": {
     label: "Waiting for your Next 3",
@@ -89,6 +154,7 @@ export default function AiPlannerGuidance({
 }) {
   const phase = getPhase({ aiLoading, aiError, aiStatus, aiSuggestions, queueReady });
   const content = PHASE_CONTENT[phase];
+  const reasonCopy = getFallbackReasonCopy(aiStatus, aiError);
   if (!content) return null;
 
   return (
@@ -118,6 +184,12 @@ export default function AiPlannerGuidance({
         <div style={{ color: "#4b5563", marginTop: 2 }}>{content.hint}</div>
         {content.detail && (
           <div style={{ color: "#6b7280", marginTop: 4 }}>{content.detail}</div>
+        )}
+        {(phase === "fallback" || phase === "error") && reasonCopy && (
+          <div style={{ color: "#6b7280", marginTop: 4 }}>
+            <span style={{ fontWeight: 600, color: content.color }}>What happened:</span>{" "}
+            {reasonCopy}
+          </div>
         )}
       </div>
     </div>
