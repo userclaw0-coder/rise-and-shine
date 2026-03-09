@@ -245,9 +245,7 @@ export default function AiPlannerGuidance({
           )}
           {phase === "fallback" && (
             <div style={{ marginTop: 6, fontSize: 12, fontWeight: 500, color: "#92400e" }}>
-              <div style={{ marginBottom: 4 }}>Starting point, not a final commitment — safe to try and refine as you go.</div>
-              <div style={{ marginBottom: 4 }}>You can start with one suggestion now and revisit or adjust it later — no need to get it perfect in one pass.</div>
-              Low-risk place to start: try one suggestion as-is or refine it; you can always adjust later. Good first win — act on one now, then refine further when you like.
+              Good enough for today — use a suggestion to keep moving; you can refine or change it whenever you like.
             </div>
           )}
         </div>
