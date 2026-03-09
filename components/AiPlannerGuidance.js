@@ -112,10 +112,10 @@ function getFallbackReasonCopy(aiStatus, aiError) {
     const rawReason = aiStatus.slice("fallback:".length).replace(/[-_]+/g, " ").trim();
 
     if (!rawReason) {
-      return "The planner couldn’t complete the full AI pass this time, so it used a calmer backup review path instead. Your tasks were not changed automatically, and you can review these suggestions now or retry later.";
+      return "The planner couldn’t complete the full AI pass this time, so it used a calmer backup review path instead. These suggestions are still safe starting points to review, edit, and use. Your tasks were not changed automatically, and you can retry later if you want another pass.";
     }
 
-    return `${humanizePlannerReason(rawReason)} Instead of forcing a shaky result through, the planner used a calmer backup review path. Your tasks were not changed automatically, and you can review these suggestions now or retry later.`;
+    return `${humanizePlannerReason(rawReason)} Instead of forcing a shaky result through, the planner used a calmer backup review path. These suggestions are still safe starting points to review, edit, and use. Your tasks were not changed automatically, and you can retry later if you want another pass.`;
   }
 
   return humanizePlannerReason(aiError);
@@ -152,7 +152,7 @@ const PHASE_CONTENT = {
   fallback: {
     label: "Safer backup path used",
     hint: "The planner couldn’t finish the full AI pass cleanly this time, so it kept going with a safer backup review path instead.",
-    detail: "This is still safe to use: review or dismiss each suggestion below now, or come back and retry later. Nothing in your tasks changes unless you explicitly approve it.",
+    detail: "You can treat the suggestions below as safe starting points: review them, tweak them, or use them as-is. Nothing in your tasks changes unless you explicitly approve it.",
     icon: "◇",
     color: "#92400e",
     bg: "#fffbeb",
