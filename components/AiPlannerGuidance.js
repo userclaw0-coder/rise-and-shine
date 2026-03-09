@@ -168,9 +168,9 @@ const PHASE_CONTENT = {
     border: "#fecaca",
   },
   review: {
-    label: "Suggestions ready — review below",
-    hint: "Approve a suggestion to apply it, or dismiss to skip.",
-    detail: "Nothing changes unless you say so, and dismissing suggestions leaves your current plan untouched.",
+    label: "Suggestions ready — optional review below",
+    hint: "Each suggestion stands on its own: approve only the ones you want, or dismiss any you don’t.",
+    detail: "Nothing is applied in bulk or automatically. Your current plan stays unchanged until you approve a specific suggestion.",
     icon: "●",
     color: "#059669",
     bg: "#ecfdf5",
@@ -263,6 +263,9 @@ export default function AiPlannerGuidance({
           </div>
           <div style={{ color: "#4b5563", marginTop: 2 }}>
             {reviewSummary.items.join(" · ")}
+          </div>
+          <div style={{ color: "#6b7280", marginTop: 4 }}>
+            Review them one at a time — approving one suggestion won’t apply the others.
           </div>
         </div>
       )}

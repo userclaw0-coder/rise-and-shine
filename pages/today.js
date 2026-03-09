@@ -940,7 +940,7 @@ export default function TodayPage() {
 
       <SectionCard
         title="AI Planner"
-        subtitle="Suggestions require your approval. Nothing is applied automatically."
+        subtitle="Suggestions stay optional and approval-based. Nothing is applied automatically."
       >
         <AiPlannerGuidance
           aiLoading={aiLoading}
