@@ -96,6 +96,7 @@ export default function TodayPage() {
   const [aiCached, setAiCached] = useState(false);
   const [appliedMessage, setAppliedMessage] = useState("");
   const [subtaskApplying, setSubtaskApplying] = useState(false);
+  const [subtaskApplyError, setSubtaskApplyError] = useState("");
 
   const [profilePrefs, setProfilePrefs] = useState(null);
 
@@ -476,6 +477,7 @@ export default function TodayPage() {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
       if (!token) {
+        setAppliedMessage("");
         setError("Auth session missing. Please refresh and sign in again.");
         return;
       }
@@ -490,7 +492,9 @@ export default function TodayPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.ok) {
-        setError(data?.error || "Failed to apply refinement.");
+        const msg = data?.error || "Failed to apply refinement. Please try again.";
+        setAppliedMessage(msg);
+        setTimeout(() => setAppliedMessage(""), 5000);
         return;
       }
 
@@ -527,11 +531,13 @@ export default function TodayPage() {
         })
       );
 
-      setAppliedMessage("Applied.");
-      setTimeout(() => setAppliedMessage(""), 2000);
+      const label = taskUpdate.title || item.suggested_title || "task";
+      setAppliedMessage(`Refinement applied to "${label}".`);
+      setTimeout(() => setAppliedMessage(""), 3000);
       dismissRefinement(index, null);
     } catch {
-      setError("Failed to apply refinement.");
+      setAppliedMessage("Failed to apply refinement. Please try again.");
+      setTimeout(() => setAppliedMessage(""), 5000);
     }
   }
 
@@ -551,10 +557,13 @@ export default function TodayPage() {
   async function handleApplyOrchestrated(approvedSubtasks) {
     if (!user || !Array.isArray(approvedSubtasks) || approvedSubtasks.length === 0) return;
     setSubtaskApplying(true);
-    setError("");
+    setSubtaskApplyError("");
+    setAppliedMessage("");
 
+    const total = approvedSubtasks.length;
     try {
       const created = [];
+      const failures = [];
       for (const sub of approvedSubtasks) {
         const effortHours = sub.estimated_minutes != null ? sub.estimated_minutes / 60 : null;
         const res = await createTask(user.id, {
@@ -564,7 +573,7 @@ export default function TodayPage() {
           effort_hours: effortHours ?? undefined,
         });
         if (res.error) {
-          setError(res.error.message || "Failed to create subtask");
+          failures.push(sub.title || "Untitled");
           continue;
         }
         const tagNames = Array.isArray(sub.tags) ? sub.tags : [];
@@ -575,6 +584,9 @@ export default function TodayPage() {
       }
 
       if (created.length === 0) {
+        setSubtaskApplyError(
+          `Failed to create ${total === 1 ? "the subtask" : `all ${total} subtasks`}. Check your connection and try again.`
+        );
         setSubtaskApplying(false);
         return;
       }
@@ -582,6 +594,7 @@ export default function TodayPage() {
       const bestSubtask = created[0];
       const parentTaskId = bestSubtask._source?.parent_task_id;
       const currentQueue = dailyPlan?.queue;
+      let promoted = false;
 
       if (bestSubtask.id && parentTaskId && Array.isArray(currentQueue)) {
         const newQueue = promoteSubtaskToQueue(currentQueue, parentTaskId, bestSubtask.id);
@@ -589,6 +602,7 @@ export default function TodayPage() {
           const up = await updateDailyPlan(dailyPlan.id, { queue: newQueue });
           if (!up.error && up.data) {
             setDailyPlan(up.data);
+            promoted = true;
             setQueueEntries((prev) =>
               prev.map((e) => {
                 if (e.task_id !== parentTaskId && e.task?.id !== parentTaskId) return e;
@@ -614,12 +628,23 @@ export default function TodayPage() {
       }));
 
       const bestLabel = bestSubtask.title || "subtask";
-      setAppliedMessage(
-        `Created ${created.length} subtask${created.length !== 1 ? "s" : ""}. "${bestLabel}" promoted to Next-3${backlogAdditions.length > 0 ? `; ${backlogAdditions.length} sent to backlog` : ""}.`
-      );
-      setTimeout(() => setAppliedMessage(""), 4000);
+      const parts = [];
+      parts.push(`Created ${created.length} of ${total} subtask${total !== 1 ? "s" : ""}.`);
+      if (promoted) {
+        parts.push(`"${bestLabel}" now in your Next-3.`);
+      } else {
+        parts.push(`"${bestLabel}" added to backlog (parent not in current queue).`);
+      }
+      if (backlogAdditions.length > 0) {
+        parts.push(`${backlogAdditions.length} more sent to backlog.`);
+      }
+      if (failures.length > 0) {
+        parts.push(`${failures.length} failed to create.`);
+      }
+      setAppliedMessage(parts.join(" "));
+      setTimeout(() => setAppliedMessage(""), 6000);
     } catch (e) {
-      setError(e?.message || "Failed to apply subtask orchestration.");
+      setSubtaskApplyError(e?.message || "Failed to apply subtask orchestration. Please try again.");
     } finally {
       setSubtaskApplying(false);
     }
@@ -773,7 +798,8 @@ export default function TodayPage() {
       >
         {queueEntries.length === 0 && (
           <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
-            No candidates found. Add some non-daily backlog tasks first, or refresh the queue.
+            No tasks available for the queue. Add tasks on the Backlog page, then
+            refresh the queue here.
           </p>
         )}
         <ol style={{ paddingLeft: 18, margin: 0, fontSize: 14 }}>
@@ -825,7 +851,10 @@ export default function TodayPage() {
                           lineHeight: 1.4,
                         }}
                       >
-                        {queueReasonByTaskId.get(entry.task.id) || "Best available fit for your current focus"}
+                        <span style={{ fontWeight: 600, color: "#059669" }}>
+                          Why now:
+                        </span>{" "}
+                        {queueReasonByTaskId.get(entry.task.id) || "Top-scored task for your current focus"}
                       </div>
                     </div>
                     <div
@@ -873,7 +902,14 @@ export default function TodayPage() {
           )}
         </div>
         {appliedMessage && (
-          <p style={{ fontSize: 13, color: "#059669", margin: "0 0 10px", fontWeight: 500 }}>
+          <p
+            style={{
+              fontSize: 13,
+              color: appliedMessage.toLowerCase().includes("failed") ? "#b91c1c" : "#059669",
+              margin: "0 0 10px",
+              fontWeight: 500,
+            }}
+          >
             {appliedMessage}
           </p>
         )}
@@ -962,6 +998,7 @@ export default function TodayPage() {
                 onApply={handleApplyOrchestrated}
                 onDismissAll={handleDismissAllSubtasks}
                 applying={subtaskApplying}
+                applyError={subtaskApplyError}
               />
             )}
             {aiSuggestions.automation_opportunities && aiSuggestions.automation_opportunities.length > 0 && (

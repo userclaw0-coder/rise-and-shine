@@ -1,10 +1,10 @@
 import type { NextConfig } from "next";
+import path from "path";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  // Use this directory as workspace root to avoid lockfile inference warnings
   turbopack: {
-    root: process.cwd(),
+    root: path.resolve(__dirname, "../.."),
   },
 };
 
