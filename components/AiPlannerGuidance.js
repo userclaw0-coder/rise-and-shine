@@ -245,7 +245,7 @@ export default function AiPlannerGuidance({
           )}
           {phase === "fallback" && (
             <div style={{ marginTop: 6, fontSize: 12, fontWeight: 500, color: "#92400e" }}>
-              One useful next small step you can try now — no bigger plan required. Good enough for today: use a suggestion to keep moving; you can refine or change it whenever you like.
+              One step is enough for now. Try one suggestion to keep moving — no need to solve the whole plan first. You can refine or retry later if you want.
             </div>
           )}
         </div>
