@@ -1,5 +1,6 @@
-function getPhase({ aiLoading, aiError, aiSuggestions, queueReady }) {
+function getPhase({ aiLoading, aiError, aiStatus, aiSuggestions, queueReady }) {
   if (aiLoading) return "loading";
+  if (typeof aiStatus === "string" && aiStatus.startsWith("fallback:")) return "fallback";
   if (aiError && !aiSuggestions) return "error";
 
   if (aiSuggestions) {
@@ -15,32 +16,45 @@ function getPhase({ aiLoading, aiError, aiSuggestions, queueReady }) {
 
 const PHASE_CONTENT = {
   "idle-no-queue": {
-    label: "Waiting for queue",
-    hint: "Fill your Next 3 queue first, then use AI to refine your plan.",
+    label: "Waiting for your Next 3",
+    hint: "Fill your queue first so the planner has something concrete to review.",
+    detail: "Once 3 tasks are loaded, AI can suggest cleaner titles, subtasks, and automation ideas without changing anything automatically.",
     icon: "○",
     color: "#6b7280",
     bg: "#f9fafb",
     border: "#e5e7eb",
   },
   idle: {
-    label: "Ready",
-    hint: "Tap \"Refine these 3 with AI\" to get suggestions. Your tasks stay unchanged until you explicitly approve something.",
+    label: "Ready when you are",
+    hint: "Tap \"Refine these 3 with AI\" to review suggestions before anything changes.",
+    detail: "The planner only works on your current Next 3, and every suggestion stays in review until you approve it.",
     icon: "○",
     color: "#6b7280",
     bg: "#f9fafb",
     border: "#e5e7eb",
   },
   loading: {
-    label: "Analyzing your queue…",
-    hint: "The planner is reviewing your Next 3. This usually takes a few seconds.",
+    label: "Reviewing your Next 3…",
+    hint: "The planner is checking your current queue and drafting suggestions. This usually takes a few seconds.",
+    detail: "If AI is slow or unavailable, the planner falls back safely and your existing tasks stay exactly the same until you approve something.",
     icon: "◌",
     color: "#2563eb",
     bg: "#eff6ff",
     border: "#bfdbfe",
   },
+  fallback: {
+    label: "Safe fallback used",
+    hint: "The planner still returned a reviewable result, even though the full AI path was unavailable.",
+    detail: "You can review or dismiss the suggestions below with the same approval guardrails. Nothing was applied automatically.",
+    icon: "◇",
+    color: "#92400e",
+    bg: "#fffbeb",
+    border: "#fcd34d",
+  },
   error: {
-    label: "Something went wrong",
-    hint: "You can try again safely — nothing was changed. If the error persists, your tasks remain exactly as they were.",
+    label: "Couldn’t load suggestions",
+    hint: "You can try again safely — nothing was changed.",
+    detail: "If this keeps happening, your queue is still intact and you can continue working without the planner.",
     icon: "△",
     color: "#b91c1c",
     bg: "#fef2f2",
@@ -48,7 +62,8 @@ const PHASE_CONTENT = {
   },
   review: {
     label: "Suggestions ready — review below",
-    hint: "Approve a suggestion to apply it, or dismiss to skip. Nothing changes unless you say so.",
+    hint: "Approve a suggestion to apply it, or dismiss to skip.",
+    detail: "Nothing changes unless you say so, and dismissing suggestions leaves your current plan untouched.",
     icon: "●",
     color: "#059669",
     bg: "#ecfdf5",
@@ -56,7 +71,8 @@ const PHASE_CONTENT = {
   },
   done: {
     label: "All suggestions reviewed",
-    hint: "You're up to date. Refine again anytime to get fresh suggestions.",
+    hint: "You’re up to date. Refine again anytime to get a fresh pass.",
+    detail: "Your latest review is complete, and your tasks only reflect the changes you explicitly approved.",
     icon: "✓",
     color: "#059669",
     bg: "#ecfdf5",
@@ -67,10 +83,11 @@ const PHASE_CONTENT = {
 export default function AiPlannerGuidance({
   aiLoading,
   aiError,
+  aiStatus,
   aiSuggestions,
   queueReady,
 }) {
-  const phase = getPhase({ aiLoading, aiError, aiSuggestions, queueReady });
+  const phase = getPhase({ aiLoading, aiError, aiStatus, aiSuggestions, queueReady });
   const content = PHASE_CONTENT[phase];
   if (!content) return null;
 
@@ -99,6 +116,9 @@ export default function AiPlannerGuidance({
       <div>
         <div style={{ fontWeight: 600 }}>{content.label}</div>
         <div style={{ color: "#4b5563", marginTop: 2 }}>{content.hint}</div>
+        {content.detail && (
+          <div style={{ color: "#6b7280", marginTop: 4 }}>{content.detail}</div>
+        )}
       </div>
     </div>
   );

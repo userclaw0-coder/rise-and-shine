@@ -120,6 +120,7 @@ export default function TodayPage() {
   const [aiSuggestions, setAiSuggestions] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
+  const [aiStatus, setAiStatus] = useState("idle");
   const [aiCached, setAiCached] = useState(false);
   const [appliedMessage, setAppliedMessage] = useState("");
   const [subtaskApplying, setSubtaskApplying] = useState(false);
@@ -413,11 +414,13 @@ export default function TodayPage() {
     if (!user || aiLoading) return;
     setAiLoading(true);
     setAiError("");
+    setAiStatus("loading");
     setAiSuggestions(null);
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
       if (!token) {
+        setAiStatus("error");
         setAiError("Auth session missing. Please refresh and sign in again.");
         return;
       }
@@ -439,19 +442,24 @@ export default function TodayPage() {
       }
       if (!res.ok) {
         const msg = data.error || data.raw_text || (data.raw ? "AI returned non-JSON output. Try again." : `AI suggestions unavailable (${res.status}).`);
+        setAiStatus("error");
         setAiError(msg);
         setAiSuggestions(null);
         return;
       }
       const ai = data.ai;
       if (!ai || typeof ai !== "object") {
+        setAiStatus("error");
         setAiError("AI suggestions unavailable. Please try again.");
         setAiSuggestions(null);
         return;
       }
       setAiCached(!!data.cached);
       if (data.ai_status && data.ai_status !== 'ok') {
+        setAiStatus(data.ai_status);
         setAiError(`Planner fallback used: ${data.ai_status.replace('fallback:', '')}.`);
+      } else {
+        setAiStatus(data.cached ? "cached" : "ok");
       }
       setAiSuggestions({
         task_refinements: Array.isArray(ai.task_refinements) ? ai.task_refinements : [],
@@ -459,6 +467,7 @@ export default function TodayPage() {
         automation_opportunities: Array.isArray(ai.automation_opportunities) ? ai.automation_opportunities : [],
       });
     } catch (e) {
+      setAiStatus("error");
       setAiError(e?.message || "AI suggestions unavailable. Please try again.");
       setAiSuggestions(null);
     } finally {
@@ -936,6 +945,7 @@ export default function TodayPage() {
         <AiPlannerGuidance
           aiLoading={aiLoading}
           aiError={aiError}
+          aiStatus={aiStatus}
           aiSuggestions={aiSuggestions}
           queueReady={queueEntries.length === 3}
         />
