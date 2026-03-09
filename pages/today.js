@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import AiPlannerGuidance from "../components/AiPlannerGuidance";
 import DashboardLayout from "../components/DashboardLayout";
 import ProgressToOutcome from "../components/ProgressToOutcome";
 import QueueBehaviorHelper from "../components/QueueBehaviorHelper";
@@ -932,6 +933,12 @@ export default function TodayPage() {
         title="AI Planner"
         subtitle="Suggestions require your approval. Nothing is applied automatically."
       >
+        <AiPlannerGuidance
+          aiLoading={aiLoading}
+          aiError={aiError}
+          aiSuggestions={aiSuggestions}
+          queueReady={queueEntries.length === 3}
+        />
         <div style={{ marginBottom: 12 }}>
           <button
             type="button"
@@ -982,9 +989,12 @@ export default function TodayPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {aiSuggestions.task_refinements && aiSuggestions.task_refinements.length > 0 && (
               <div>
-                <h3 style={{ fontSize: 14, fontWeight: 600, margin: "0 0 8px", color: "#374151" }}>
+                <h3 style={{ fontSize: 14, fontWeight: 600, margin: "0 0 4px", color: "#374151" }}>
                   Task refinements
                 </h3>
+                <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 8px" }}>
+                  Approve updates the task title, tags, or effort in place. Dismiss leaves the task unchanged.
+                </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {(aiSuggestions.task_refinements || []).map((item, idx) => (
                     <div
@@ -1137,9 +1147,13 @@ export default function TodayPage() {
                 (aiSuggestions.suggested_subtasks_to_create?.length || 0) +
                 (aiSuggestions.automation_opportunities?.length || 0)) === 0 ? (
                 <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
-                  No suggestions this time. Try refining again later.
+                  No suggestions this time — your tasks are unchanged. Try refining again later.
                 </p>
-              ) : null}
+              ) : (
+                <p style={{ fontSize: 11, color: "#9ca3af", margin: "8px 0 0" }}>
+                  You can dismiss everything safely. Your tasks only change when you approve.
+                </p>
+              )}
           </div>
         )}
       </SectionCard>
