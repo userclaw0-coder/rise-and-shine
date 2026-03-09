@@ -245,7 +245,7 @@ export default function AiPlannerGuidance({
           )}
           {phase === "fallback" && (
             <div style={{ marginTop: 6, fontSize: 12, fontWeight: 500, color: "#92400e" }}>
-              Safe to try now — just pick one small move to start.
+              One good-enough next step is enough to get moving — no need to overthink it. Pick one and go.
             </div>
           )}
         </div>
