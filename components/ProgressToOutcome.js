@@ -125,7 +125,7 @@ export default function ProgressToOutcome({ queueEntries, completionMap }) {
         }}
       >
         {allDone
-          ? "Queue ready to refill with your next set of actions."
+          ? "Great work! Hit \u201cRefresh queue\u201d below to get your next 3 actions."
           : "How your current actions connect to bigger outcomes."}
       </p>
 

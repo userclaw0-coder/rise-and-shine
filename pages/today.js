@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../components/DashboardLayout";
 import ProgressToOutcome from "../components/ProgressToOutcome";
+import QueueBehaviorHelper from "../components/QueueBehaviorHelper";
 import SectionCard from "../components/SectionCard";
 import SubtaskOrchestrator from "../components/SubtaskOrchestrator";
 import { useAuth } from "../hooks/useAuth";
@@ -68,6 +69,30 @@ function buildLastCompletedMap(events) {
   }
   return map;
 }
+
+function getNextActionHint(taskId, queueEntries, completionMap) {
+  const isDone = !!completionMap[taskId];
+  if (isDone) {
+    const allDone = queueEntries.every((e) => !!completionMap[e.task?.id]);
+    if (allDone) return { text: "All done \u2014 queue will refill", style: "success" };
+    const remaining = queueEntries.filter((e) => !completionMap[e.task?.id]).length;
+    return {
+      text: `Done \u2014 ${remaining} left to unlock a fresh set`,
+      style: "done",
+    };
+  }
+  const firstUncompleted = queueEntries.find((e) => !completionMap[e.task?.id]);
+  if (firstUncompleted?.task?.id === taskId) {
+    return { text: "Up next \u2014 start here", style: "action" };
+  }
+  return null;
+}
+
+const HINT_STYLES = {
+  action: { color: "#1d4ed8", background: "#eff6ff", border: "#bfdbfe" },
+  done: { color: "#6b7280", background: "#f9fafb", border: "#e5e7eb" },
+  success: { color: "#059669", background: "#ecfdf5", border: "#86efac" },
+};
 
 export default function TodayPage() {
   const { user, isCheckingAuth } = useAuth();
@@ -794,11 +819,13 @@ export default function TodayPage() {
         completionMap={completionMap}
       />
 
+      <QueueBehaviorHelper />
+
       <SectionCard
         title="Next 3 Actions"
         subtitle={
           dailyPlan != null
-            ? `Queue does not refill until all 3 are completed. Refilled ${dailyPlan.refilled_count ?? 0} time(s) today.`
+            ? `Finish all 3 to unlock your next set · Refilled ${dailyPlan.refilled_count ?? 0} time(s) today`
             : "Load or create your daily plan to see the queue."
         }
       >
@@ -862,6 +889,28 @@ export default function TodayPage() {
                         </span>{" "}
                         {queueReasonByTaskId.get(entry.task.id) || "Top-scored task for your current focus"}
                       </div>
+                      {(() => {
+                        const hint = getNextActionHint(entry.task.id, queueEntries, completionMap);
+                        if (!hint) return null;
+                        const s = HINT_STYLES[hint.style] || HINT_STYLES.done;
+                        return (
+                          <div
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 600,
+                              marginTop: 4,
+                              padding: "2px 8px",
+                              borderRadius: 6,
+                              background: s.background,
+                              color: s.color,
+                              border: `1px solid ${s.border}`,
+                              display: "inline-block",
+                            }}
+                          >
+                            {hint.text}
+                          </div>
+                        );
+                      })()}
                     </div>
                     <div
                       style={{
