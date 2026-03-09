@@ -112,10 +112,10 @@ function getFallbackReasonCopy(aiStatus, aiError) {
     const rawReason = aiStatus.slice("fallback:".length).replace(/[-_]+/g, " ").trim();
 
     if (!rawReason) {
-      return "The full AI path wasn’t available, so the planner used its safer backup path instead.";
+      return "The full AI path wasn’t available, so the planner switched to a safer backup path. Nothing was changed automatically.";
     }
 
-    return `${humanizePlannerReason(rawReason)} A safer backup path was used instead.`;
+    return `${humanizePlannerReason(rawReason)} The planner used a safer backup path, and nothing was changed automatically.`;
   }
 
   return humanizePlannerReason(aiError);
@@ -150,9 +150,9 @@ const PHASE_CONTENT = {
     border: "#bfdbfe",
   },
   fallback: {
-    label: "Safe fallback used",
-    hint: "The planner still returned a reviewable result, even though the full AI path was unavailable.",
-    detail: "You can review or dismiss the suggestions below with the same approval guardrails. Nothing was applied automatically.",
+    label: "Safer backup path used",
+    hint: "The full AI path wasn’t available, so the planner switched to a safer backup path. Your suggestions are still ready to review.",
+    detail: "The same approval guardrails apply: review or dismiss each suggestion below, and nothing in your tasks changes unless you explicitly approve it.",
     icon: "◇",
     color: "#92400e",
     bg: "#fffbeb",
@@ -239,7 +239,7 @@ export default function AiPlannerGuidance({
           )}
           {(phase === "fallback" || phase === "error") && reasonCopy && (
             <div style={{ color: "#6b7280", marginTop: 4 }}>
-              <span style={{ fontWeight: 600, color: content.color }}>What happened:</span>{" "}
+              <span style={{ fontWeight: 600, color: content.color }}>Details:</span>{" "}
               {reasonCopy}
             </div>
           )}
