@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../components/DashboardLayout";
+import ProgressToOutcome from "../components/ProgressToOutcome";
 import SectionCard from "../components/SectionCard";
 import SubtaskOrchestrator from "../components/SubtaskOrchestrator";
 import { useAuth } from "../hooks/useAuth";
@@ -787,6 +788,11 @@ export default function TodayPage() {
           {error}
         </p>
       )}
+
+      <ProgressToOutcome
+        queueEntries={queueEntries}
+        completionMap={completionMap}
+      />
 
       <SectionCard
         title="Next 3 Actions"
