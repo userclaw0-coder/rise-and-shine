@@ -141,9 +141,9 @@ const PHASE_CONTENT = {
     border: "#e5e7eb",
   },
   loading: {
-    label: "Reviewing your Next 3…",
-    hint: "The planner is checking your current queue and drafting suggestions. This usually takes a few seconds.",
-    detail: "If AI is slow or unavailable, the planner falls back safely and your existing tasks stay exactly the same until you approve something.",
+    label: "Actively reviewing your Next 3…",
+    hint: "The planner is working through your current queue right now and drafting suggestions. This usually takes a few seconds.",
+    detail: "This is a review step only — nothing in your tasks changes while loading, and any suggestions still wait for your approval.",
     icon: "◌",
     color: "#2563eb",
     bg: "#eff6ff",
