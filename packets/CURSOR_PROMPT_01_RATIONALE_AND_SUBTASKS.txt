@@ -1,0 +1,49 @@
+You are implementing a narrow Rise-and-Shine vertical slice inside the assigned worktree only.
+
+Read and follow these files first:
+1. /home/clawofhank/.openclaw/workspace/CURSOR_OPERATING_MODEL.md
+2. /home/clawofhank/rise-and-shine/packets/CURSOR_PACKET_01_RATIONALE_AND_SUBTASKS.md
+3. /home/clawofhank/rise-and-shine/README.md
+4. /home/clawofhank/rise-and-shine/CURRENT_STATE_SNAPSHOT.md
+5. /home/clawofhank/rise-and-shine/docs/PROJECT_SPEC.md
+
+Working rules:
+- Work only in this worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-rationale-subtask-flow
+- Do not modify other repos or other branches.
+- Start from the approved develop-based lane; do not touch main.
+- Do not expand scope beyond this packet.
+- Preserve the stabilized planner/apply/auth behavior unless directly improving the scoped flow.
+- Keep validation local-first.
+- Prefer narrow, reviewable changes over broad rewrites.
+
+Primary objective:
+Implement one narrow, user-visible slice that improves "why this task now" rationale and adds the approved subtask orchestration flow: generate -> edit/approve -> best subtask to Next-3 -> remaining approved subtasks to backlog.
+
+Likely files/surfaces:
+- pages/today.js
+- pages/backlog.js
+- components/* related to task detail or planner UX
+- lib/today-queue.js
+- lib/planner-* helpers
+
+Before coding:
+- briefly state your implementation plan in 3-6 bullets
+- identify any ambiguity you are resolving conservatively
+
+Then implement the packet.
+
+Before finishing:
+- run exactly:
+  - npm run lint
+  - npm run build
+- if verification fails, fix what is reasonably fixable within scope or report the failure clearly
+
+Completion report required:
+- branch name
+- commit hash
+- summary of changes
+- verification commands run
+- verification results
+- known risks / follow-ups
+
+If blocked, return a blocked report instead of pretending the task is complete.

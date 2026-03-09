@@ -51,6 +51,9 @@ rise_data.zip
 # Logs
 *.log
 
+# Local worktrees
+.worktrees/
+
 # n8n secrets and runtime data (encryption key in config; use n8n/.env instead)
 n8n_data/config
 n8n_data/config.example
