@@ -1,3 +1,45 @@
+function getReviewSummary(aiSuggestions) {
+  if (!aiSuggestions) return null;
+
+  const categories = [
+    {
+      key: "task_refinements",
+      singular: "task refinement",
+      plural: "task refinements",
+    },
+    {
+      key: "suggested_subtasks_to_create",
+      singular: "subtask plan",
+      plural: "subtask plans",
+    },
+    {
+      key: "automation_opportunities",
+      singular: "automation idea",
+      plural: "automation ideas",
+    },
+  ];
+
+  const items = categories
+    .map(({ key, singular, plural }) => {
+      const count = aiSuggestions[key]?.length || 0;
+      if (!count) return null;
+      return `${count} ${count === 1 ? singular : plural}`;
+    })
+    .filter(Boolean);
+
+  if (items.length === 0) return null;
+
+  const total = categories.reduce(
+    (sum, { key }) => sum + (aiSuggestions[key]?.length || 0),
+    0
+  );
+
+  return {
+    total,
+    items,
+  };
+}
+
 function getPhase({ aiLoading, aiError, aiStatus, aiSuggestions, queueReady }) {
   if (aiLoading) return "loading";
   if (typeof aiStatus === "string" && aiStatus.startsWith("fallback:")) return "fallback";
@@ -155,43 +197,66 @@ export default function AiPlannerGuidance({
   const phase = getPhase({ aiLoading, aiError, aiStatus, aiSuggestions, queueReady });
   const content = PHASE_CONTENT[phase];
   const reasonCopy = getFallbackReasonCopy(aiStatus, aiError);
+  const reviewSummary = getReviewSummary(aiSuggestions);
   if (!content) return null;
 
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "flex-start",
-        gap: 8,
-        padding: "8px 12px",
-        borderRadius: 8,
-        background: content.bg,
-        border: `1px solid ${content.border}`,
-        marginBottom: 12,
-        fontSize: 12,
-        lineHeight: 1.5,
-        color: content.color,
-      }}
-    >
-      <span
-        aria-hidden="true"
-        style={{ flexShrink: 0, fontSize: 14, lineHeight: "18px" }}
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          gap: 8,
+          padding: "8px 12px",
+          borderRadius: 8,
+          background: content.bg,
+          border: `1px solid ${content.border}`,
+          fontSize: 12,
+          lineHeight: 1.5,
+          color: content.color,
+        }}
       >
-        {content.icon}
-      </span>
-      <div>
-        <div style={{ fontWeight: 600 }}>{content.label}</div>
-        <div style={{ color: "#4b5563", marginTop: 2 }}>{content.hint}</div>
-        {content.detail && (
-          <div style={{ color: "#6b7280", marginTop: 4 }}>{content.detail}</div>
-        )}
-        {(phase === "fallback" || phase === "error") && reasonCopy && (
-          <div style={{ color: "#6b7280", marginTop: 4 }}>
-            <span style={{ fontWeight: 600, color: content.color }}>What happened:</span>{" "}
-            {reasonCopy}
-          </div>
-        )}
+        <span
+          aria-hidden="true"
+          style={{ flexShrink: 0, fontSize: 14, lineHeight: "18px" }}
+        >
+          {content.icon}
+        </span>
+        <div>
+          <div style={{ fontWeight: 600 }}>{content.label}</div>
+          <div style={{ color: "#4b5563", marginTop: 2 }}>{content.hint}</div>
+          {content.detail && (
+            <div style={{ color: "#6b7280", marginTop: 4 }}>{content.detail}</div>
+          )}
+          {(phase === "fallback" || phase === "error") && reasonCopy && (
+            <div style={{ color: "#6b7280", marginTop: 4 }}>
+              <span style={{ fontWeight: 600, color: content.color }}>What happened:</span>{" "}
+              {reasonCopy}
+            </div>
+          )}
+        </div>
       </div>
+
+      {reviewSummary && (
+        <div
+          style={{
+            padding: "10px 12px",
+            borderRadius: 8,
+            background: "#f9fafb",
+            border: "1px solid #e5e7eb",
+            fontSize: 12,
+            lineHeight: 1.5,
+            color: "#374151",
+          }}
+        >
+          <div style={{ fontWeight: 600, color: "#111827" }}>
+            Ready to review: {reviewSummary.total} suggestion{reviewSummary.total === 1 ? "" : "s"}
+          </div>
+          <div style={{ color: "#4b5563", marginTop: 2 }}>
+            {reviewSummary.items.join(" · ")}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
