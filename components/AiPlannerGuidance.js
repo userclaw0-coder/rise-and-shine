@@ -112,10 +112,10 @@ function getFallbackReasonCopy(aiStatus, aiError) {
     const rawReason = aiStatus.slice("fallback:".length).replace(/[-_]+/g, " ").trim();
 
     if (!rawReason) {
-      return "The planner couldn’t complete the full AI pass this time, so it set up a quick backup review instead. Scan these suggestions, adjust anything you want, and apply only what feels useful. Your tasks were not changed automatically, and you can retry later if you want another pass.";
+      return "The planner couldn’t complete the full AI pass this time, so it set up a quick backup review instead. Treat these suggestions as a strong starting point, adjust anything you want, and apply only what feels useful. Your tasks were not changed automatically, and you can retry later if you want another pass.";
     }
 
-    return `${humanizePlannerReason(rawReason)} Instead of forcing a shaky result through, the planner set up a quick backup review. Scan these suggestions, adjust anything you want, and apply only what feels useful. Your tasks were not changed automatically, and you can retry later if you want another pass.`;
+    return `${humanizePlannerReason(rawReason)} Instead of forcing a shaky result through, the planner set up a quick backup review. Treat these suggestions as a strong starting point, adjust anything you want, and apply only what feels useful. Your tasks were not changed automatically, and you can retry later if you want another pass.`;
   }
 
   return humanizePlannerReason(aiError);
@@ -151,8 +151,8 @@ const PHASE_CONTENT = {
   },
   fallback: {
     label: "Safer backup path used",
-    hint: "The planner couldn’t finish the full AI pass cleanly this time, so it queued up a quick backup review instead.",
-    detail: "Start with one quick edit if you want, then apply only what helps. Nothing in your tasks changes unless you explicitly approve it.",
+    hint: "The planner couldn’t finish the full AI pass cleanly this time, so it queued up a strong starting point for you to refine.",
+    detail: "Use these suggestions as a draft, make one quick edit if you want, then apply only what helps. Nothing in your tasks changes unless you explicitly approve it.",
     icon: "◇",
     color: "#92400e",
     bg: "#fffbeb",
@@ -266,7 +266,7 @@ export default function AiPlannerGuidance({
           </div>
           <div style={{ color: "#6b7280", marginTop: 4 }}>
             {phase === "fallback"
-              ? "Give them a quick scan one at a time — start with one small edit if you want, then apply only what feels useful."
+              ? "Give them a quick scan one at a time — this is a solid starting point, so make one small edit if you want, then apply only what feels useful."
               : "Review them one at a time — approving one suggestion won’t apply the others."}
           </div>
         </div>
