@@ -152,7 +152,7 @@ const PHASE_CONTENT = {
   fallback: {
     label: "Safer backup path used",
     hint: "The planner couldn’t finish the full AI pass this time, so it set up a quick backup review you can try right now.",
-    detail: "Pick the first suggestion that feels useful — no need to compare everything. Nothing changes unless you approve it, and you can retry for a fresh pass anytime.",
+    detail: "You only need one good option to keep moving. Pick what feels useful — no need to compare everything. Nothing changes unless you approve it, and you can retry for a fresh pass anytime.",
     icon: "◇",
     color: "#92400e",
     bg: "#fffbeb",
@@ -260,7 +260,7 @@ export default function AiPlannerGuidance({
               }}
             >
               <span aria-hidden="true">→</span>
-              <span>Pick the first suggestion that feels useful — no need to compare everything. One step still counts as progress today.</span>
+              <span>One good option is enough — pick the first that feels useful and keep moving.</span>
             </div>
           )}
         </div>
@@ -286,7 +286,7 @@ export default function AiPlannerGuidance({
           </div>
           <div style={{ color: "#6b7280", marginTop: 4 }}>
             {phase === "fallback"
-              ? "Pick the first suggestion that feels useful — no need to compare every option. Tweak it, keep it, or skip it and move on."
+              ? "You only need one good option. Pick what feels useful, tweak it, or skip and move on."
               : "Review them one at a time — approving one suggestion won’t apply the others."}
           </div>
         </div>
