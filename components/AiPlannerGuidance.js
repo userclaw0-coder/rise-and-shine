@@ -260,7 +260,7 @@ export default function AiPlannerGuidance({
               }}
             >
               <span aria-hidden="true">→</span>
-              <span>Start now with one suggested step. More planning can wait.</span>
+              <span>Start now with one suggested step — it still counts as progress today. More planning can wait.</span>
             </div>
           )}
         </div>
@@ -286,7 +286,7 @@ export default function AiPlannerGuidance({
           </div>
           <div style={{ color: "#6b7280", marginTop: 4 }}>
             {phase === "fallback"
-              ? "You can start now with the first suggestion that feels useful. Tweak it, keep it, or skip it and move on."
+              ? "Even a small step counts as progress today. Start with the first suggestion that feels useful — tweak it, keep it, or skip it and move on."
               : "Review them one at a time — approving one suggestion won’t apply the others."}
           </div>
         </div>
