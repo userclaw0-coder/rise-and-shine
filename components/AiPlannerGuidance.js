@@ -112,10 +112,10 @@ function getFallbackReasonCopy(aiStatus, aiError) {
     const rawReason = aiStatus.slice("fallback:".length).replace(/[-_]+/g, " ").trim();
 
     if (!rawReason) {
-      return "The planner couldn’t complete the full AI pass this time, so it set up a quick backup review instead. Treat this as a low-pressure starting point — try a suggestion, edit it, or ignore it if it doesn’t help. You only need one helpful next step to get moving again, and your tasks were not changed automatically. You can retry later if you want another pass.";
+      return "The planner couldn’t complete the full AI pass this time, so it set up a quick backup review instead. This is safe to try right now as one small next move — pick a suggestion, tweak it, keep it, or ignore it. You only need one helpful next step to get moving again, your tasks were not changed automatically, and you can retry later if you want another pass.";
     }
 
-    return `${humanizePlannerReason(rawReason)} Instead of forcing a shaky result through, the planner set up a quick backup review. Treat this as a low-pressure starting point — try a suggestion, edit it, or ignore it if it doesn’t help. You only need one helpful next step to get moving again, your tasks were not changed automatically, and you can retry later if you want another pass.`;
+    return `${humanizePlannerReason(rawReason)} Instead of forcing a shaky result through, the planner set up a quick backup review. This is safe to try right now as one small next move — pick a suggestion, tweak it, keep it, or ignore it. You only need one helpful next step to get moving again, your tasks were not changed automatically, and you can retry later if you want another pass.`;
   }
 
   return humanizePlannerReason(aiError);
@@ -151,8 +151,8 @@ const PHASE_CONTENT = {
   },
   fallback: {
     label: "Safer backup path used",
-    hint: "The planner couldn’t finish the full AI pass cleanly this time, so this backup review is just a low-pressure starting point.",
-    detail: "Try a suggestion, edit it, or ignore it — you are not locked into anything. Apply only what helps, and nothing in your tasks changes unless you explicitly approve it.",
+    hint: "The planner couldn’t finish the full AI pass cleanly this time, so this backup review is safe to try right now as one small next move.",
+    detail: "Pick a suggestion, tweak it, keep it, or ignore it — you are not locked into anything. Apply only what helps, and nothing in your tasks changes unless you explicitly approve it.",
     icon: "◇",
     color: "#92400e",
     bg: "#fffbeb",
@@ -243,6 +243,11 @@ export default function AiPlannerGuidance({
               {reasonCopy}
             </div>
           )}
+          {phase === "fallback" && (
+            <div style={{ marginTop: 6, fontSize: 12, fontWeight: 500, color: "#92400e" }}>
+              Safe to try now — just pick one small move to start.
+            </div>
+          )}
         </div>
       </div>
 
@@ -266,7 +271,7 @@ export default function AiPlannerGuidance({
           </div>
           <div style={{ color: "#6b7280", marginTop: 4 }}>
             {phase === "fallback"
-              ? "Give them a quick scan one at a time — this is a low-pressure starting point, so try one suggestion, make one small edit if you want, or ignore it and move on."
+              ? "Safe to try right now — pick one suggestion to start with, tweak it if you want, or skip it and move on."
               : "Review them one at a time — approving one suggestion won’t apply the others."}
           </div>
         </div>
