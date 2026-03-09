@@ -50,7 +50,7 @@ function getPhase({ aiLoading, aiError, aiStatus, aiSuggestions, queueReady }) {
       (aiSuggestions.task_refinements?.length || 0) +
       (aiSuggestions.suggested_subtasks_to_create?.length || 0) +
       (aiSuggestions.automation_opportunities?.length || 0);
-    return total > 0 ? "review" : "done";
+    return total > 0 ? "review" : "empty";
   }
 
   return queueReady ? "idle" : "idle-no-queue";
@@ -172,6 +172,15 @@ const PHASE_CONTENT = {
     hint: "Approve a suggestion to apply it, or dismiss to skip.",
     detail: "Nothing changes unless you say so, and dismissing suggestions leaves your current plan untouched.",
     icon: "●",
+    color: "#059669",
+    bg: "#ecfdf5",
+    border: "#86efac",
+  },
+  empty: {
+    label: "No new suggestions this pass",
+    hint: "That can be a good result — it usually means your current Next 3 already looks clear enough to keep moving.",
+    detail: "This is different from an error: the planner finished safely, found nothing worth changing, and left your tasks exactly as they were.",
+    icon: "✓",
     color: "#059669",
     bg: "#ecfdf5",
     border: "#86efac",

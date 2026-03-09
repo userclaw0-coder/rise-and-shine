@@ -1157,7 +1157,7 @@ export default function TodayPage() {
                 (aiSuggestions.suggested_subtasks_to_create?.length || 0) +
                 (aiSuggestions.automation_opportunities?.length || 0)) === 0 ? (
                 <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
-                  No suggestions this time — your tasks are unchanged. Try refining again later.
+                  Nothing new to review this time. That means the planner completed, found no worthwhile changes, and kept your tasks exactly as they were.
                 </p>
               ) : (
                 <p style={{ fontSize: 11, color: "#9ca3af", margin: "8px 0 0" }}>
