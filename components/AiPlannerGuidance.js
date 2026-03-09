@@ -152,7 +152,7 @@ const PHASE_CONTENT = {
   fallback: {
     label: "Safer backup path used",
     hint: "The planner couldn’t finish the full AI pass cleanly this time, so it queued up a quick backup review instead.",
-    detail: "Scan these suggestions for your current Next 3, refine anything that needs a tweak, and apply only what helps. Nothing in your tasks changes unless you explicitly approve it.",
+    detail: "Start with one quick edit if you want, then apply only what helps. Nothing in your tasks changes unless you explicitly approve it.",
     icon: "◇",
     color: "#92400e",
     bg: "#fffbeb",
@@ -266,7 +266,7 @@ export default function AiPlannerGuidance({
           </div>
           <div style={{ color: "#6b7280", marginTop: 4 }}>
             {phase === "fallback"
-              ? "Give them a quick scan one at a time — this backup pass is just for your current Next 3, and applying one is still a safe draft step."
+              ? "Give them a quick scan one at a time — start with one small edit if you want, then apply only what feels useful."
               : "Review them one at a time — approving one suggestion won’t apply the others."}
           </div>
         </div>
