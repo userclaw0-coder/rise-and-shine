@@ -112,10 +112,10 @@ function getFallbackReasonCopy(aiStatus, aiError) {
     const rawReason = aiStatus.slice("fallback:".length).replace(/[-_]+/g, " ").trim();
 
     if (!rawReason) {
-      return "The full AI path wasn’t available, so the planner switched to a safer backup path. Nothing was changed automatically.";
+      return "The full AI path wasn’t available, so the planner switched to a safer backup path. Nothing was changed automatically, so you can review the backup suggestions now or retry later.";
     }
 
-    return `${humanizePlannerReason(rawReason)} The planner used a safer backup path, and nothing was changed automatically.`;
+    return `${humanizePlannerReason(rawReason)} The planner used a safer backup path, and nothing was changed automatically, so you can review the backup suggestions now or retry later.`;
   }
 
   return humanizePlannerReason(aiError);
@@ -151,8 +151,8 @@ const PHASE_CONTENT = {
   },
   fallback: {
     label: "Safer backup path used",
-    hint: "The full AI path wasn’t available, so the planner switched to a safer backup path. Your suggestions are still ready to review.",
-    detail: "The same approval guardrails apply: review or dismiss each suggestion below, and nothing in your tasks changes unless you explicitly approve it.",
+    hint: "The full AI path wasn’t available, so the planner switched to a safer backup path. You can review the backup suggestions now or retry the full planner later.",
+    detail: "Both options are safe: review or dismiss each suggestion below now, or come back and try again later. Nothing in your tasks changes unless you explicitly approve it.",
     icon: "◇",
     color: "#92400e",
     bg: "#fffbeb",
