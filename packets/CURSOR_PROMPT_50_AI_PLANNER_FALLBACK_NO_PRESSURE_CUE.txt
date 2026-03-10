@@ -1,46 +1,27 @@
-Implement rise-and-shine packet 50: AI Planner fallback no-pressure cue.
+Implement rise-and-shine packet 50 as a larger milestone slice: AI Planner fallback trust bundle.
 
-Goal
-- Add one compact fallback cue in Today that reassures the user there is no pressure to act immediately, so a pause feels safe instead of costly.
+Read and follow:
+1. /home/clawofhank/rise-and-shine/packets/CURSOR_PACKET_50_AI_PLANNER_FALLBACK_TRUST_BUNDLE.md
+2. /home/clawofhank/rise-and-shine/PROJECT_NORTH_STAR.md
+3. /home/clawofhank/rise-and-shine/CURRENT_STATE_SNAPSHOT.md
 
-Repo boundary
-- Work only in rise-and-shine.
-- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
-- Keep routine work off `main`.
+Work only in:
+- repo: rise-and-shine
+- branch: feat/ai-planner-fallback-trust-bundle
+- worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-fallback-trust-bundle
 
-Branch / worktree
-- Base from: develop
-- Work on: feat/ai-planner-fallback-pause-has-no-penalty-cue
-- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-fallback-pause-has-no-penalty-cue
+Goal:
+Bundle the adjacent fallback trust cues into one coherent guidance improvement so users understand they can pause, return later, avoid catch-up anxiety, and still move forward with confidence.
 
-Scope
-- Improve fallback wording in the existing Today AI Planner guidance area.
-- Keep the message compact, calming, and action-oriented.
-- Keep the change narrow and local to Today.
+Important:
+- this replaces the tiny-slice chain; do not implement just one reassurance sentence
+- keep the slice local to the AI Planner guidance surface in Today
+- no backend/auth/onboarding changes
 
-Non-goals
-- No planner architecture rewrite.
-- No onboarding redesign.
-- No auth or analytics changes.
-- No backend prompt/model changes.
-- No broad redesign of the planner surface.
+Verification:
+- npm run lint
+- npm run build
 
-Likely files
-- components/AiPlannerGuidance.js
-- pages/today.js only if a tiny wording hook is clearly warranted
-
-Acceptance criteria
-- Fallback guidance reassures the user there is no pressure to decide or act immediately.
-- The wording stays calm, confidence-building, and non-technical.
-- The change remains narrow, user-facing, and reviewable.
-- `npm run lint` passes.
-- `npm run build` passes.
-
-Verification
-- Run: npm run lint
-- Run: npm run build
-
-Completion report
 Return:
 - branch name
 - commit hash
