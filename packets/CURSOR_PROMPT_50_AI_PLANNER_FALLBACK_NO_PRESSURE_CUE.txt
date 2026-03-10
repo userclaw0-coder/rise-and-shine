@@ -1,0 +1,49 @@
+Implement rise-and-shine packet 50: AI Planner fallback no-pressure cue.
+
+Goal
+- Add one compact fallback cue in Today that reassures the user there is no pressure to act immediately, so a pause feels safe instead of costly.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat/ai-planner-fallback-no-pressure-cue
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-fallback-no-pressure-cue
+
+Scope
+- Improve fallback wording in the existing Today AI Planner guidance area.
+- Keep the message compact, calming, and action-oriented.
+- Keep the change narrow and local to Today.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth or analytics changes.
+- No backend prompt/model changes.
+- No broad redesign of the planner surface.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a tiny wording hook is clearly warranted
+
+Acceptance criteria
+- Fallback guidance reassures the user there is no pressure to decide or act immediately.
+- The wording stays calm, confidence-building, and non-technical.
+- The change remains narrow, user-facing, and reviewable.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups
