@@ -1,0 +1,54 @@
+Implement rise-and-shine packet 87: AI Planner late morning continuity bundle.
+
+Goal
+- Build on the morning execution stability bundle by turning stability into a clearer late-morning continuity contract: combine stronger proof that the current plan can keep carrying the morning, better distinction between ordinary slowdown and a real pre-lunch mismatch, clearer guidance on when to finish/trim/resequence manually instead of rerunning AI, and a more confident threshold for deciding whether the rest of the morning should stay intact until lunch.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat-ai-planner-late-morning-continuity-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-late-morning-continuity-bundle
+
+Scope
+- Bundle adjacent late-morning continuity proof, ordinary slowdown tolerance, manual resequencing guidance, and pre-lunch rerun-threshold confidence into one coherent Today planner treatment.
+- Improve the planner experience so users can more clearly tell late in the morning:
+  - why the current plan can still carry the rest of the morning,
+  - what slowdown or spillover is normal versus what breaks the plan,
+  - when a small manual reshuffle is enough,
+  - and what kind of change truly justifies reopening the planner before lunch.
+- Prefer one coherent late-morning treatment over scattered reassurance copy or broad page changes.
+- Keep the change narrow and local to Today planner guidance / review / apply surfaces.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth, analytics, or backend prompt/model changes.
+- No broad redesign of the Today page.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a small hook or summary treatment is clearly warranted
+- related planner review/apply components only if clearly necessary
+
+Acceptance criteria
+- Late in the morning, users can tell why the current plan still carries, what slowdown is harmless, when a manual reshuffle is enough, and what real shift justifies reopening the planner before lunch.
+- The planner feels more like a stable pre-lunch execution contract and less like something that should be rerun because the morning got imperfect.
+- The change stays narrow, local, and reviewable.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups
