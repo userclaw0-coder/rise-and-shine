@@ -157,6 +157,20 @@ const CARRYFORWARD_PLAN_STILL_FITS_SIGNALS =
 const CARRYFORWARD_RERUN_ONLY_IF_OVERNIGHT_SHIFT =
   "When an overnight change really justifies a rerun: a new blocker or deadline reshapes what “today” should be, surprise work crowds out your current focus, or your Next 3 feels wrong for more than ~10 minutes even after trying the first task. That’s when a single fresh pass is worth it — not simply because it’s a new day.";
 
+// Packet 83: AI Planner morning restart confidence bundle — first-task restart contract,
+// leave-last-night-alone proof, early-friction tolerance, and rerun-only-if shifts for tomorrow.
+const MORNING_RESTART_TITLE = "Tomorrow morning restart contract";
+const MORNING_RESTART_HEADLINE =
+  "Treat tomorrow as a restart from a stable plan, not a reset — your updated Next 3 is already strong enough to open and begin from.";
+const MORNING_RESTART_FIRST_MOVE =
+  "What to open first tomorrow: open Today, look at your updated Next 3, and start with the first not-done task. Don’t reopen the planner or re-scan everything unless a rerun trigger below is actually true.";
+const MORNING_RESTART_WHAT_STAYS_UNTOUCHED =
+  "What can stay exactly as you left it: remaining cards, backlog items, and other days. They do not need overnight edits or another AI pass just because it’s morning.";
+const MORNING_RESTART_FRICTION_NORMAL =
+  "Normal morning friction: a few minutes of warm-up, light resistance, or needing to reread the first task (around 10 minutes or less) still counts as the plan fitting — keep going from your existing Next 3.";
+const MORNING_RESTART_RERUN_ONLY_IF =
+  "Rerun is worth it tomorrow only when something real shifted: a new blocker or deadline, surprise work that reshapes the day, or your Next 3 still feels wrong after ~10 minutes of trying the first task. Not just because it’s a new day or you feel wobbly.";
+
 // Packet 64: Updated plan recap bundle — what changed, what to do now, when safe to ignore
 const RECAP_WHAT_CHANGED_FALLBACK =
   "One suggestion was applied; your plan is updated.";
@@ -422,6 +436,13 @@ const PHASE_CONTENT = {
       carryforwardFirstMoveTomorrow: CARRYFORWARD_FIRST_MOVE_TOMORROW,
       carryforwardPlanStillFitsSignals: CARRYFORWARD_PLAN_STILL_FITS_SIGNALS,
       carryforwardRerunOnlyIfOvernightShift: CARRYFORWARD_RERUN_ONLY_IF_OVERNIGHT_SHIFT,
+      // Packet 83: tomorrow morning restart confidence bundle
+      morningRestartTitle: MORNING_RESTART_TITLE,
+      morningRestartHeadline: MORNING_RESTART_HEADLINE,
+      morningRestartFirstMove: MORNING_RESTART_FIRST_MOVE,
+      morningRestartWhatStaysUntouched: MORNING_RESTART_WHAT_STAYS_UNTOUCHED,
+      morningRestartFrictionNormal: MORNING_RESTART_FRICTION_NORMAL,
+      morningRestartRerunOnlyIf: MORNING_RESTART_RERUN_ONLY_IF,
     },
     icon: "●",
     color: "#059669",
@@ -928,6 +949,59 @@ export default function AiPlannerGuidance({
                 </li>
                 <li style={{ marginBottom: 0 }}>
                   {content.appliedStateBundle.carryforwardRerunOnlyIfOvernightShift}
+                </li>
+              </ol>
+            </div>
+          )}
+          {showAppliedState && content.appliedStateBundle && (
+            <div
+              role="region"
+              aria-label="Tomorrow morning restart contract"
+              style={{
+                marginTop: 10,
+                padding: "10px 10px 8px",
+                borderRadius: 6,
+                background: "#ecfdf5",
+                border: "1px solid #6ee7b7",
+              }}
+            >
+              <div
+                style={{
+                  fontWeight: 900,
+                  marginBottom: 4,
+                  color: "#047857",
+                }}
+              >
+                {content.appliedStateBundle.morningRestartTitle}
+              </div>
+              <div style={{ marginBottom: 6, color: "#047857", fontSize: 12 }}>
+                {content.appliedStateBundle.morningRestartHeadline}
+              </div>
+              <ol
+                style={{
+                  margin: 0,
+                  paddingLeft: 18,
+                  fontSize: 12,
+                  color: "#065f46",
+                  lineHeight: 1.5,
+                }}
+              >
+                <li style={{ marginBottom: 4 }}>
+                  {content.appliedStateBundle.morningRestartFirstMove}{" "}
+                  {nextActionLabel ? (
+                    <span style={{ fontWeight: 600 }}>
+                      Morning cue: {nextActionLabel}
+                    </span>
+                  ) : null}
+                </li>
+                <li style={{ marginBottom: 4 }}>
+                  {content.appliedStateBundle.morningRestartWhatStaysUntouched}
+                </li>
+                <li style={{ marginBottom: 4 }}>
+                  {content.appliedStateBundle.morningRestartFrictionNormal}
+                </li>
+                <li style={{ marginBottom: 0 }}>
+                  {content.appliedStateBundle.morningRestartRerunOnlyIf}
                 </li>
               </ol>
             </div>
