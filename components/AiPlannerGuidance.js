@@ -151,13 +151,17 @@ const PHASE_CONTENT = {
   },
   fallback: {
     label: "Backup path — you’re still in good shape",
-    hint: "The full AI pass didn’t complete this time. A backup review is ready so you can keep moving with low pressure.",
-    detail: "Nothing changed without your approval. You can use what’s here now, pause, or retry for a full pass later.",
+    hint: "The full AI pass didn’t complete this time. A calm backup review is ready so you can still make progress.",
+    detail: "Your tasks haven’t changed. You stay in control of if and when any single suggestion is applied.",
     trustBundle: {
-      safety: "Pausing is safe — nothing is lost and no penalty builds up.",
-      resume: "When you return, you pick up right here; there’s no catch-up.",
-      useful: "The backup review is useful right now: pick one workable option if you like, or skip and revisit later.",
-      nextStep: "Next step: use something that helps, tweak it, or leave it and come back when it fits.",
+      safety:
+        "Each suggestion is optional and applied one at a time — approving one only updates that single task and leaves the rest exactly as they are.",
+      useful:
+        "Scan for a single suggestion that clearly helps your Next 3; approve just that one and ignore or dismiss anything that doesn’t feel useful.",
+      resume:
+        "If nothing feels right, keep working your current queue as-is and try another AI pass later — there’s no penalty for waiting.",
+      nextStep:
+        "Next step: either take one low-pressure tweak, or keep your existing plan and revisit suggestions when you have more energy.",
     },
     icon: "◇",
     color: "#92400e",
@@ -252,7 +256,7 @@ export default function AiPlannerGuidance({
           {phase === "fallback" && content.trustBundle && (
             <div
               role="region"
-              aria-label="Fallback guidance"
+              aria-label="Fallback action path"
               style={{
                 marginTop: 8,
                 padding: "10px 12px",
@@ -264,21 +268,29 @@ export default function AiPlannerGuidance({
                 color: "#78350f",
               }}
             >
-              <div style={{ fontWeight: 600, marginBottom: 6, color: "#92400e" }}>
-                You can keep moving — here’s what matters:
+              <div style={{ fontWeight: 600, marginBottom: 4, color: "#92400e" }}>
+                Calm backup action path
               </div>
-              <ul style={{ margin: 0, paddingLeft: 18 }}>
+              {reviewSummary && (
+                <div style={{ marginBottom: 6, color: "#6b7280" }}>
+                  <span style={{ fontWeight: 600, color: "#92400e" }}>Suggestions on deck:</span>{" "}
+                  {reviewSummary.total} suggestion{reviewSummary.total === 1 ? "" : "s"} ·{" "}
+                  {reviewSummary.items.join(" · ")}. You can safely ignore them all or
+                  approve just one that clearly helps.
+                </div>
+              )}
+              <ol style={{ margin: 0, paddingLeft: 18 }}>
                 <li style={{ marginBottom: 4 }}>{content.trustBundle.safety}</li>
-                <li style={{ marginBottom: 4 }}>{content.trustBundle.resume}</li>
                 <li style={{ marginBottom: 4 }}>{content.trustBundle.useful}</li>
+                <li style={{ marginBottom: 4 }}>{content.trustBundle.resume}</li>
                 <li style={{ marginBottom: 0 }}>{content.trustBundle.nextStep}</li>
-              </ul>
+              </ol>
             </div>
           )}
         </div>
       </div>
 
-      {reviewSummary && (
+      {reviewSummary && phase !== "fallback" && (
         <div
           style={{
             padding: "10px 12px",
@@ -297,9 +309,7 @@ export default function AiPlannerGuidance({
             {reviewSummary.items.join(" · ")}
           </div>
           <div style={{ color: "#6b7280", marginTop: 4 }}>
-            {phase === "fallback"
-              ? "You only need one good option. You don't need to decide right now — pick what feels useful, tweak it, or revisit when it feels right."
-              : "Review them one at a time — approving one suggestion won’t apply the others."}
+            Review them one at a time — approving one suggestion won’t apply the others.
           </div>
         </div>
       )}
