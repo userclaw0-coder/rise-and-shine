@@ -78,18 +78,20 @@ const KEEP_WORKING_THRESHOLD =
 const RERUN_AVOID_THRESHOLD =
   "Avoid rerun when: you just applied one suggestion and are still on the same Next 3 — that’s reassurance churn, not progress.";
 
-// Packet 74: keep-working contract bundle — one denser post-apply layer for do-now clarity + progress-is-real proof + optional revisit boundaries + rerun-only-when-worth-it signals
-const KEEP_WORKING_CONTRACT_TITLE = "Keep‑working contract";
-const KEEP_WORKING_CONTRACT_SUBTITLE =
-  "Do now, proof you can keep executing, optional quick revisit boundaries, and full rerun thresholds — in one place.";
-const KEEP_WORKING_DO_NOW =
-  "Close this panel and start the next task from your updated Next 3.";
-const KEEP_WORKING_PROOF_INTRO =
-  "Proof you can keep moving without reopening the planner:";
-const KEEP_WORKING_QUICK_REVISIT_BOUNDARY =
-  "Optional quick revisit (≤5 minutes): only if you can name one exact upgrade — stop after one card.";
-const KEEP_WORKING_FULL_RERUN_SIGNAL =
-  "Full rerun is worth interrupting for only after meaningful change (finished a task/real chunk, Next 3 changed, constraints changed) or if you’re stuck/wrong for >10 minutes.";
+// Packet 74: keep-working contract bundle — prior denser post-apply layer. Packet 75 refines it into a clearer "continue with confidence" surface.
+
+// Packet 75: continue-with-confidence bundle — one dense post-apply layer that separates do-now, ignore-for-now, optional check-back timing, and full-rerun thresholds
+const CONTINUE_WITH_CONFIDENCE_TITLE = "Continue with confidence";
+const CONTINUE_WITH_CONFIDENCE_SUBTITLE =
+  "Do next (now), what to ignore for now, an optional check‑back window, and when a full rerun is actually worth interrupting execution.";
+const CWC_DO_NEXT_NOW =
+  "Start the next task from your updated Next 3 (then keep going).";
+const CWC_IGNORE_FOR_NOW =
+  "Ignore for now: remaining cards, planner verification, and any urge to rerun “just to make sure” — your plan is already updated and bounded to what you approved.";
+const CWC_OPTIONAL_CHECKBACK_TIMING =
+  "Optional check‑back: after you finish one task (or after ~60–120 minutes), take ≤2 minutes to confirm your Next 3 still feels right. If one card is an obvious upgrade, do just one — then stop.";
+const CWC_FULL_RERUN_BOUNDARY =
+  "Full rerun: only when something meaningfully changed (finished a task/real chunk, Next 3 changed, constraints changed) or you’re stuck/wrong for >10 minutes. Otherwise keep executing.";
 
 // Packet 64: Updated plan recap bundle — what changed, what to do now, when safe to ignore
 const RECAP_WHAT_CHANGED_FALLBACK =
@@ -573,7 +575,7 @@ export default function AiPlannerGuidance({
           {showAppliedState && content.appliedStateBundle && (
             <div
               role="region"
-              aria-label="Keep-working contract after apply"
+              aria-label="Continue with confidence after apply"
               style={{
                 marginTop: 8,
                 padding: "10px 12px",
@@ -586,10 +588,10 @@ export default function AiPlannerGuidance({
               }}
             >
               <div style={{ fontWeight: 700, marginBottom: 2, color: "#047857" }}>
-                {KEEP_WORKING_CONTRACT_TITLE}
+                {CONTINUE_WITH_CONFIDENCE_TITLE}
               </div>
               <div style={{ fontSize: 12, color: "#047857", marginBottom: 10 }}>
-                {KEEP_WORKING_CONTRACT_SUBTITLE}
+                {CONTINUE_WITH_CONFIDENCE_SUBTITLE}
               </div>
               <div
                 style={{
@@ -600,13 +602,13 @@ export default function AiPlannerGuidance({
                   border: "1px solid #6ee7b7",
                 }}
               >
-                <div style={{ marginBottom: 8, color: "#047857" }}>
-                  <span style={{ fontWeight: 800 }}>Do now:</span> {KEEP_WORKING_DO_NOW}
-                  {nextActionLabel ? <span style={{ color: "#065f46" }}> ({nextActionLabel})</span> : null}
+                <div style={{ marginBottom: 10, color: "#047857" }}>
+                  <span style={{ fontWeight: 800 }}>Do next (now):</span> {CWC_DO_NEXT_NOW}{" "}
+                  {nextActionLabel ? <span style={{ color: "#065f46" }}>({nextActionLabel})</span> : null}
                 </div>
 
-                <div style={{ marginBottom: 8 }}>
-                  <div style={{ fontWeight: 800, marginBottom: 4 }}>Progress proof</div>
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontWeight: 800, marginBottom: 4 }}>Execution proof</div>
                   <div style={{ marginBottom: 4 }}>
                     <span style={{ fontWeight: 700 }}>Applied:</span>{" "}
                     {appliedMessage && isAppliedSuccessMessage(appliedMessage)
@@ -627,7 +629,7 @@ export default function AiPlannerGuidance({
                   </div>
                 </div>
 
-                <div style={{ fontWeight: 800, marginBottom: 6 }}>{KEEP_WORKING_PROOF_INTRO}</div>
+                <div style={{ fontWeight: 800, marginBottom: 6 }}>Why you can keep going</div>
                 <ul style={{ margin: 0, paddingLeft: 16 }}>
                   {keepWorkingProofLines.map((line) => (
                     <li key={line} style={{ marginBottom: 4 }}>
@@ -640,23 +642,22 @@ export default function AiPlannerGuidance({
               <div style={{ fontWeight: 800, marginBottom: 4, color: "#047857" }}>
                 Boundaries (so you don’t reopen the planner by default)
               </div>
-              {reviewSummary && reviewSummary.total > 0 && (
-                <div style={{ marginBottom: 6, color: "#047857" }}>
-                  <span style={{ fontWeight: 700 }}>Remaining:</span>{" "}
-                  {reviewSummary.total} suggestion{reviewSummary.total === 1 ? "" : "s"} · {reviewSummary.items.join(" · ")}.
-                </div>
-              )}
               <ul style={{ margin: 0, paddingLeft: 16 }}>
                 <li style={{ marginBottom: 6 }}>
                   <span style={{ fontWeight: 800 }}>Keep working:</span> {KEEP_WORKING_THRESHOLD} {AUTONOMY_WHEN_PLAN_STILL_GOOD}
                 </li>
                 <li style={{ marginBottom: 6 }}>
-                  <span style={{ fontWeight: 800 }}>Quick revisit:</span> {KEEP_WORKING_QUICK_REVISIT_BOUNDARY}{" "}
-                  {AUTONOMY_WHEN_QUICK_REVISIT_HELPS}
+                  <span style={{ fontWeight: 800 }}>Ignore for now:</span>{" "}
+                  {reviewSummary && reviewSummary.total > 0
+                    ? `Remaining cards (${reviewSummary.total}): ${reviewSummary.items.join(" · ")}. ${CWC_IGNORE_FOR_NOW}`
+                    : CWC_IGNORE_FOR_NOW}
                 </li>
                 <li style={{ marginBottom: 6 }}>
-                  <span style={{ fontWeight: 800 }}>Full rerun:</span> {KEEP_WORKING_FULL_RERUN_SIGNAL} {RERUN_AVOID_THRESHOLD}{" "}
-                  {AUTONOMY_WHEN_FULL_RERUN_WORTHWHILE}
+                  <span style={{ fontWeight: 800 }}>Optional check‑back:</span> {CWC_OPTIONAL_CHECKBACK_TIMING}
+                </li>
+                <li style={{ marginBottom: 6 }}>
+                  <span style={{ fontWeight: 800 }}>Full rerun:</span> {CWC_FULL_RERUN_BOUNDARY} {RERUN_AVOID_THRESHOLD}{" "}
+                  {AUTONOMY_WHEN_TO_AVOID_RERUN} {AUTONOMY_WHEN_FULL_RERUN_WORTHWHILE}
                 </li>
                 <li style={{ marginBottom: 0 }}>
                   <span style={{ fontWeight: 800 }}>Stop rule:</span> {SELF_TRUST_STOP_RULE}
