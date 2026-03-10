@@ -1,0 +1,55 @@
+Implement rise-and-shine packet 65: AI Planner post-apply confidence bundle.
+
+Goal
+- Build on the AI Planner updated plan recap bundle by making the post-apply state feel fully trustworthy at a glance: clarify what changed, what stayed the same, what to do now, and when the planner can safely stay out of the way.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat-ai-planner-post-apply-confidence-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-post-apply-confidence-bundle
+
+Scope
+- Bundle adjacent post-apply confidence, what-stayed-the-same clarity, and planner-can-wait guidance into one coherent Today planner layer.
+- Improve the planner experience so users can more clearly understand after applying one suggestion:
+  - what changed in their plan,
+  - what stayed stable enough to trust,
+  - what the best immediate next move is,
+  - and when they can safely keep working without reopening the planner.
+- Prefer one coherent recap/confidence treatment over scattered reassurance copy or broad page changes.
+- Keep the change narrow and local to Today planner guidance / review / apply surfaces.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth, analytics, or backend prompt/model changes.
+- No broad redesign of the Today page.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a small hook or summary treatment is clearly warranted
+- related planner review/apply components only if clearly necessary
+
+Acceptance criteria
+- After applying one suggestion, users can quickly see what changed and what stayed the same.
+- Users can tell what to do next without reopening the planner.
+- Users can tell when the planner can safely wait for a while.
+- Users can keep moving today without feeling pulled back into repeated planner checks.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups
