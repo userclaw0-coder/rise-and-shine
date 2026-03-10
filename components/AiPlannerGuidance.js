@@ -1,5 +1,8 @@
 // Packet 63: AI Planner re-entry decision bundle — when to keep working, quick revisit, or full rerun; lightest next step
 // Packet 65: AI Planner post-apply confidence bundle — what stayed the same, planner can wait, trustworthy at a glance
+// Packet 66: AI Planner keep-moving-without-recheck bundle — one coherent treatment: next-step momentum, planner-can-wait, revisit threshold
+const KEEP_MOVING_LEAD =
+  "Keep moving — no need to recheck the planner now. Your best next step is clear; the planner can wait.";
 const APPLIED_KEEP_WORKING =
   "Keep working: your best move is from the updated plan. Pick the next task in your queue and keep going — no need to review every remaining suggestion or run Refine again. Lightest step: work your Next 3.";
 const APPLIED_QUICK_REVISIT =
@@ -231,7 +234,9 @@ const PHASE_CONTENT = {
     // Packet 63: re-entry decision bundle — keep working, quick revisit, full rerun, stay in motion
     // Packet 64: updated plan recap — what changed, do now, safe to ignore, when revisit worth it
     // Packet 65: post-apply confidence — what stayed the same, planner can wait
+    // Packet 66: keep-moving bundle — one coherent action-ready treatment
     appliedStateBundle: {
+      keepMovingLead: KEEP_MOVING_LEAD,
       title: "Updated plan recap",
       confidenceHeadline: "Your plan is updated and trustworthy at a glance.",
       recapWhatChangedFallback: RECAP_WHAT_CHANGED_FALLBACK,
@@ -426,7 +431,7 @@ export default function AiPlannerGuidance({
           {showAppliedState && content.appliedStateBundle && (
             <div
               role="region"
-              aria-label="Post-apply confidence: what changed, what stayed the same, what to do now, when the planner can wait"
+              aria-label="Keep moving: best next move, when to keep working instead of rechecking, when to revisit or rerun"
               style={{
                 marginTop: 8,
                 padding: "10px 12px",
@@ -438,43 +443,52 @@ export default function AiPlannerGuidance({
                 color: "#065f46",
               }}
             >
-              <div style={{ fontWeight: 600, marginBottom: 6, color: "#047857" }}>
-                {content.appliedStateBundle.title}
-              </div>
-              {content.appliedStateBundle.confidenceHeadline && (
-                <div style={{ marginBottom: 6, color: "#047857" }}>
-                  {content.appliedStateBundle.confidenceHeadline}
+              {content.appliedStateBundle.keepMovingLead && (
+                <div style={{ fontWeight: 600, marginBottom: 6, color: "#047857" }}>
+                  {content.appliedStateBundle.keepMovingLead}
                 </div>
               )}
-              <div style={{ marginBottom: 6 }}>
-                <span style={{ fontWeight: 600, color: "#047857" }}>What changed:</span>{" "}
-                {appliedMessage && isAppliedSuccessMessage(appliedMessage)
-                  ? appliedMessage.trim()
-                  : content.appliedStateBundle.recapWhatChangedFallback}
+              <div style={{ fontWeight: 600, marginBottom: 4, color: "#047857" }}>
+                Best next move
               </div>
               <div style={{ marginBottom: 6 }}>
-                <span style={{ fontWeight: 600, color: "#047857" }}>What stayed the same:</span>{" "}
-                {content.appliedStateBundle.recapWhatStayedSame}
-              </div>
-              <div style={{ marginBottom: 6 }}>
-                <span style={{ fontWeight: 600, color: "#047857" }}>Do now:</span>{" "}
                 {content.appliedStateBundle.recapDoNow}
               </div>
+              <div style={{ fontWeight: 600, marginBottom: 4, color: "#047857" }}>
+                Keep working — no need to recheck
+              </div>
               <div style={{ marginBottom: 6 }}>
-                <span style={{ fontWeight: 600, color: "#047857" }}>Planner can wait:</span>{" "}
                 {content.appliedStateBundle.recapPlannerCanWait}
               </div>
-              <div style={{ marginBottom: reviewSummary?.total > 0 ? 6 : 8 }}>
-                <span style={{ fontWeight: 600, color: "#047857" }}>When to revisit or rerun:</span>{" "}
+              <div style={{ fontWeight: 600, marginBottom: 4, color: "#047857" }}>
+                When a revisit is worth it (vs unnecessary recheck)
+              </div>
+              <div style={{ marginBottom: 6 }}>
                 {content.appliedStateBundle.recapWhenRevisitWorthIt}
               </div>
               {reviewSummary && reviewSummary.total > 0 && (
-                <div style={{ marginBottom: 8, color: "#047857" }}>
+                <div style={{ marginBottom: 6, color: "#047857" }}>
                   <span style={{ fontWeight: 600 }}>Remaining:</span>{" "}
                   {reviewSummary.total} suggestion{reviewSummary.total === 1 ? "" : "s"} ·{" "}
                   {reviewSummary.items.join(" · ")}. Quick peek later if one helps; the rest can wait.
                 </div>
               )}
+              <div style={{ fontWeight: 600, marginBottom: 4, color: "#047857" }}>
+                When a full rerun is worth it (right now it isn’t)
+              </div>
+              <div style={{ marginBottom: 8 }}>
+                {content.appliedStateBundle.recapSafeToIgnore}
+              </div>
+              <div style={{ marginBottom: 4 }}>
+                <span style={{ fontWeight: 600, color: "#047857" }}>What changed:</span>{" "}
+                {appliedMessage && isAppliedSuccessMessage(appliedMessage)
+                  ? appliedMessage.trim()
+                  : content.appliedStateBundle.recapWhatChangedFallback}
+              </div>
+              <div style={{ marginBottom: 8 }}>
+                <span style={{ fontWeight: 600, color: "#047857" }}>What stayed the same:</span>{" "}
+                {content.appliedStateBundle.recapWhatStayedSame}
+              </div>
               <div style={{ fontWeight: 600, marginBottom: 4, color: "#047857" }}>
                 {content.appliedStateBundle.reEntryTitle}
               </div>
