@@ -191,6 +191,16 @@ const PHASE_CONTENT = {
       nextStep:
         "Quickest low-risk move: scan the list below, approve one suggestion that clearly helps, or dismiss and keep working your queue as-is. You can safely ignore anything that feels off and ask for a new set later.",
     },
+    continuityBundle: {
+      afterApprove:
+        "Right after you approve one suggestion, that change is applied and the card goes away. You can approve another, or stop here and work your queue — no need to review everything.",
+      afterDismiss:
+        "After you dismiss one, that suggestion is removed from view and your tasks are unchanged. You can dismiss more, approve another, or simply continue with your current plan.",
+      oneStep:
+        "One small move is enough: approve one or dismiss one, then continue. You’re not expected to do a full pass — the planner stays steady either way.",
+      momentum:
+        "Staying steady: one approval or one dismiss keeps momentum. You can leave the rest for later or run \"Refine these 3 with AI\" again anytime for a fresh set.",
+    },
     icon: "●",
     color: "#059669",
     bg: "#ecfdf5",
@@ -199,7 +209,8 @@ const PHASE_CONTENT = {
   empty: {
     label: "No new suggestions this pass",
     hint: "That can be a good result — it usually means your current Next 3 already looks clear enough to keep moving.",
-    detail: "This is different from an error: the planner finished safely, found nothing worth changing, and left your tasks exactly as they were.",
+    detail:
+      "This is different from an error: the planner finished safely, found nothing worth changing, and left your tasks exactly as they were. Work your queue as-is, or run \"Refine these 3 with AI\" again anytime for a fresh set.",
     icon: "✓",
     color: "#059669",
     bg: "#ecfdf5",
@@ -327,6 +338,32 @@ export default function AiPlannerGuidance({
                 <li style={{ marginBottom: 4 }}>{content.readinessBundle.whatStaysUntouched}</li>
                 <li style={{ marginBottom: 4 }}>{content.readinessBundle.whyNow}</li>
                 <li style={{ marginBottom: 0 }}>{content.readinessBundle.nextStep}</li>
+              </ol>
+            </div>
+          )}
+          {phase === "review" && content.continuityBundle && (
+            <div
+              role="region"
+              aria-label="Post-review continuity"
+              style={{
+                marginTop: 8,
+                padding: "10px 12px",
+                borderRadius: 8,
+                background: "#f0fdf4",
+                border: "1px solid #86efac",
+                fontSize: 12,
+                lineHeight: 1.5,
+                color: "#065f46",
+              }}
+            >
+              <div style={{ fontWeight: 600, marginBottom: 4, color: "#047857" }}>
+                What happens next — stay steady
+              </div>
+              <ol style={{ margin: 0, paddingLeft: 18 }}>
+                <li style={{ marginBottom: 4 }}>{content.continuityBundle.afterApprove}</li>
+                <li style={{ marginBottom: 4 }}>{content.continuityBundle.afterDismiss}</li>
+                <li style={{ marginBottom: 4 }}>{content.continuityBundle.oneStep}</li>
+                <li style={{ marginBottom: 0 }}>{content.continuityBundle.momentum}</li>
               </ol>
             </div>
           )}
