@@ -143,6 +143,20 @@ const DONE_FOR_TODAY_NORMAL_RESUME_VS_RERUN =
 const DONE_FOR_TODAY_RERUN_TRIGGERS =
   "Overnight rerun is worth it when: your day’s focus shifted (new deadline, new blocker, big surprise work), your Next 3 feels wrong for more than ~10 minutes, or you want a fresh set after finishing a real chunk tomorrow. It’s not needed just because a night passed.";
 
+// Packet 82: AI Planner end-of-day carryforward bundle — overnight contract,
+// tomorrow first move, plan-still-fits signals, and rerun-only-if shifts.
+const CARRYFORWARD_TITLE = "Overnight carryforward contract";
+const CARRYFORWARD_HEADLINE =
+  "Tonight can be a handoff, not a reset — your updated plan can rest as-is and still give you a clear first move tomorrow.";
+const CARRYFORWARD_WHAT_STAYS_STABLE =
+  "What safely carries forward overnight: your updated Next 3, any remaining cards you didn’t touch, and the rest of your backlog. None of them need a second pass just because a night passed — they stay valid as-is unless tomorrow’s constraints really change.";
+const CARRYFORWARD_FIRST_MOVE_TOMORROW =
+  "Tomorrow’s first useful move: open Today and start from the first not-done task in your updated Next 3. If that still fits, treat it as your default starting point — no rerun, no re-scan, just begin there and keep going.";
+const CARRYFORWARD_PLAN_STILL_FITS_SIGNALS =
+  "Signs the current plan still fits: your first task still looks like a reasonable use of your energy, nothing big changed in deadlines or blockers, and you’re not meaningfully stuck (≤10 minutes of friction) once you start. In that case, keep working from your existing Next 3 without reopening the planner.";
+const CARRYFORWARD_RERUN_ONLY_IF_OVERNIGHT_SHIFT =
+  "When an overnight change really justifies a rerun: a new blocker or deadline reshapes what “today” should be, surprise work crowds out your current focus, or your Next 3 feels wrong for more than ~10 minutes even after trying the first task. That’s when a single fresh pass is worth it — not simply because it’s a new day.";
+
 // Packet 64: Updated plan recap bundle — what changed, what to do now, when safe to ignore
 const RECAP_WHAT_CHANGED_FALLBACK =
   "One suggestion was applied; your plan is updated.";
@@ -401,6 +415,13 @@ const PHASE_CONTENT = {
       quickRevisitSignals: QUICK_REVISIT_SIGNALS,
       fullRerunWorthwhile: FULL_RERUN_WORTHWHILE,
       fullRerunChurnAvoid: FULL_RERUN_CHURN_AVOID,
+      // Packet 82: overnight carryforward contract
+      carryforwardTitle: CARRYFORWARD_TITLE,
+      carryforwardHeadline: CARRYFORWARD_HEADLINE,
+      carryforwardWhatStaysStable: CARRYFORWARD_WHAT_STAYS_STABLE,
+      carryforwardFirstMoveTomorrow: CARRYFORWARD_FIRST_MOVE_TOMORROW,
+      carryforwardPlanStillFitsSignals: CARRYFORWARD_PLAN_STILL_FITS_SIGNALS,
+      carryforwardRerunOnlyIfOvernightShift: CARRYFORWARD_RERUN_ONLY_IF_OVERNIGHT_SHIFT,
     },
     icon: "●",
     color: "#059669",
@@ -856,6 +877,59 @@ export default function AiPlannerGuidance({
                   <li style={{ marginBottom: 0 }}>{DONE_FOR_TODAY_RERUN_TRIGGERS}</li>
                 </ol>
               </div>
+            </div>
+          )}
+          {showAppliedState && content.appliedStateBundle && (
+            <div
+              role="region"
+              aria-label="Overnight carryforward contract"
+              style={{
+                marginTop: 10,
+                padding: "10px 10px 8px",
+                borderRadius: 6,
+                background: "#f9fafb",
+                border: "1px solid #e5e7eb",
+              }}
+            >
+              <div
+                style={{
+                  fontWeight: 900,
+                  marginBottom: 4,
+                  color: "#111827",
+                }}
+              >
+                {content.appliedStateBundle.carryforwardTitle}
+              </div>
+              <div style={{ marginBottom: 6, color: "#374151", fontSize: 12 }}>
+                {content.appliedStateBundle.carryforwardHeadline}
+              </div>
+              <ol
+                style={{
+                  margin: 0,
+                  paddingLeft: 18,
+                  fontSize: 12,
+                  color: "#4b5563",
+                  lineHeight: 1.5,
+                }}
+              >
+                <li style={{ marginBottom: 4 }}>
+                  {content.appliedStateBundle.carryforwardWhatStaysStable}
+                </li>
+                <li style={{ marginBottom: 4 }}>
+                  {content.appliedStateBundle.carryforwardFirstMoveTomorrow}{" "}
+                  {nextActionLabel ? (
+                    <span style={{ fontWeight: 600 }}>
+                      Tomorrow restart cue: {nextActionLabel}
+                    </span>
+                  ) : null}
+                </li>
+                <li style={{ marginBottom: 4 }}>
+                  {content.appliedStateBundle.carryforwardPlanStillFitsSignals}
+                </li>
+                <li style={{ marginBottom: 0 }}>
+                  {content.appliedStateBundle.carryforwardRerunOnlyIfOvernightShift}
+                </li>
+              </ol>
             </div>
           )}
         </div>
