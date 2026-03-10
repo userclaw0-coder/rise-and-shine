@@ -80,18 +80,18 @@ const RERUN_AVOID_THRESHOLD =
 
 // Packet 74: keep-working contract bundle — prior denser post-apply layer. Packet 75 refines it into a clearer "continue with confidence" surface.
 
-// Packet 75: continue-with-confidence bundle — one dense post-apply layer that separates do-now, ignore-for-now, optional check-back timing, and full-rerun thresholds
-const CONTINUE_WITH_CONFIDENCE_TITLE = "Continue with confidence";
-const CONTINUE_WITH_CONFIDENCE_SUBTITLE =
-  "Do next (now), what to ignore for now, an optional check‑back window, and when a full rerun is actually worth interrupting execution.";
-const CWC_DO_NEXT_NOW =
-  "Start the next task from your updated Next 3 (then keep going).";
-const CWC_IGNORE_FOR_NOW =
-  "Ignore for now: remaining cards, planner verification, and any urge to rerun “just to make sure” — your plan is already updated and bounded to what you approved.";
-const CWC_OPTIONAL_CHECKBACK_TIMING =
-  "Optional check‑back: after you finish one task (or after ~60–120 minutes), take ≤2 minutes to confirm your Next 3 still feels right. If one card is an obvious upgrade, do just one — then stop.";
-const CWC_FULL_RERUN_BOUNDARY =
-  "Full rerun: only when something meaningfully changed (finished a task/real chunk, Next 3 changed, constraints changed) or you’re stuck/wrong for >10 minutes. Otherwise keep executing.";
+// Packet 76: AI Planner execution pace bundle — one dense Today layer: focus-now, what-can-wait, later-today revisit timing, rerun escalation triggers
+const EXECUTION_PACE_TITLE = "Execution pace (today)";
+const EXECUTION_PACE_SUBTITLE =
+  "A single at-a-glance pace layer: focus now, what can wait, an optional later-today revisit window, and clear rerun triggers.";
+const EP_NOW =
+  "Focus now: start the next task from your updated Next 3 (then keep going).";
+const EP_CAN_WAIT =
+  "Can wait: remaining cards + any “verify again” urge. Your plan is already updated and bounded to what you approved.";
+const EP_LATER_TODAY =
+  "Later today (optional): after you finish one task (or after ~60–120 minutes), take ≤2 minutes to confirm your Next 3 still feels right. If one card is an obvious upgrade, do just one — then stop.";
+const EP_RERUN_ONLY_IF =
+  "Rerun only if: you finished a real chunk, your Next 3 changed, constraints changed, or you’re stuck/wrong for >10 minutes. Otherwise keep executing.";
 
 // Packet 64: Updated plan recap bundle — what changed, what to do now, when safe to ignore
 const RECAP_WHAT_CHANGED_FALLBACK =
@@ -434,17 +434,6 @@ export default function AiPlannerGuidance({
     return null;
   })();
 
-  const keepWorkingProofLines = [
-    nextActionLabel ? `Next action is concrete: ${nextActionLabel}.` : "Next action is concrete: you can start the next task now.",
-    "Progress is real: the approved change already updated your tasks/queue — nothing is “pending” behind the scenes.",
-    "Only the approved item changed (bounded scope).",
-    reviewSummary && reviewSummary.total > 0
-      ? `Remaining cards are optional: ${reviewSummary.total} suggestion${reviewSummary.total === 1 ? "" : "s"} can wait.`
-      : "No pending cards: nothing is waiting on review to keep moving.",
-    AUTONOMY_SAFE_PAUSE_RULE,
-    "No rerun needed to validate: keep executing unless a threshold below is met.",
-  ];
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
       <div
@@ -575,7 +564,7 @@ export default function AiPlannerGuidance({
           {showAppliedState && content.appliedStateBundle && (
             <div
               role="region"
-              aria-label="Continue with confidence after apply"
+              aria-label="Execution pace after apply"
               style={{
                 marginTop: 8,
                 padding: "10px 12px",
@@ -588,81 +577,124 @@ export default function AiPlannerGuidance({
               }}
             >
               <div style={{ fontWeight: 700, marginBottom: 2, color: "#047857" }}>
-                {CONTINUE_WITH_CONFIDENCE_TITLE}
+                {EXECUTION_PACE_TITLE}
               </div>
               <div style={{ fontSize: 12, color: "#047857", marginBottom: 10 }}>
-                {CONTINUE_WITH_CONFIDENCE_SUBTITLE}
+                {EXECUTION_PACE_SUBTITLE}
               </div>
+
               <div
                 style={{
-                  marginBottom: 8,
+                  marginBottom: 10,
                   padding: "8px 10px",
                   borderRadius: 6,
                   background: "#d1fae5",
                   border: "1px solid #6ee7b7",
                 }}
               >
-                <div style={{ marginBottom: 10, color: "#047857" }}>
-                  <span style={{ fontWeight: 800 }}>Do next (now):</span> {CWC_DO_NEXT_NOW}{" "}
-                  {nextActionLabel ? <span style={{ color: "#065f46" }}>({nextActionLabel})</span> : null}
+                <div style={{ marginBottom: 4 }}>
+                  <span style={{ fontWeight: 800 }}>Applied:</span>{" "}
+                  {appliedMessage && isAppliedSuccessMessage(appliedMessage)
+                    ? appliedMessage.trim()
+                    : content.appliedStateBundle.recapWhatChangedFallback}
                 </div>
-
-                <div style={{ marginBottom: 10 }}>
-                  <div style={{ fontWeight: 800, marginBottom: 4 }}>Execution proof</div>
-                  <div style={{ marginBottom: 4 }}>
-                    <span style={{ fontWeight: 700 }}>Applied:</span>{" "}
-                    {appliedMessage && isAppliedSuccessMessage(appliedMessage)
-                      ? appliedMessage.trim()
-                      : content.appliedStateBundle.recapWhatChangedFallback}
-                  </div>
-                  {appliedChangedLines && appliedChangedLines.length > 0 && (
-                    <ul style={{ margin: "6px 0 0", paddingLeft: 16 }}>
-                      {appliedChangedLines.map((line) => (
-                        <li key={line} style={{ marginBottom: 4 }}>
-                          {line}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  <div style={{ marginTop: 8 }}>
-                    <span style={{ fontWeight: 700 }}>Stable:</span> {AUTONOMY_KEEP_MOVING_PROOF}
-                  </div>
+                {appliedChangedLines && appliedChangedLines.length > 0 && (
+                  <ul style={{ margin: "6px 0 0", paddingLeft: 16 }}>
+                    {appliedChangedLines.slice(0, 3).map((line) => (
+                      <li key={line} style={{ marginBottom: 4 }}>
+                        {line}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div style={{ marginTop: 8, color: "#047857" }}>
+                  <span style={{ fontWeight: 800 }}>Stable:</span> {AUTONOMY_KEEP_MOVING_PROOF}
                 </div>
-
-                <div style={{ fontWeight: 800, marginBottom: 6 }}>Why you can keep going</div>
-                <ul style={{ margin: 0, paddingLeft: 16 }}>
-                  {keepWorkingProofLines.map((line) => (
-                    <li key={line} style={{ marginBottom: 4 }}>
-                      {line}
-                    </li>
-                  ))}
-                </ul>
               </div>
 
-              <div style={{ fontWeight: 800, marginBottom: 4, color: "#047857" }}>
-                Boundaries (so you don’t reopen the planner by default)
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                  gap: 8,
+                }}
+              >
+                <div
+                  style={{
+                    padding: "8px 10px",
+                    borderRadius: 6,
+                    background: "#f0fdf4",
+                    border: "1px solid #86efac",
+                  }}
+                >
+                  <div style={{ fontWeight: 900, marginBottom: 4, color: "#047857" }}>Now</div>
+                  <div style={{ marginBottom: 6 }}>
+                    <span style={{ fontWeight: 800 }}>Do next:</span> {EP_NOW}{" "}
+                    {nextActionLabel ? (
+                      <span style={{ color: "#065f46" }}>({nextActionLabel})</span>
+                    ) : null}
+                  </div>
+                  <div style={{ color: "#065f46" }}>
+                    <span style={{ fontWeight: 800 }}>Keep working when:</span> {KEEP_WORKING_THRESHOLD}
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    padding: "8px 10px",
+                    borderRadius: 6,
+                    background: "#f0fdf4",
+                    border: "1px solid #86efac",
+                  }}
+                >
+                  <div style={{ fontWeight: 900, marginBottom: 4, color: "#047857" }}>Can wait</div>
+                  <div style={{ marginBottom: 6 }}>
+                    <span style={{ fontWeight: 800 }}>Ignore for now:</span>{" "}
+                    {reviewSummary && reviewSummary.total > 0
+                      ? `Remaining cards (${reviewSummary.total}): ${reviewSummary.items.join(" · ")}. ${EP_CAN_WAIT}`
+                      : EP_CAN_WAIT}
+                  </div>
+                  <div style={{ color: "#065f46" }}>
+                    <span style={{ fontWeight: 800 }}>Stop rule:</span> {SELF_TRUST_STOP_RULE}
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    padding: "8px 10px",
+                    borderRadius: 6,
+                    background: "#f0fdf4",
+                    border: "1px solid #86efac",
+                  }}
+                >
+                  <div style={{ fontWeight: 900, marginBottom: 4, color: "#047857" }}>
+                    Later today (optional)
+                  </div>
+                  <div style={{ marginBottom: 6 }}>
+                    <span style={{ fontWeight: 800 }}>Quick revisit:</span> {EP_LATER_TODAY}
+                  </div>
+                  <div style={{ color: "#065f46" }}>
+                    <span style={{ fontWeight: 800 }}>Rule:</span> one card is enough — stop after one.
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    padding: "8px 10px",
+                    borderRadius: 6,
+                    background: "#f0fdf4",
+                    border: "1px solid #86efac",
+                  }}
+                >
+                  <div style={{ fontWeight: 900, marginBottom: 4, color: "#047857" }}>Rerun only if…</div>
+                  <div style={{ marginBottom: 6 }}>
+                    <span style={{ fontWeight: 800 }}>Full rerun:</span> {EP_RERUN_ONLY_IF}
+                  </div>
+                  <div style={{ color: "#065f46" }}>
+                    <span style={{ fontWeight: 800 }}>Avoid rerun when:</span> {RERUN_AVOID_THRESHOLD}
+                  </div>
+                </div>
               </div>
-              <ul style={{ margin: 0, paddingLeft: 16 }}>
-                <li style={{ marginBottom: 6 }}>
-                  <span style={{ fontWeight: 800 }}>Keep working:</span> {KEEP_WORKING_THRESHOLD} {AUTONOMY_WHEN_PLAN_STILL_GOOD}
-                </li>
-                <li style={{ marginBottom: 6 }}>
-                  <span style={{ fontWeight: 800 }}>Ignore for now:</span>{" "}
-                  {reviewSummary && reviewSummary.total > 0
-                    ? `Remaining cards (${reviewSummary.total}): ${reviewSummary.items.join(" · ")}. ${CWC_IGNORE_FOR_NOW}`
-                    : CWC_IGNORE_FOR_NOW}
-                </li>
-                <li style={{ marginBottom: 6 }}>
-                  <span style={{ fontWeight: 800 }}>Optional check‑back:</span> {CWC_OPTIONAL_CHECKBACK_TIMING}
-                </li>
-                <li style={{ marginBottom: 6 }}>
-                  <span style={{ fontWeight: 800 }}>Full rerun:</span> {CWC_FULL_RERUN_BOUNDARY} {RERUN_AVOID_THRESHOLD}{" "}
-                  {AUTONOMY_WHEN_TO_AVOID_RERUN} {AUTONOMY_WHEN_FULL_RERUN_WORTHWHILE}
-                </li>
-                <li style={{ marginBottom: 0 }}>
-                  <span style={{ fontWeight: 800 }}>Stop rule:</span> {SELF_TRUST_STOP_RULE}
-                </li>
-              </ul>
             </div>
           )}
         </div>
