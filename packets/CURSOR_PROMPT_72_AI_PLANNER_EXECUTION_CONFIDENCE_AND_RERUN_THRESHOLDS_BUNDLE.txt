@@ -1,0 +1,55 @@
+Implement rise-and-shine packet 72: AI Planner execution confidence and rerun thresholds bundle.
+
+Goal
+- Build on the AI Planner self-trust bundle by turning the post-apply state into a clearer keep-working contract: combine stronger execution confidence, tighter revisit-versus-rerun thresholds, and more explicit proof that today’s updated plan is still actionable so users can keep moving without reopening the planner for reassurance.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat-ai-planner-execution-confidence-and-rerun-thresholds-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-execution-confidence-and-rerun-thresholds-bundle
+
+Scope
+- Bundle adjacent execution-confidence proof, revisit-versus-rerun thresholds, and keep-moving guidance into one coherent Today planner layer.
+- Improve the planner experience so users can more clearly tell after applying one suggestion:
+  - why the updated plan is still actionable right now,
+  - what exact signal means keep working is still the right move,
+  - what exact signal makes a quick revisit worthwhile,
+  - and what exact signal makes a full rerun worth the interruption.
+- Prefer one coherent execution-confidence treatment over scattered reassurance copy or broad page changes.
+- Keep the change narrow and local to Today planner guidance / review / apply surfaces.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth, analytics, or backend prompt/model changes.
+- No broad redesign of the Today page.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a small hook or summary treatment is clearly warranted
+- related planner review/apply components only if clearly necessary
+
+Acceptance criteria
+- After applying one suggestion, users can tell why the updated plan is still actionable and when not to reopen the planner.
+- Users can distinguish keep working, quick revisit, and full rerun using crisp thresholds instead of vague reassurance.
+- Users can stay in execution mode today with less reassurance-seeking.
+- The change stays narrow, local, and reviewable.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups
