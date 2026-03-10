@@ -1055,15 +1055,8 @@ export default function TodayPage() {
             </span>
           )}
         </div>
-        {appliedMessage && (
-          <p
-            style={{
-              fontSize: 13,
-              color: appliedMessage.toLowerCase().includes("failed") ? "#b91c1c" : "#059669",
-              margin: "0 0 10px",
-              fontWeight: 500,
-            }}
-          >
+        {appliedMessage && appliedMessage.toLowerCase().includes("failed") && (
+          <p style={{ fontSize: 13, color: "#b91c1c", margin: "0 0 10px", fontWeight: 500 }}>
             {appliedMessage}
           </p>
         )}

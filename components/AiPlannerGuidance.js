@@ -78,17 +78,17 @@ const KEEP_WORKING_THRESHOLD =
 const RERUN_AVOID_THRESHOLD =
   "Avoid rerun when: you just applied one suggestion and are still on the same Next 3 — that’s reassurance churn, not progress.";
 
-// Packet 73: execution-mode contract bundle — do-now clarity + keep-working proof + quick-revisit boundaries + rerun-worth-it signals
-const EXECUTION_MODE_CONTRACT_TITLE = "Execution‑mode contract";
-const EXECUTION_MODE_CONTRACT_SUBTITLE =
-  "Do now, trust proof, quick‑revisit boundaries, and rerun‑worth‑it signals — in one place.";
-const EXECUTION_MODE_DO_NOW =
-  "Do now: close this panel and start the next task from your updated Next 3.";
-const EXECUTION_MODE_TRUST_PROOF_INTRO =
-  "Why you can trust the updated plan without another planner pass:";
-const EXECUTION_MODE_QUICK_REVISIT_BOUNDARY =
-  "Quick revisit is useful but optional: only when you can name one exact upgrade and you have ≤5 minutes — stop after one card.";
-const EXECUTION_MODE_FULL_RERUN_SIGNAL =
+// Packet 74: keep-working contract bundle — one denser post-apply layer for do-now clarity + progress-is-real proof + optional revisit boundaries + rerun-only-when-worth-it signals
+const KEEP_WORKING_CONTRACT_TITLE = "Keep‑working contract";
+const KEEP_WORKING_CONTRACT_SUBTITLE =
+  "Do now, proof you can keep executing, optional quick revisit boundaries, and full rerun thresholds — in one place.";
+const KEEP_WORKING_DO_NOW =
+  "Close this panel and start the next task from your updated Next 3.";
+const KEEP_WORKING_PROOF_INTRO =
+  "Proof you can keep moving without reopening the planner:";
+const KEEP_WORKING_QUICK_REVISIT_BOUNDARY =
+  "Optional quick revisit (≤5 minutes): only if you can name one exact upgrade — stop after one card.";
+const KEEP_WORKING_FULL_RERUN_SIGNAL =
   "Full rerun is worth interrupting for only after meaningful change (finished a task/real chunk, Next 3 changed, constraints changed) or if you’re stuck/wrong for >10 minutes.";
 
 // Packet 64: Updated plan recap bundle — what changed, what to do now, when safe to ignore
@@ -432,16 +432,15 @@ export default function AiPlannerGuidance({
     return null;
   })();
 
-  const executionConfidenceProof = [
-    nextActionLabel
-      ? `Next action is concrete: ${nextActionLabel}.`
-      : "Next action is concrete: you can start the next task now.",
+  const keepWorkingProofLines = [
+    nextActionLabel ? `Next action is concrete: ${nextActionLabel}.` : "Next action is concrete: you can start the next task now.",
+    "Progress is real: the approved change already updated your tasks/queue — nothing is “pending” behind the scenes.",
     "Only the approved item changed (bounded scope).",
     reviewSummary && reviewSummary.total > 0
       ? `Remaining cards are optional: ${reviewSummary.total} suggestion${reviewSummary.total === 1 ? "" : "s"} can wait.`
       : "No pending cards: nothing is waiting on review to keep moving.",
     AUTONOMY_SAFE_PAUSE_RULE,
-    "No re-open needed to validate: keep executing unless a threshold below is met.",
+    "No rerun needed to validate: keep executing unless a threshold below is met.",
   ];
 
   return (
@@ -574,7 +573,7 @@ export default function AiPlannerGuidance({
           {showAppliedState && content.appliedStateBundle && (
             <div
               role="region"
-              aria-label="Autonomy after apply: keep-moving proof, safe pause confidence, revisit vs rerun thresholds"
+              aria-label="Keep-working contract after apply"
               style={{
                 marginTop: 8,
                 padding: "10px 12px",
@@ -587,19 +586,10 @@ export default function AiPlannerGuidance({
               }}
             >
               <div style={{ fontWeight: 700, marginBottom: 2, color: "#047857" }}>
-                {EXECUTION_MODE_CONTRACT_TITLE}
+                {KEEP_WORKING_CONTRACT_TITLE}
               </div>
               <div style={{ fontSize: 12, color: "#047857", marginBottom: 10 }}>
-                {EXECUTION_MODE_CONTRACT_SUBTITLE}
-              </div>
-              <div style={{ marginBottom: 10, color: "#047857" }}>
-                <span style={{ fontWeight: 700 }}>Do now:</span> {EXECUTION_MODE_DO_NOW}
-                {nextActionLabel ? (
-                  <span>
-                    {" "}
-                    <span style={{ color: "#065f46" }}>({nextActionLabel})</span>
-                  </span>
-                ) : null}
+                {KEEP_WORKING_CONTRACT_SUBTITLE}
               </div>
               <div
                 style={{
@@ -610,21 +600,15 @@ export default function AiPlannerGuidance({
                   border: "1px solid #6ee7b7",
                 }}
               >
-                <div
-                  style={{
-                    fontWeight: 700,
-                    marginBottom: 6,
-                    fontSize: 11,
-                    color: "#047857",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.02em",
-                  }}
-                >
-                  What changed / what stayed stable
+                <div style={{ marginBottom: 8, color: "#047857" }}>
+                  <span style={{ fontWeight: 800 }}>Do now:</span> {KEEP_WORKING_DO_NOW}
+                  {nextActionLabel ? <span style={{ color: "#065f46" }}> ({nextActionLabel})</span> : null}
                 </div>
+
                 <div style={{ marginBottom: 8 }}>
+                  <div style={{ fontWeight: 800, marginBottom: 4 }}>Progress proof</div>
                   <div style={{ marginBottom: 4 }}>
-                    <span style={{ fontWeight: 700 }}>Changed:</span>{" "}
+                    <span style={{ fontWeight: 700 }}>Applied:</span>{" "}
                     {appliedMessage && isAppliedSuccessMessage(appliedMessage)
                       ? appliedMessage.trim()
                       : content.appliedStateBundle.recapWhatChangedFallback}
@@ -638,57 +622,44 @@ export default function AiPlannerGuidance({
                       ))}
                     </ul>
                   )}
-                </div>
-                <div style={{ marginBottom: 10 }}>
-                  <span style={{ fontWeight: 700 }}>Stable:</span> {AUTONOMY_KEEP_MOVING_PROOF}
+                  <div style={{ marginTop: 8 }}>
+                    <span style={{ fontWeight: 700 }}>Stable:</span> {AUTONOMY_KEEP_MOVING_PROOF}
+                  </div>
                 </div>
 
-                <div
-                  style={{
-                    fontWeight: 700,
-                    marginBottom: 6,
-                    fontSize: 11,
-                    color: "#047857",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.02em",
-                  }}
-                >
-                  Trust proof (plan still actionable)
-                </div>
-                <div style={{ marginBottom: 6 }}>{EXECUTION_MODE_TRUST_PROOF_INTRO}</div>
+                <div style={{ fontWeight: 800, marginBottom: 6 }}>{KEEP_WORKING_PROOF_INTRO}</div>
                 <ul style={{ margin: 0, paddingLeft: 16 }}>
-                  {executionConfidenceProof.map((line) => (
+                  {keepWorkingProofLines.map((line) => (
                     <li key={line} style={{ marginBottom: 4 }}>
                       {line}
                     </li>
                   ))}
                 </ul>
               </div>
-              <div style={{ fontWeight: 600, marginBottom: 4, color: "#047857" }}>
-                Boundaries: keep working vs quick revisit vs full rerun
+
+              <div style={{ fontWeight: 800, marginBottom: 4, color: "#047857" }}>
+                Boundaries (so you don’t reopen the planner by default)
               </div>
               {reviewSummary && reviewSummary.total > 0 && (
                 <div style={{ marginBottom: 6, color: "#047857" }}>
-                  <span style={{ fontWeight: 600 }}>Remaining:</span>{" "}
-                  {reviewSummary.total} suggestion{reviewSummary.total === 1 ? "" : "s"} ·{" "}
-                  {reviewSummary.items.join(" · ")}. Quick peek later if one helps; the rest can wait.
+                  <span style={{ fontWeight: 700 }}>Remaining:</span>{" "}
+                  {reviewSummary.total} suggestion{reviewSummary.total === 1 ? "" : "s"} · {reviewSummary.items.join(" · ")}.
                 </div>
               )}
               <ul style={{ margin: 0, paddingLeft: 16 }}>
                 <li style={{ marginBottom: 6 }}>
-                  <span style={{ fontWeight: 700 }}>Keep working:</span> {KEEP_WORKING_THRESHOLD}{" "}
-                  {AUTONOMY_WHEN_PLAN_STILL_GOOD}
+                  <span style={{ fontWeight: 800 }}>Keep working:</span> {KEEP_WORKING_THRESHOLD} {AUTONOMY_WHEN_PLAN_STILL_GOOD}
                 </li>
                 <li style={{ marginBottom: 6 }}>
-                  <span style={{ fontWeight: 700 }}>Quick revisit:</span>{" "}
-                  {EXECUTION_MODE_QUICK_REVISIT_BOUNDARY} {AUTONOMY_WHEN_QUICK_REVISIT_HELPS}
+                  <span style={{ fontWeight: 800 }}>Quick revisit:</span> {KEEP_WORKING_QUICK_REVISIT_BOUNDARY}{" "}
+                  {AUTONOMY_WHEN_QUICK_REVISIT_HELPS}
                 </li>
                 <li style={{ marginBottom: 6 }}>
-                  <span style={{ fontWeight: 700 }}>Full rerun:</span> {EXECUTION_MODE_FULL_RERUN_SIGNAL}{" "}
-                  {RERUN_AVOID_THRESHOLD} {AUTONOMY_WHEN_FULL_RERUN_WORTHWHILE}
+                  <span style={{ fontWeight: 800 }}>Full rerun:</span> {KEEP_WORKING_FULL_RERUN_SIGNAL} {RERUN_AVOID_THRESHOLD}{" "}
+                  {AUTONOMY_WHEN_FULL_RERUN_WORTHWHILE}
                 </li>
                 <li style={{ marginBottom: 0 }}>
-                  <span style={{ fontWeight: 700 }}>Stop rule:</span> {SELF_TRUST_STOP_RULE}
+                  <span style={{ fontWeight: 800 }}>Stop rule:</span> {SELF_TRUST_STOP_RULE}
                 </li>
               </ul>
             </div>
