@@ -1,0 +1,54 @@
+Implement rise-and-shine packet 76: AI Planner execution pace bundle.
+
+Goal
+- Build on the AI Planner continue-with-confidence bundle by turning the post-apply state into a clearer execution pace surface: combine right-now action focus, what-can-wait boundaries, later-today revisit timing, and rerun-escalation triggers into one denser Today planner layer so users can keep momentum without over-checking the planner.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat-ai-planner-execution-pace-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-execution-pace-bundle
+
+Scope
+- Bundle adjacent action-now focus, what-can-wait clarity, later-today revisit timing, and rerun-escalation thresholds into one coherent Today planner treatment.
+- Improve the planner experience so users can more clearly tell after applying one suggestion:
+  - what deserves focus right now,
+  - what can wait until later today,
+  - when a quick revisit is helpful but optional,
+  - and when a full rerun is actually warranted.
+- Prefer one coherent execution-pace treatment over scattered reassurance copy or broad page changes.
+- Keep the change narrow and local to Today planner guidance / review / apply surfaces.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth, analytics, or backend prompt/model changes.
+- No broad redesign of the Today page.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a small hook or summary treatment is clearly warranted
+- related planner review/apply components only if clearly necessary
+
+Acceptance criteria
+- After applying one suggestion, users can tell what to focus on now, what can wait, and when a revisit or rerun is truly worth it.
+- Users can stay in execution mode today with less reassurance-seeking and less planner thrash.
+- The change stays narrow, local, and reviewable.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups
