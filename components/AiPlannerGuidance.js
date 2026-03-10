@@ -1,6 +1,7 @@
 // Packet 63: AI Planner re-entry decision bundle — when to keep working, quick revisit, or full rerun; lightest next step
 // Packet 65: AI Planner post-apply confidence bundle — what stayed the same, planner can wait, trustworthy at a glance
 // Packet 66: AI Planner keep-moving-without-recheck bundle — one coherent treatment: next-step momentum, planner-can-wait, revisit threshold
+// Packet 67: AI Planner progress-without-recheck bundle — progress loop: keep-going cues, revisit triggers, quick progress-check orientation
 const KEEP_MOVING_LEAD =
   "Keep moving — no need to recheck the planner now. Your best next step is clear; the planner can wait.";
 const APPLIED_KEEP_WORKING =
@@ -11,6 +12,17 @@ const APPLIED_WHEN_FULL_RERUN_WORTH_IT =
   "When a full planner run is worth it: run \"Refine these 3 with AI\" when you've done a chunk of work, your Next 3 has changed, or you want a fresh set. Right after one apply, another run is unnecessary — your plan is already updated; reopening the planner now would be an interruption. Lightest step: don't run Refine now.";
 const APPLIED_STAY_IN_MOTION =
   "Stay in motion: your queue is updated. Work your Next 3; the planner is there whenever you want another pass, but you don't need one to keep today moving — so you can keep going without feeling trapped in repeated planner loops.";
+// Packet 67: progress loop — how to tell you're still on track without reopening
+const PROGRESS_CHECK_ORIENTATION =
+  "You're still on track if you're working from your updated Next 3, you've applied one change and are doing the next task, and nothing has made your plan feel wrong. No need to reopen the planner to verify — your queue is updated and today is moving.";
+const PROGRESS_SIGNALS_KEEP_GOING =
+  "Keep going when: you're working your Next 3; you know your next task; you're not stuck.";
+const PROGRESS_SIGNALS_REVISIT_LATER =
+  "Consider a quick revisit later when: one remaining suggestion clearly helps and you have a short break; you've done a chunk and want to peek at one more. Right now, keep going.";
+const REVISIT_TRIGGERS_WORTH_IT =
+  "Revisit is worth it when: you've done a chunk of work and one remaining suggestion still fits; your Next 3 has changed and you want a fresh set; you're on a short break and one suggestion would help.";
+const REVISIT_TRIGGERS_NOT_NEEDED =
+  "Revisit is not needed when: you just applied one suggestion; you're still working through your current Next 3; today is moving and you're not stuck — no pressure to rerun.";
 
 // Packet 64: Updated plan recap bundle — what changed, what to do now, when safe to ignore
 const RECAP_WHAT_CHANGED_FALLBACK =
@@ -235,6 +247,7 @@ const PHASE_CONTENT = {
     // Packet 64: updated plan recap — what changed, do now, safe to ignore, when revisit worth it
     // Packet 65: post-apply confidence — what stayed the same, planner can wait
     // Packet 66: keep-moving bundle — one coherent action-ready treatment
+    // Packet 67: progress loop — progress-check orientation, keep-going vs revisit signals, concrete revisit triggers
     appliedStateBundle: {
       keepMovingLead: KEEP_MOVING_LEAD,
       title: "Updated plan recap",
@@ -250,6 +263,11 @@ const PHASE_CONTENT = {
       quickRevisit: APPLIED_QUICK_REVISIT,
       whenFullRerunWorthIt: APPLIED_WHEN_FULL_RERUN_WORTH_IT,
       stayInMotion: APPLIED_STAY_IN_MOTION,
+      progressCheckOrientation: PROGRESS_CHECK_ORIENTATION,
+      progressSignalsKeepGoing: PROGRESS_SIGNALS_KEEP_GOING,
+      progressSignalsRevisitLater: PROGRESS_SIGNALS_REVISIT_LATER,
+      revisitTriggersWorthIt: REVISIT_TRIGGERS_WORTH_IT,
+      revisitTriggersNotNeeded: REVISIT_TRIGGERS_NOT_NEEDED,
     },
     icon: "●",
     color: "#059669",
@@ -431,7 +449,7 @@ export default function AiPlannerGuidance({
           {showAppliedState && content.appliedStateBundle && (
             <div
               role="region"
-              aria-label="Keep moving: best next move, when to keep working instead of rechecking, when to revisit or rerun"
+              aria-label="Keep moving: progress check, keep-going signals, revisit triggers, when to keep working or rerun"
               style={{
                 marginTop: 8,
                 padding: "10px 12px",
@@ -454,17 +472,39 @@ export default function AiPlannerGuidance({
               <div style={{ marginBottom: 6 }}>
                 {content.appliedStateBundle.recapDoNow}
               </div>
+              {content.appliedStateBundle.progressCheckOrientation && (
+                <>
+                  <div style={{ fontWeight: 600, marginBottom: 4, color: "#047857" }}>
+                    Progress check — still on track without reopening
+                  </div>
+                  <div style={{ marginBottom: 6 }}>
+                    {content.appliedStateBundle.progressCheckOrientation}
+                  </div>
+                  <div style={{ fontWeight: 600, marginBottom: 4, color: "#047857" }}>
+                    Keep going vs revisit later
+                  </div>
+                  <div style={{ marginBottom: 4 }}>
+                    {content.appliedStateBundle.progressSignalsKeepGoing}
+                  </div>
+                  <div style={{ marginBottom: 6 }}>
+                    {content.appliedStateBundle.progressSignalsRevisitLater}
+                  </div>
+                </>
+              )}
+              <div style={{ fontWeight: 600, marginBottom: 4, color: "#047857" }}>
+                When a revisit is worth it (concrete triggers)
+              </div>
+              <div style={{ marginBottom: 4 }}>
+                {content.appliedStateBundle.revisitTriggersWorthIt}
+              </div>
+              <div style={{ marginBottom: 6 }}>
+                {content.appliedStateBundle.revisitTriggersNotNeeded}
+              </div>
               <div style={{ fontWeight: 600, marginBottom: 4, color: "#047857" }}>
                 Keep working — no need to recheck
               </div>
               <div style={{ marginBottom: 6 }}>
                 {content.appliedStateBundle.recapPlannerCanWait}
-              </div>
-              <div style={{ fontWeight: 600, marginBottom: 4, color: "#047857" }}>
-                When a revisit is worth it (vs unnecessary recheck)
-              </div>
-              <div style={{ marginBottom: 6 }}>
-                {content.appliedStateBundle.recapWhenRevisitWorthIt}
               </div>
               {reviewSummary && reviewSummary.total > 0 && (
                 <div style={{ marginBottom: 6, color: "#047857" }}>
