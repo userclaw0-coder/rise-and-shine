@@ -153,7 +153,7 @@ const PHASE_CONTENT = {
     label: "Safer backup path used",
     hint: "The planner couldn’t finish the full AI pass this time, so it set up a quick backup review you can try right now.",
     detail: "You only need one good option to keep moving. Nothing changes unless you approve it, and you can retry for a fresh pass anytime.",
-    comeBackCue: "Come back when you're ready — no pressure.",
+    comeBackCue: "Your progress waits for you — step away anytime and come back when you're ready.",
     icon: "◇",
     color: "#92400e",
     bg: "#fffbeb",
