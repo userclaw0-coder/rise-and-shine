@@ -181,6 +181,16 @@ const PHASE_CONTENT = {
     label: "Suggestions ready — optional review below",
     hint: "Each suggestion stands on its own: approve only the ones you want, or dismiss any you don’t.",
     detail: "Nothing is applied in bulk or automatically. Your current plan stays unchanged until you approve a specific suggestion.",
+    readinessBundle: {
+      whatChanges:
+        "Approving one suggestion only updates that single item (one task title, one subtask set, or one automation idea). Nothing else in your plan changes.",
+      whatStaysUntouched:
+        "Every other suggestion stays in review until you approve it. There is no bulk apply — your queue and tasks stay as they are except for the ones you explicitly approve.",
+      whyNow:
+        "This set was built for your current Next 3 and is ready for a quick one-at-a-time pass. You can do one approval and stop, or work through as many as you like.",
+      nextStep:
+        "Quickest low-risk move: scan the list below, approve one suggestion that clearly helps, or dismiss and keep working your queue as-is. No need to do everything.",
+    },
     icon: "●",
     color: "#059669",
     bg: "#ecfdf5",
@@ -287,32 +297,41 @@ export default function AiPlannerGuidance({
               </ol>
             </div>
           )}
+          {phase === "review" && content.readinessBundle && (
+            <div
+              role="region"
+              aria-label="Review readiness"
+              style={{
+                marginTop: 8,
+                padding: "10px 12px",
+                borderRadius: 8,
+                background: "#d1fae5",
+                border: "1px solid #6ee7b7",
+                fontSize: 12,
+                lineHeight: 1.5,
+                color: "#065f46",
+              }}
+            >
+              <div style={{ fontWeight: 600, marginBottom: 4, color: "#047857" }}>
+                Review readiness — what to expect
+              </div>
+              {reviewSummary && (
+                <div style={{ marginBottom: 6, color: "#047857" }}>
+                  <span style={{ fontWeight: 600 }}>Suggestions on deck:</span>{" "}
+                  {reviewSummary.total} suggestion{reviewSummary.total === 1 ? "" : "s"} ·{" "}
+                  {reviewSummary.items.join(" · ")}. Worth a quick one-at-a-time pass.
+                </div>
+              )}
+              <ol style={{ margin: 0, paddingLeft: 18 }}>
+                <li style={{ marginBottom: 4 }}>{content.readinessBundle.whatChanges}</li>
+                <li style={{ marginBottom: 4 }}>{content.readinessBundle.whatStaysUntouched}</li>
+                <li style={{ marginBottom: 4 }}>{content.readinessBundle.whyNow}</li>
+                <li style={{ marginBottom: 0 }}>{content.readinessBundle.nextStep}</li>
+              </ol>
+            </div>
+          )}
         </div>
       </div>
-
-      {reviewSummary && phase !== "fallback" && (
-        <div
-          style={{
-            padding: "10px 12px",
-            borderRadius: 8,
-            background: "#f9fafb",
-            border: "1px solid #e5e7eb",
-            fontSize: 12,
-            lineHeight: 1.5,
-            color: "#374151",
-          }}
-        >
-          <div style={{ fontWeight: 600, color: "#111827" }}>
-            Ready to review: {reviewSummary.total} suggestion{reviewSummary.total === 1 ? "" : "s"}
-          </div>
-          <div style={{ color: "#4b5563", marginTop: 2 }}>
-            {reviewSummary.items.join(" · ")}
-          </div>
-          <div style={{ color: "#6b7280", marginTop: 4 }}>
-            Review them one at a time — approving one suggestion won’t apply the others.
-          </div>
-        </div>
-      )}
     </div>
   );
 }
