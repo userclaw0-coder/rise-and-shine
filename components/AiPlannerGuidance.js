@@ -152,7 +152,7 @@ const PHASE_CONTENT = {
   fallback: {
     label: "Safer backup path used",
     hint: "The planner couldn’t finish the full AI pass this time, so it set up a quick backup review you can try right now.",
-    detail: "You only need one good option to keep moving. Pick what feels useful — no need to compare everything. Nothing changes unless you approve it, and you can retry for a fresh pass anytime.",
+    detail: "You only need one good option to keep moving. Pick a workable option now — you can tweak it later. Nothing changes unless you approve it, and you can retry for a fresh pass anytime.",
     icon: "◇",
     color: "#92400e",
     bg: "#fffbeb",
@@ -260,7 +260,7 @@ export default function AiPlannerGuidance({
               }}
             >
               <span aria-hidden="true">→</span>
-              <span>One good option is enough — pick the first that feels useful and keep moving.</span>
+              <span>Pick a workable option now — you can tweak it later.</span>
             </div>
           )}
         </div>
