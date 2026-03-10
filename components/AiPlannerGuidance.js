@@ -150,11 +150,15 @@ const PHASE_CONTENT = {
     border: "#bfdbfe",
   },
   fallback: {
-    label: "Safer backup path used",
-    hint: "The planner couldn’t finish the full AI pass this time, so it set up a quick backup review you can try right now.",
-    detail: "You only need one good option to keep moving. Nothing changes unless you approve it, and you can retry for a fresh pass anytime.",
-    noPressureCue: "No pressure to decide or act now — pausing is safe and nothing is lost.",
-    comeBackCue: "No catch-up when you return — you'll pick up right here.",
+    label: "Backup path — you’re still in good shape",
+    hint: "The full AI pass didn’t complete this time. A backup review is ready so you can keep moving with low pressure.",
+    detail: "Nothing changed without your approval. You can use what’s here now, pause, or retry for a full pass later.",
+    trustBundle: {
+      safety: "Pausing is safe — nothing is lost and no penalty builds up.",
+      resume: "When you return, you pick up right here; there’s no catch-up.",
+      useful: "The backup review is useful right now: pick one workable option if you like, or skip and revisit later.",
+      nextStep: "Next step: use something that helps, tweak it, or leave it and come back when it fits.",
+    },
     icon: "◇",
     color: "#92400e",
     bg: "#fffbeb",
@@ -245,63 +249,30 @@ export default function AiPlannerGuidance({
               {reasonCopy}
             </div>
           )}
-          {phase === "fallback" && (
-            <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
-              {content.noPressureCue && (
-                <div
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    padding: "4px 8px",
-                    borderRadius: 999,
-                    background: "#f0fdf4",
-                    border: "1px solid #86efac",
-                    fontSize: 12,
-                    fontWeight: 500,
-                    color: "#059669",
-                  }}
-                >
-                  <span aria-hidden="true">✓</span>
-                  <span>{content.noPressureCue}</span>
-                </div>
-              )}
-              <div
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "4px 8px",
-                  borderRadius: 999,
-                  background: "#fef3c7",
-                  border: "1px solid #fcd34d",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: "#92400e",
-                }}
-              >
-                <span aria-hidden="true">→</span>
-                <span>Pick a workable option now — you can tweak it later.</span>
+          {phase === "fallback" && content.trustBundle && (
+            <div
+              role="region"
+              aria-label="Fallback guidance"
+              style={{
+                marginTop: 8,
+                padding: "10px 12px",
+                borderRadius: 8,
+                background: "#fffbeb",
+                border: "1px solid #fcd34d",
+                fontSize: 12,
+                lineHeight: 1.5,
+                color: "#78350f",
+              }}
+            >
+              <div style={{ fontWeight: 600, marginBottom: 6, color: "#92400e" }}>
+                You can keep moving — here’s what matters:
               </div>
-              {content.comeBackCue && (
-                <div
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    padding: "4px 8px",
-                    borderRadius: 999,
-                    background: "#f9fafb",
-                    border: "1px solid #e5e7eb",
-                    fontSize: 12,
-                    fontWeight: 500,
-                    color: "#4b5563",
-                  }}
-                >
-                  <span aria-hidden="true">↻</span>
-                  <span>{content.comeBackCue}</span>
-                </div>
-              )}
+              <ul style={{ margin: 0, paddingLeft: 18 }}>
+                <li style={{ marginBottom: 4 }}>{content.trustBundle.safety}</li>
+                <li style={{ marginBottom: 4 }}>{content.trustBundle.resume}</li>
+                <li style={{ marginBottom: 4 }}>{content.trustBundle.useful}</li>
+                <li style={{ marginBottom: 0 }}>{content.trustBundle.nextStep}</li>
+              </ul>
             </div>
           )}
         </div>
