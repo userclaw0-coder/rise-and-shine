@@ -201,16 +201,16 @@ const PHASE_CONTENT = {
       momentum:
         "Staying steady: one approval or one dismiss keeps momentum. You can leave the rest for later or run \"Refine these 3 with AI\" again anytime for a fresh set.",
     },
-    // Coherent post-apply light-review and keep-moving: need-now vs can-wait, what to skip, fastest next move, stay in motion without full planner
+    // Keep-moving-from-updated-plan: one coherent Today workflow after apply — best move, glance vs defer, defer safely, continue without planner rerun
     appliedStateBundle: {
-      needNowVsCanWait:
-        "Remaining suggestions don’t need action right now — they’re optional. Glance at them if you like, or skip for now and come back later.",
-      whatToSkip:
-        "What you can safely skip for now: the rest of the cards, a full review of every suggestion, and another planner run. Dismiss or ignore the remaining ones; run \"Refine these 3 with AI\" later only if you want a fresh set.",
-      fastestNextMove:
-        "Fastest useful next move: work from your updated plan. If you want one more tweak, approve or dismiss one more suggestion below — no need to reopen the whole planner flow or review everything.",
-      stayInMotion:
-        "Stay in motion: your updated plan is ready. No need to run Refine again or reopen the full planner; keep working your queue. The planner stays available whenever you want a new pass.",
+      bestImmediateMove:
+        "Best immediate move: work from your updated plan. Pick the next task and keep going — no need to review every remaining suggestion or run Refine again.",
+      worthGlanceVsCanWait:
+        "Remaining suggestions are worth a quick glance if one catches your eye; otherwise they can wait. Approve or dismiss one more only if it clearly helps; the rest can stay deferred without reopening the planner.",
+      deferSafely:
+        "Safe to defer: the rest of the cards, a full pass over every suggestion, and another planner run. Dismiss or ignore what’s left; run \"Refine these 3 with AI\" later only when you want a fresh set.",
+      continueWithoutRerun:
+        "Continue today: your queue is updated. Keep working your Next 3 — the planner is there whenever you want another pass, but you don’t need one to stay in motion.",
     },
     icon: "●",
     color: "#059669",
@@ -392,7 +392,7 @@ export default function AiPlannerGuidance({
           {showAppliedState && content.appliedStateBundle && (
             <div
               role="region"
-              aria-label="Light review — what needs attention now, what can wait, how to keep moving"
+              aria-label="Keep moving from your updated plan"
               style={{
                 marginTop: 8,
                 padding: "10px 12px",
@@ -405,21 +405,21 @@ export default function AiPlannerGuidance({
               }}
             >
               <div style={{ fontWeight: 600, marginBottom: 4, color: "#047857" }}>
-                Light review — what needs attention now, what can wait, how to keep moving
+                Keep moving from your updated plan
               </div>
               {reviewSummary && reviewSummary.total > 0 && (
                 <div style={{ marginBottom: 6, color: "#047857" }}>
                   <span style={{ fontWeight: 600 }}>Remaining:</span>{" "}
                   {reviewSummary.total} suggestion{reviewSummary.total === 1 ? "" : "s"} ·{" "}
-                  {reviewSummary.items.join(" · ")}. Worth a quick look if you have a moment, or
-                  skip for now.
+                  {reviewSummary.items.join(" · ")}. Worth a quick glance if one helps; otherwise
+                  safe to defer.
                 </div>
               )}
               <ol style={{ margin: 0, paddingLeft: 18 }}>
-                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.needNowVsCanWait}</li>
-                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.whatToSkip}</li>
-                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.fastestNextMove}</li>
-                <li style={{ marginBottom: 0 }}>{content.appliedStateBundle.stayInMotion}</li>
+                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.bestImmediateMove}</li>
+                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.worthGlanceVsCanWait}</li>
+                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.deferSafely}</li>
+                <li style={{ marginBottom: 0 }}>{content.appliedStateBundle.continueWithoutRerun}</li>
               </ol>
             </div>
           )}
