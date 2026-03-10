@@ -1,8 +1,12 @@
-// Continue-today confidence bundle copy (avoid Unicode apostrophe in PHASE_CONTENT)
+// Today momentum and revisit bundle (packet 62): one coherent post-apply flow — do now, later-today vs can wait, when rerun worth it, stay in motion
+const APPLIED_DO_NOW =
+  "Keep doing now: your best immediate move is from the updated plan. Pick the next task in your queue and keep going — no need to review every remaining suggestion or run Refine again.";
+const APPLIED_LATER_TODAY_VS_CAN_WAIT =
+  "Later today vs can wait: if one remaining suggestion clearly helps, give it a quick look when you take a short break; that deserves a later-today revisit. The rest can wait until another day — you don't need to clear every card today.";
 const APPLIED_WHEN_RERUN_WORTH_IT =
-  "When to run Refine again: run \"Refine these 3 with AI\" when you want a fresh set (e.g. after you've done a chunk of work or your Next 3 has changed). Right after one apply, another run isn't necessary — your plan is already updated.";
-const APPLIED_CONTINUE_WITHOUT_RERUN =
-  "Keep moving: your queue is updated and you don't need to second-guess it. Work your Next 3; the planner is there whenever you want another pass, but you don't need one to stay in motion.";
+  "When another planner run is worth it: run \"Refine these 3 with AI\" when you've done a chunk of work, your Next 3 has changed, or you want a fresh set. Right after one apply, another run is unnecessary — your plan is already updated; reopening the planner now would be an interruption, not a help.";
+const APPLIED_STAY_IN_MOTION =
+  "Stay in motion: your queue is updated. Work your Next 3; the planner is there whenever you want another pass, but you don't need one to keep today moving — so you can keep going without feeling pushed back into a full planner rerun.";
 
 function getReviewSummary(aiSuggestions) {
   if (!aiSuggestions) return null;
@@ -207,15 +211,14 @@ const PHASE_CONTENT = {
       momentum:
         "Staying steady: one approval or one dismiss keeps momentum. You can leave the rest for later or run \"Refine these 3 with AI\" again anytime for a fresh set.",
     },
-    // Continue-today confidence bundle: one coherent Today follow-through after apply — do now, later-today vs can wait, when rerun worth it, continue without second-guessing
+    // Today momentum and revisit bundle: one coherent post-apply flow — do now, later-today revisit vs can wait, when rerun worth it, stay in motion without rerun
     appliedStateBundle: {
-      doNow:
-        "Do this now: work from your updated plan. Pick the next task in your queue and keep going — no need to review every remaining suggestion or run Refine again.",
-      laterTodayVsCanWait:
-        "Later today vs can wait: if one remaining suggestion clearly helps, you can approve or dismiss it when you take a short break. The rest can wait until another day — no need to clear every card today.",
+      doNow: APPLIED_DO_NOW,
+      laterTodayVsCanWait: APPLIED_LATER_TODAY_VS_CAN_WAIT,
       whenRerunWorthIt: APPLIED_WHEN_RERUN_WORTH_IT,
-      continueWithoutRerun: APPLIED_CONTINUE_WITHOUT_RERUN,
-      __ORPHAN:
+      stayInMotion: APPLIED_STAY_IN_MOTION,
+      continueWithoutRerun: APPLIED_STAY_IN_MOTION,
+      _removed:
         " Dismiss or ignore what’s left; run \"Refine these 3 with AI\" later only when you want a fresh set.",
       continueWithoutRerun:
         "Continue today: your queue is updated. Keep working your Next 3 — the planner is there whenever you want another pass, but you don’t need one to stay in motion.",
@@ -400,7 +403,7 @@ export default function AiPlannerGuidance({
           {showAppliedState && content.appliedStateBundle && (
             <div
               role="region"
-              aria-label="Today follow-through: what to do now, later today, and when to refine again"
+              aria-label="Today momentum: what to keep doing now, later-today revisit, and when to refine again"
               style={{
                 marginTop: 8,
                 padding: "10px 12px",
@@ -413,7 +416,7 @@ export default function AiPlannerGuidance({
               }}
             >
               <div style={{ fontWeight: 600, marginBottom: 4, color: "#047857" }}>
-                Today follow-through
+                Today momentum
               </div>
               {reviewSummary && reviewSummary.total > 0 && (
                 <div style={{ marginBottom: 6, color: "#047857" }}>
@@ -426,7 +429,7 @@ export default function AiPlannerGuidance({
                 <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.doNow}</li>
                 <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.laterTodayVsCanWait}</li>
                 <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.whenRerunWorthIt}</li>
-                <li style={{ marginBottom: 0 }}>{content.appliedStateBundle.continueWithoutRerun}</li>
+                <li style={{ marginBottom: 0 }}>{content.appliedStateBundle.stayInMotion ?? content.appliedStateBundle.continueWithoutRerun}</li>
               </ol>
             </div>
           )}
