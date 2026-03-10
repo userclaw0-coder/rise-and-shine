@@ -1,0 +1,32 @@
+Implement rise-and-shine packet 45: AI Planner fallback come-back-when-ready cue.
+
+Read first:
+- packets/CURSOR_PACKET_45_AI_PLANNER_FALLBACK_COME_BACK_WHEN_READY_CUE.md
+- PROJECT_NORTH_STAR.md
+- CURRENT_STATE_SNAPSHOT.md
+
+Constraints:
+- Repo: rise-and-shine only
+- Base branch: develop
+- Work on: feat/ai-planner-fallback-come-back-when-ready-cue
+- Keep scope narrow and local to the Today AI Planner fallback guidance
+- No auth changes, no backend prompt/model changes, no broad redesign, no cross-repo edits
+
+Goal:
+Add a compact cue that reassures the user they can come back when ready, so the backup path stays supportive without making a paused moment feel like failure.
+
+Expected files:
+- components/AiPlannerGuidance.js
+- pages/today.js only if clearly warranted
+
+Verification:
+- npm run lint
+- npm run build
+
+Completion report must include:
+- branch name
+- commit hash
+- concise change summary
+- verification commands run
+- results
+- risks / follow-ups
