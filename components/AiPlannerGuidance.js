@@ -1,12 +1,12 @@
-// Today momentum and revisit bundle (packet 62): one coherent post-apply flow — do now, later-today vs can wait, when rerun worth it, stay in motion
-const APPLIED_DO_NOW =
-  "Keep doing now: your best immediate move is from the updated plan. Pick the next task in your queue and keep going — no need to review every remaining suggestion or run Refine again.";
-const APPLIED_LATER_TODAY_VS_CAN_WAIT =
-  "Later today vs can wait: if one remaining suggestion clearly helps, give it a quick look when you take a short break; that deserves a later-today revisit. The rest can wait until another day — you don't need to clear every card today.";
-const APPLIED_WHEN_RERUN_WORTH_IT =
-  "When another planner run is worth it: run \"Refine these 3 with AI\" when you've done a chunk of work, your Next 3 has changed, or you want a fresh set. Right after one apply, another run is unnecessary — your plan is already updated; reopening the planner now would be an interruption, not a help.";
+// Packet 63: AI Planner re-entry decision bundle — when to keep working, quick revisit, or full rerun; lightest next step
+const APPLIED_KEEP_WORKING =
+  "Keep working: your best move is from the updated plan. Pick the next task in your queue and keep going — no need to review every remaining suggestion or run Refine again. Lightest step: work your Next 3.";
+const APPLIED_QUICK_REVISIT =
+  "Quick revisit: if one remaining suggestion clearly helps, a quick look on a short break later today is enough. The rest can wait until another day — you don't need to clear every card today. Lightest step: optionally peek at one suggestion later, or ignore.";
+const APPLIED_WHEN_FULL_RERUN_WORTH_IT =
+  "When a full planner run is worth it: run \"Refine these 3 with AI\" when you've done a chunk of work, your Next 3 has changed, or you want a fresh set. Right after one apply, another run is unnecessary — your plan is already updated; reopening the planner now would be an interruption. Lightest step: don't run Refine now.";
 const APPLIED_STAY_IN_MOTION =
-  "Stay in motion: your queue is updated. Work your Next 3; the planner is there whenever you want another pass, but you don't need one to keep today moving — so you can keep going without feeling pushed back into a full planner rerun.";
+  "Stay in motion: your queue is updated. Work your Next 3; the planner is there whenever you want another pass, but you don't need one to keep today moving — so you can keep going without feeling trapped in repeated planner loops.";
 
 function getReviewSummary(aiSuggestions) {
   if (!aiSuggestions) return null;
@@ -211,17 +211,13 @@ const PHASE_CONTENT = {
       momentum:
         "Staying steady: one approval or one dismiss keeps momentum. You can leave the rest for later or run \"Refine these 3 with AI\" again anytime for a fresh set.",
     },
-    // Today momentum and revisit bundle: one coherent post-apply flow — do now, later-today revisit vs can wait, when rerun worth it, stay in motion without rerun
+    // Packet 63: re-entry decision bundle — keep working, quick revisit, full rerun, stay in motion
     appliedStateBundle: {
-      doNow: APPLIED_DO_NOW,
-      laterTodayVsCanWait: APPLIED_LATER_TODAY_VS_CAN_WAIT,
-      whenRerunWorthIt: APPLIED_WHEN_RERUN_WORTH_IT,
+      title: "Re-entry: your next move",
+      keepWorking: APPLIED_KEEP_WORKING,
+      quickRevisit: APPLIED_QUICK_REVISIT,
+      whenFullRerunWorthIt: APPLIED_WHEN_FULL_RERUN_WORTH_IT,
       stayInMotion: APPLIED_STAY_IN_MOTION,
-      continueWithoutRerun: APPLIED_STAY_IN_MOTION,
-      _removed:
-        " Dismiss or ignore what’s left; run \"Refine these 3 with AI\" later only when you want a fresh set.",
-      continueWithoutRerun:
-        "Continue today: your queue is updated. Keep working your Next 3 — the planner is there whenever you want another pass, but you don’t need one to stay in motion.",
     },
     icon: "●",
     color: "#059669",
@@ -403,7 +399,7 @@ export default function AiPlannerGuidance({
           {showAppliedState && content.appliedStateBundle && (
             <div
               role="region"
-              aria-label="Today momentum: what to keep doing now, later-today revisit, and when to refine again"
+              aria-label="Planner re-entry: when to keep working, quick revisit, or run Refine again"
               style={{
                 marginTop: 8,
                 padding: "10px 12px",
@@ -416,20 +412,20 @@ export default function AiPlannerGuidance({
               }}
             >
               <div style={{ fontWeight: 600, marginBottom: 4, color: "#047857" }}>
-                Today momentum
+                {content.appliedStateBundle.title}
               </div>
               {reviewSummary && reviewSummary.total > 0 && (
                 <div style={{ marginBottom: 6, color: "#047857" }}>
                   <span style={{ fontWeight: 600 }}>Remaining:</span>{" "}
                   {reviewSummary.total} suggestion{reviewSummary.total === 1 ? "" : "s"} ·{" "}
-                  {reviewSummary.items.join(" · ")}. Revisit later today if one helps; the rest can wait.
+                  {reviewSummary.items.join(" · ")}. Quick revisit later today if one helps; the rest can wait.
                 </div>
               )}
               <ol style={{ margin: 0, paddingLeft: 18 }}>
-                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.doNow}</li>
-                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.laterTodayVsCanWait}</li>
-                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.whenRerunWorthIt}</li>
-                <li style={{ marginBottom: 0 }}>{content.appliedStateBundle.stayInMotion ?? content.appliedStateBundle.continueWithoutRerun}</li>
+                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.keepWorking}</li>
+                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.quickRevisit}</li>
+                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.whenFullRerunWorthIt}</li>
+                <li style={{ marginBottom: 0 }}>{content.appliedStateBundle.stayInMotion}</li>
               </ol>
             </div>
           )}
