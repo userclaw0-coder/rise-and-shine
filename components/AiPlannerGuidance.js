@@ -185,6 +185,22 @@ const FIRST_BLOCK_WHEN_PLAN_STILL_GOOD =
 const FIRST_BLOCK_RERUN_ONLY_IF =
   "Reopen the planner only if the morning actually changed: a new blocker or deadline reshaped the day, surprise work crowded out this focus block, or the first task still feels wrong after ~10 solid minutes of trying to move it forward. Not just because the first few minutes felt wobbly.";
 
+// Packet 85: AI Planner morning momentum protection bundle — one coherent morning execution contract:
+// keep-going proof, harmless-wobble vs mismatch, stay-with-the-block guidance, and a mid-morning rerun threshold.
+const MORNING_MOMENTUM_TITLE = "Morning momentum protection contract";
+const MORNING_MOMENTUM_HEADLINE =
+  "For the first half of the morning, treat this block as your lane and the planner as a stable contract — your job is to keep moving inside it, not to keep reopening the plan.";
+const MORNING_MOMENTUM_KEEP_GOING_PROOF =
+  "Keep-going proof: your plan is already updated from your last apply, your Next 3 is anchored, and this first block is pointed at the top task. You’re not waiting on a better plan — you’re executing the one you chose.";
+const MORNING_MOMENTUM_WOBBLE_NORMAL =
+  "Normal first-block wobble: rereading the task, light tab flinch, checking messages once, or taking up to ~10 minutes to warm up still counts as the block working. That’s friction inside the contract, not a reason to reopen the planner.";
+const MORNING_MOMENTUM_REAL_MISMATCH =
+  "Real plan mismatch: the first task clearly no longer fits what this block is for, a new constraint makes this work a bad choice, or you’ve genuinely tried to move it for ~10–15 minutes and still can’t make meaningful progress.";
+const MORNING_MOMENTUM_STAY_WITH_BLOCK =
+  "Stay with this block: as long as you’re nudging the first task forward — even in small chunks — stay with it and treat planner re-open as off-limits. If you need a micro-adjustment, tweak the task or Next 3 manually rather than rerunning AI.";
+const MORNING_MOMENTUM_RERUN_THRESHOLD =
+  "Mid-morning rerun threshold: only reopen the planner after you’ve either finished this first block or given it a real try (one solid attempt, not just a few minutes of wobble) and one of the “real plan mismatch” conditions is true. Otherwise, keep executing from the current Next 3.";
+
 // Packet 64: Updated plan recap bundle — what changed, what to do now, when safe to ignore
 const RECAP_WHAT_CHANGED_FALLBACK =
   "One suggestion was applied; your plan is updated.";
@@ -722,7 +738,7 @@ export default function AiPlannerGuidance({
               {isMorningFirstBlock && (
                 <div
                   role="region"
-                  aria-label="First-block morning flow contract"
+                  aria-label="Morning momentum protection contract"
                   style={{
                     marginTop: 10,
                     padding: "10px 10px 8px",
@@ -738,10 +754,10 @@ export default function AiPlannerGuidance({
                       color: "#1d4ed8",
                     }}
                   >
-                    {FIRST_BLOCK_TITLE}
+                    {MORNING_MOMENTUM_TITLE}
                   </div>
                   <div style={{ marginBottom: 6, color: "#1e3a8a", fontSize: 12 }}>
-                    {FIRST_BLOCK_HEADLINE}
+                    {MORNING_MOMENTUM_HEADLINE}
                   </div>
                   <ol
                     style={{
@@ -753,16 +769,34 @@ export default function AiPlannerGuidance({
                     }}
                   >
                     <li style={{ marginBottom: 4 }}>
-                      {FIRST_BLOCK_KEEP_DOING}{" "}
+                      <span style={{ fontWeight: 600 }}>Keep going from here:</span>{" "}
+                      {MORNING_MOMENTUM_KEEP_GOING_PROOF} {FIRST_BLOCK_KEEP_DOING}{" "}
                       {nextActionLabel ? (
                         <span style={{ fontWeight: 600 }}>
                           First-block focus: {nextActionLabel}
                         </span>
                       ) : null}
                     </li>
-                    <li style={{ marginBottom: 4 }}>{FIRST_BLOCK_WOBBLE_NORMAL}</li>
-                    <li style={{ marginBottom: 4 }}>{FIRST_BLOCK_WHEN_PLAN_STILL_GOOD}</li>
-                    <li style={{ marginBottom: 0 }}>{FIRST_BLOCK_RERUN_ONLY_IF}</li>
+                    <li style={{ marginBottom: 4 }}>
+                      <span style={{ fontWeight: 600 }}>This wobble is harmless:</span>{" "}
+                      {FIRST_BLOCK_WOBBLE_NORMAL} {MORNING_MOMENTUM_WOBBLE_NORMAL}
+                    </li>
+                    <li style={{ marginBottom: 4 }}>
+                      <span style={{ fontWeight: 600 }}>Signs the plan still fits:</span>{" "}
+                      {FIRST_BLOCK_WHEN_PLAN_STILL_GOOD}
+                    </li>
+                    <li style={{ marginBottom: 4 }}>
+                      <span style={{ fontWeight: 600 }}>When it’s a real mismatch:</span>{" "}
+                      {MORNING_MOMENTUM_REAL_MISMATCH}
+                    </li>
+                    <li style={{ marginBottom: 4 }}>
+                      <span style={{ fontWeight: 600 }}>Stay-with-the-block rule:</span>{" "}
+                      {MORNING_MOMENTUM_STAY_WITH_BLOCK}
+                    </li>
+                    <li style={{ marginBottom: 0 }}>
+                      <span style={{ fontWeight: 600 }}>Rerun only when:</span>{" "}
+                      {FIRST_BLOCK_RERUN_ONLY_IF} {MORNING_MOMENTUM_RERUN_THRESHOLD}
+                    </li>
                   </ol>
                 </div>
               )}
