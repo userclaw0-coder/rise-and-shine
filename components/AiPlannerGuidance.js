@@ -152,7 +152,7 @@ const PHASE_CONTENT = {
   fallback: {
     label: "Safer backup path used",
     hint: "The planner couldn’t finish the full AI pass this time, so it set up a quick backup review you can try right now.",
-    detail: "You only need one good option to keep moving. Pick a workable option now — you can tweak it later. Nothing changes unless you approve it, and you can retry for a fresh pass anytime.",
+    detail: "You only need one good option to keep moving. Pick a workable option now — you can tweak it later. Nothing changes unless you approve it, and you can retry for a fresh pass anytime. If none feels right yet, you can revisit these suggestions later.",
     icon: "◇",
     color: "#92400e",
     bg: "#fffbeb",
@@ -244,23 +244,27 @@ export default function AiPlannerGuidance({
             </div>
           )}
           {phase === "fallback" && (
-            <div
-              style={{
-                marginTop: 6,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "4px 8px",
-                borderRadius: 999,
-                background: "#fef3c7",
-                border: "1px solid #fcd34d",
-                fontSize: 12,
-                fontWeight: 600,
-                color: "#92400e",
-              }}
-            >
-              <span aria-hidden="true">→</span>
-              <span>Pick a workable option now — you can tweak it later.</span>
+            <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "4px 8px",
+                  borderRadius: 999,
+                  background: "#fef3c7",
+                  border: "1px solid #fcd34d",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "#92400e",
+                }}
+              >
+                <span aria-hidden="true">→</span>
+                <span>Pick a workable option now — you can tweak it later.</span>
+              </div>
+              <div style={{ fontSize: 12, color: "#6b7280", fontStyle: "italic" }}>
+                No rush — revisit later if none feels right yet.
+              </div>
             </div>
           )}
         </div>
@@ -286,7 +290,7 @@ export default function AiPlannerGuidance({
           </div>
           <div style={{ color: "#6b7280", marginTop: 4 }}>
             {phase === "fallback"
-              ? "You only need one good option. Pick what feels useful, tweak it, or skip and move on."
+              ? "You only need one good option. Pick what feels useful, tweak it, or skip and move on. No rush — revisit later if none feels right yet."
               : "Review them one at a time — approving one suggestion won’t apply the others."}
           </div>
         </div>
