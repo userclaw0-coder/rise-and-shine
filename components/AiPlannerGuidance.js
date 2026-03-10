@@ -202,14 +202,15 @@ const PHASE_CONTENT = {
         "Staying steady: one approval or one dismiss keeps momentum. You can leave the rest for later or run \"Refine these 3 with AI\" again anytime for a fresh set.",
     },
     appliedStateBundle: {
-      whatChanged:
-        "The suggestion you approved was applied: that one task or subtask set is updated in your Next 3 or queue; nothing else was changed.",
-      whatStayedSame:
-        "Everything else stayed the same: other suggestions (if any) remain in review, other queue tasks are unchanged, and your backlog is untouched.",
-      nextMove:
-        "Lowest-risk next move: work your updated queue as-is, approve or dismiss another suggestion, or stop here — no need to run the planner again right away.",
-      oneMoveEnough:
-        "Stopping after one useful change is a successful outcome. You can leave the rest for later or run \"Refine these 3 with AI\" anytime for a fresh set.",
+      // Coherent post-apply momentum summary: payoff, next move, no rerun, keep momentum
+      immediatePayoff:
+        "That one change is already in your Next 3 or queue — you got a concrete improvement without touching anything else.",
+      smallestNextMove:
+        "Smallest next move: work your updated queue as-is, or approve or dismiss one more suggestion. No need to do a full review.",
+      noRerunNeeded:
+        "You don’t need to run the planner again right away. Your updated plan is ready; run \"Refine these 3 with AI\" later if you want a fresh set.",
+      keepMomentum:
+        "To keep momentum: use your updated Next 3 or queue as your guide. One applied change is enough to continue today.",
     },
     icon: "●",
     color: "#059669",
@@ -388,7 +389,7 @@ export default function AiPlannerGuidance({
           {showAppliedState && content.appliedStateBundle && (
             <div
               role="region"
-              aria-label="After applying — what changed and what to do next"
+              aria-label="After applying — keep momentum with your updated plan"
               style={{
                 marginTop: 8,
                 padding: "10px 12px",
@@ -401,13 +402,13 @@ export default function AiPlannerGuidance({
               }}
             >
               <div style={{ fontWeight: 600, marginBottom: 4, color: "#047857" }}>
-                Applied — what that means
+                Keep moving — applied and ready
               </div>
               <ol style={{ margin: 0, paddingLeft: 18 }}>
-                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.whatChanged}</li>
-                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.whatStayedSame}</li>
-                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.nextMove}</li>
-                <li style={{ marginBottom: 0 }}>{content.appliedStateBundle.oneMoveEnough}</li>
+                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.immediatePayoff}</li>
+                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.smallestNextMove}</li>
+                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.noRerunNeeded}</li>
+                <li style={{ marginBottom: 0 }}>{content.appliedStateBundle.keepMomentum}</li>
               </ol>
             </div>
           )}
