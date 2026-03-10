@@ -3,6 +3,7 @@
 // Packet 66: AI Planner keep-moving-without-recheck bundle — one coherent treatment: next-step momentum, planner-can-wait, revisit threshold
 // Packet 67: AI Planner progress-without-recheck bundle — progress loop: keep-going cues, revisit triggers, quick progress-check orientation
 // Packet 68: AI Planner progress-check and re-entry bundle — compact progress cues, continue-vs-pause confidence, clearer re-entry thresholds; one-glance after-apply loop
+// Packet 69: AI Planner steady-progress and rerun-readiness bundle — one coherent layer: steady progress signs, pause-vs-continue confidence, revisit vs full rerun; decisive at a glance
 const KEEP_MOVING_LEAD =
   "Keep moving — no need to recheck the planner now. Your best next step is clear; the planner can wait.";
 const APPLIED_KEEP_WORKING =
@@ -34,6 +35,22 @@ const REVISIT_THRESHOLD_COMPACT =
   "Revisit worth it: after a chunk of work, or one remaining suggestion clearly helps on a short break. Not now: you just applied; keep going.";
 const FULL_RERUN_UNNECESSARY_COMPACT =
   "Full rerun unnecessary now: plan is updated and trustworthy; run Refine again when you want a fresh set, not to verify progress.";
+
+// Packet 69: steady-progress and rerun-readiness bundle — one coherent layer: steady progress, pause-vs-continue, revisit vs full rerun
+const STEADY_PROGRESS_HEADLINE =
+  "You're in a steady progress state — no need for another planner pass.";
+const STEADY_PROGRESS_SIGNS =
+  "Signs today is still advancing: you're working from your updated Next 3, your next task is clear, and nothing has made your plan feel wrong.";
+const PAUSE_SAFE =
+  "Short pause is safe: taking a break won't undo progress. Your plan stays trustworthy; you can keep working or pause without reopening the planner.";
+const WHEN_REVISIT_ADDS_VALUE =
+  "Revisit adds value when: you've done a chunk of work and one remaining suggestion still fits, or you're on a short break and one suggestion would help. Right now you don't need to — you just applied.";
+const QUICK_REVISIT_SIGNALS =
+  "Quick revisit helps when: one remaining suggestion clearly helps and you have a few minutes; you've finished a chunk and want to peek at one more. Not required to keep today moving.";
+const FULL_RERUN_WORTHWHILE =
+  "Full rerun is worthwhile when: you've done a chunk of work, your Next 3 has changed, or you want a fresh set. Right after one apply it's unnecessary — that would be reassurance churn, not progress.";
+const FULL_RERUN_CHURN_AVOID =
+  "Don't rerun to verify: your plan is already updated and trustworthy. Run Refine again when you want a new pass, not to double-check.";
 
 // Packet 64: Updated plan recap bundle — what changed, what to do now, when safe to ignore
 const RECAP_WHAT_CHANGED_FALLBACK =
@@ -285,6 +302,14 @@ const PHASE_CONTENT = {
       continueOrPauseCompact: CONTINUE_OR_PAUSE_COMPACT,
       revisitThresholdCompact: REVISIT_THRESHOLD_COMPACT,
       fullRerunUnnecessaryCompact: FULL_RERUN_UNNECESSARY_COMPACT,
+      // Packet 69: steady-progress and rerun-readiness — one coherent layer
+      steadyProgressHeadline: STEADY_PROGRESS_HEADLINE,
+      steadyProgressSigns: STEADY_PROGRESS_SIGNS,
+      pauseSafe: PAUSE_SAFE,
+      whenRevisitAddsValue: WHEN_REVISIT_ADDS_VALUE,
+      quickRevisitSignals: QUICK_REVISIT_SIGNALS,
+      fullRerunWorthwhile: FULL_RERUN_WORTHWHILE,
+      fullRerunChurnAvoid: FULL_RERUN_CHURN_AVOID,
     },
     icon: "●",
     color: "#059669",
@@ -466,7 +491,7 @@ export default function AiPlannerGuidance({
           {showAppliedState && content.appliedStateBundle && (
             <div
               role="region"
-              aria-label="Keep moving: progress check, continue or pause, revisit threshold, when to keep working or rerun"
+              aria-label="Steady progress and rerun readiness: signs you can keep moving, pause or continue, when to revisit or full rerun"
               style={{
                 marginTop: 8,
                 padding: "10px 12px",
@@ -478,12 +503,10 @@ export default function AiPlannerGuidance({
                 color: "#065f46",
               }}
             >
-              {content.appliedStateBundle.keepMovingLead && (
-                <div style={{ fontWeight: 600, marginBottom: 8, color: "#047857" }}>
-                  {content.appliedStateBundle.keepMovingLead}
-                </div>
-              )}
-              {/* Packet 68: one-glance progress loop — compact cues, continue-vs-pause confidence, re-entry threshold */}
+              {/* Packet 69: one coherent progress-readiness layer — steady progress, pause-vs-continue, revisit vs full rerun */}
+              <div style={{ fontWeight: 600, marginBottom: 8, color: "#047857" }}>
+                {content.appliedStateBundle.steadyProgressHeadline}
+              </div>
               <div
                 style={{
                   marginBottom: 8,
@@ -493,15 +516,21 @@ export default function AiPlannerGuidance({
                   border: "1px solid #6ee7b7",
                 }}
               >
-                <div style={{ fontWeight: 600, marginBottom: 6, fontSize: 11, color: "#047857", textTransform: "uppercase", letterSpacing: "0.02em" }}>
-                  Progress loop at a glance
+                <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, color: "#047857", textTransform: "uppercase", letterSpacing: "0.02em" }}>
+                  Steady progress
                 </div>
-                <ul style={{ margin: 0, paddingLeft: 16, listStyle: "disc" }}>
-                  <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.progressCuesCompact}</li>
-                  <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.continueOrPauseCompact}</li>
-                  <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.revisitThresholdCompact}</li>
-                  <li style={{ marginBottom: 0 }}>{content.appliedStateBundle.fullRerunUnnecessaryCompact}</li>
-                </ul>
+                <div style={{ marginBottom: 8 }}>{content.appliedStateBundle.steadyProgressSigns}</div>
+                <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, color: "#047857", textTransform: "uppercase", letterSpacing: "0.02em" }}>
+                  Pause or continue
+                </div>
+                <div style={{ marginBottom: 4 }}>{content.appliedStateBundle.pauseSafe}</div>
+                <div style={{ marginBottom: 8 }}>{content.appliedStateBundle.whenRevisitAddsValue}</div>
+                <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, color: "#047857", textTransform: "uppercase", letterSpacing: "0.02em" }}>
+                  Revisit vs full rerun
+                </div>
+                <div style={{ marginBottom: 4 }}>{content.appliedStateBundle.quickRevisitSignals}</div>
+                <div style={{ marginBottom: 4 }}>{content.appliedStateBundle.fullRerunWorthwhile}</div>
+                <div style={{ marginBottom: 0 }}>{content.appliedStateBundle.fullRerunChurnAvoid}</div>
               </div>
               <div style={{ fontWeight: 600, marginBottom: 4, color: "#047857" }}>
                 Best next move
@@ -516,31 +545,16 @@ export default function AiPlannerGuidance({
                   {reviewSummary.items.join(" · ")}. Quick peek later if one helps; the rest can wait.
                 </div>
               )}
-              <div style={{ fontWeight: 600, marginBottom: 4, color: "#047857" }}>
-                When a full rerun is worth it (right now it isn’t)
-              </div>
-              <div style={{ marginBottom: 8 }}>
-                {content.appliedStateBundle.recapSafeToIgnore}
-              </div>
               <div style={{ marginBottom: 4 }}>
                 <span style={{ fontWeight: 600, color: "#047857" }}>What changed:</span>{" "}
                 {appliedMessage && isAppliedSuccessMessage(appliedMessage)
                   ? appliedMessage.trim()
                   : content.appliedStateBundle.recapWhatChangedFallback}
               </div>
-              <div style={{ marginBottom: 8 }}>
+              <div style={{ marginBottom: 0 }}>
                 <span style={{ fontWeight: 600, color: "#047857" }}>What stayed the same:</span>{" "}
                 {content.appliedStateBundle.recapWhatStayedSame}
               </div>
-              <div style={{ fontWeight: 600, marginBottom: 4, color: "#047857" }}>
-                {content.appliedStateBundle.reEntryTitle}
-              </div>
-              <ol style={{ margin: 0, paddingLeft: 18 }}>
-                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.keepWorking}</li>
-                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.quickRevisit}</li>
-                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.whenFullRerunWorthIt}</li>
-                <li style={{ marginBottom: 0 }}>{content.appliedStateBundle.stayInMotion}</li>
-              </ol>
             </div>
           )}
         </div>
