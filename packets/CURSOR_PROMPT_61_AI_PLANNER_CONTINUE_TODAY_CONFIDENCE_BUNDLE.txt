@@ -1,0 +1,55 @@
+Implement rise-and-shine packet 61: AI Planner continue-today confidence bundle.
+
+Goal
+- Build on the keep-moving-from-updated-plan bundle by turning the post-apply state into a more complete Today follow-through flow: make it clearer what to do now, what can wait until later today, and when another planner pass is actually worth reopening.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat/ai-planner-continue-today-confidence-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-continue-today-confidence-bundle
+
+Scope
+- Bundle adjacent continue-working, later-today deferral, and planner-rerun threshold improvements into one coherent Today planner layer.
+- Improve the planner experience so users can more clearly understand after applying one suggestion:
+  - what to do immediately from the updated plan,
+  - what deserves a later-today revisit versus can wait longer,
+  - when another planner run is actually worth it,
+  - and how to keep today moving without second-guessing the updated queue.
+- Prefer one coherent continue-working treatment over more scattered reassurance copy.
+- Keep the change narrow and local to Today planner guidance / review / apply surfaces.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth, analytics, or backend prompt/model changes.
+- No broad redesign of the Today page.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a small hook or summary treatment is clearly warranted
+- related planner review/apply components only if clearly necessary
+
+Acceptance criteria
+- After applying one suggestion, users can tell the best immediate move from the updated plan.
+- Users can distinguish later-today follow-up from suggestions that can wait longer.
+- Users can tell when another planner run is worth doing versus unnecessary.
+- Users can keep moving without feeling pushed back into a full planner rerun.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups
