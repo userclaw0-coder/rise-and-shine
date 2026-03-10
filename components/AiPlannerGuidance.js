@@ -121,9 +121,6 @@ function getFallbackReasonCopy(aiStatus, aiError) {
   return humanizePlannerReason(aiError);
 }
 
-const APPLIED_CONTINUATION_NO_RERUN =
-  "To continue without another planner round-trip: your updated plan is ready. Run \"Refine these 3 with AI\" later only if you want a fresh set of suggestions.";
-
 const PHASE_CONTENT = {
   "idle-no-queue": {
     label: "Waiting for your Next 3",
@@ -204,16 +201,16 @@ const PHASE_CONTENT = {
       momentum:
         "Staying steady: one approval or one dismiss keeps momentum. You can leave the rest for later or run \"Refine these 3 with AI\" again anytime for a fresh set.",
     },
+    // Coherent post-apply light-review and keep-moving: need-now vs can-wait, what to skip, fastest next move, stay in motion without full planner
     appliedStateBundle: {
-      // Coherent post-apply continuation: use updated plan for rest of today, what can wait, next move, no planner round-trip
-      useUpdatedPlan:
-        "For the rest of today: use your updated Next 3 or queue as your guide. That one change is already applied — no need to do anything else to \"lock it in.\"",
-      whatCanWait:
-        "What can safely wait: the rest of the suggestions, a full review of every card, and another planner run. Ignore or dismiss the remaining suggestions for now; you can run \"Refine these 3 with AI\" later if you want a fresh set.",
-      smallestNextMove:
-        "Smallest next move: keep working from your updated plan. If you want one more tweak, approve or dismiss one more suggestion — no need to reopen the whole planner flow or review everything.",
-      continueWithoutRerun:
-        "To keep moving without another planner round-trip: work your queue as-is. Your updated plan is ready; the planner stays available whenever you want a new pass.",
+      needNowVsCanWait:
+        "Remaining suggestions don’t need action right now — they’re optional. Glance at them if you like, or skip for now and come back later.",
+      whatToSkip:
+        "What you can safely skip for now: the rest of the cards, a full review of every suggestion, and another planner run. Dismiss or ignore the remaining ones; run \"Refine these 3 with AI\" later only if you want a fresh set.",
+      fastestNextMove:
+        "Fastest useful next move: work from your updated plan. If you want one more tweak, approve or dismiss one more suggestion below — no need to reopen the whole planner flow or review everything.",
+      stayInMotion:
+        "Stay in motion: your updated plan is ready. No need to run Refine again or reopen the full planner; keep working your queue. The planner stays available whenever you want a new pass.",
     },
     icon: "●",
     color: "#059669",
@@ -240,7 +237,6 @@ const PHASE_CONTENT = {
     border: "#86efac",
   },
 };
-PHASE_CONTENT.review.appliedStateBundle.continueWithoutRerun = APPLIED_CONTINUATION_NO_RERUN;
 
 function isAppliedSuccessMessage(msg) {
   if (!msg || typeof msg !== "string") return false;
@@ -396,7 +392,7 @@ export default function AiPlannerGuidance({
           {showAppliedState && content.appliedStateBundle && (
             <div
               role="region"
-              aria-label="How to use your updated plan for the rest of today and what can wait"
+              aria-label="Light review — what needs attention now, what can wait, how to keep moving"
               style={{
                 marginTop: 8,
                 padding: "10px 12px",
@@ -409,15 +405,21 @@ export default function AiPlannerGuidance({
               }}
             >
               <div style={{ fontWeight: 600, marginBottom: 4, color: "#047857" }}>
-                Use your updated plan for the rest of today — what can wait and how to continue
+                Light review — what needs attention now, what can wait, how to keep moving
               </div>
+              {reviewSummary && reviewSummary.total > 0 && (
+                <div style={{ marginBottom: 6, color: "#047857" }}>
+                  <span style={{ fontWeight: 600 }}>Remaining:</span>{" "}
+                  {reviewSummary.total} suggestion{reviewSummary.total === 1 ? "" : "s"} ·{" "}
+                  {reviewSummary.items.join(" · ")}. Worth a quick look if you have a moment, or
+                  skip for now.
+                </div>
+              )}
               <ol style={{ margin: 0, paddingLeft: 18 }}>
-                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.useUpdatedPlan}</li>
-                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.whatCanWait}</li>
-                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.smallestNextMove}</li>
-                <li style={{ marginBottom: 0 }}>
-                  {content.appliedStateBundle.continueWithoutRerun}
-                </li>
+                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.needNowVsCanWait}</li>
+                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.whatToSkip}</li>
+                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.fastestNextMove}</li>
+                <li style={{ marginBottom: 0 }}>{content.appliedStateBundle.stayInMotion}</li>
               </ol>
             </div>
           )}
