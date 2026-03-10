@@ -81,19 +81,25 @@ const RERUN_AVOID_THRESHOLD =
 // Packet 74: keep-working contract bundle — prior denser post-apply layer. Packet 75 refines it into a clearer "continue with confidence" surface.
 
 // Packet 76: AI Planner execution pace bundle — one dense Today layer: focus-now, what-can-wait, later-today revisit timing, rerun escalation triggers
-const EXECUTION_WINDOW_TITLE = "Execution window (today)";
+// Packet 78: AI Planner continue-until-blocked bundle — unify keep-going proof, can-wait boundaries,
+// optional checkpoint timing, and interruption-vs-rerun thresholds into one denser post-apply layer.
+const EXECUTION_WINDOW_TITLE = "Continue until blocked (today)";
 const EXECUTION_WINDOW_SUBTITLE =
-  "One dense post-apply layer: focus now, what can wait until later today, an optional quick-check window, and clear rerun escalation triggers.";
+  "A single post-apply contract: keep executing from your updated Next 3 until you’re meaningfully blocked — with clear can-wait boundaries, an optional checkpoint, and rerun-only-if triggers.";
 const EW_NOW =
   "Focus now: start the next task from your updated Next 3 — then keep going.";
 const EW_CAN_WAIT =
   "Can wait until later today: remaining cards + any “verify again” urge. Your plan is already updated and bounded to what you approved.";
-const EW_QUICK_CHECK_WINDOW =
-  "Quick check (optional): after you finish one task (or after ~60–120 minutes), take ≤2 minutes to confirm your Next 3 still feels right.";
-const EW_QUICK_CHECK_DECISION =
-  "If it still fits, close and continue. If it doesn’t fit, either do one quick card revisit (one card, then stop) or escalate to a full rerun only if a trigger below is true.";
+const EW_LATER_TODAY =
+  "Later today (optional): if exactly one remaining card clearly helps, do one quick revisit on a short break — one card, then stop.";
+const EW_CHECKPOINT_WINDOW =
+  "Checkpoint (optional): after you finish one task or after ~60–120 minutes, take ≤2 minutes to confirm your Next 3 still fits.";
+const EW_CHECKPOINT_DECISION =
+  "If it still fits, close and continue. If it doesn’t, either adjust your Next 3 manually or do one quick card revisit (one card, then stop). Escalate to a full rerun only if a trigger below is true.";
+const EW_INTERRUPTION_RULE =
+  "Interruption rule: interruptions (meetings/messages/context switches) don’t require a rerun by themselves — resume from your Next 3 unless the interruption changed constraints.";
 const EW_RERUN_ONLY_IF =
-  "Full rerun only if: you finished a real chunk, your Next 3 changed, constraints changed (deadline/blocker/surprise meeting), or you’re stuck/wrong for >10 minutes. Otherwise keep executing.";
+  "Full rerun only if: your Next 3 changed, constraints changed (deadline/blocker/surprise meeting), you finished a real chunk and want a fresh set, or you’re stuck/wrong for >10 minutes. Otherwise keep executing.";
 
 // Packet 64: Updated plan recap bundle — what changed, what to do now, when safe to ignore
 const RECAP_WHAT_CHANGED_FALLBACK =
@@ -656,6 +662,9 @@ export default function AiPlannerGuidance({
                       ? `Remaining cards (${reviewSummary.total}): ${reviewSummary.items.join(" · ")}. ${EW_CAN_WAIT}`
                       : EW_CAN_WAIT}
                   </div>
+                  <div style={{ marginBottom: 6, color: "#065f46" }}>
+                    <span style={{ fontWeight: 800 }}>Later today:</span> {EW_LATER_TODAY}
+                  </div>
                   <div style={{ color: "#065f46" }}>
                     <span style={{ fontWeight: 800 }}>Stop rule:</span> {SELF_TRUST_STOP_RULE}
                   </div>
@@ -670,13 +679,13 @@ export default function AiPlannerGuidance({
                   }}
                 >
                   <div style={{ fontWeight: 900, marginBottom: 4, color: "#047857" }}>
-                    Quick check window (optional)
+                    Checkpoint (optional)
                   </div>
                   <div style={{ marginBottom: 6 }}>
-                    <span style={{ fontWeight: 800 }}>Timing:</span> {EW_QUICK_CHECK_WINDOW}
+                    <span style={{ fontWeight: 800 }}>Timing:</span> {EW_CHECKPOINT_WINDOW}
                   </div>
                   <div style={{ color: "#065f46" }}>
-                    <span style={{ fontWeight: 800 }}>Decision:</span> {EW_QUICK_CHECK_DECISION}
+                    <span style={{ fontWeight: 800 }}>Decision:</span> {EW_CHECKPOINT_DECISION}
                   </div>
                 </div>
 
@@ -688,7 +697,12 @@ export default function AiPlannerGuidance({
                     border: "1px solid #86efac",
                   }}
                 >
-                  <div style={{ fontWeight: 900, marginBottom: 4, color: "#047857" }}>Rerun only if…</div>
+                  <div style={{ fontWeight: 900, marginBottom: 4, color: "#047857" }}>
+                    Interrupt vs rerun
+                  </div>
+                  <div style={{ marginBottom: 6 }}>
+                    <span style={{ fontWeight: 800 }}>Interruption:</span> {EW_INTERRUPTION_RULE}
+                  </div>
                   <div style={{ marginBottom: 6 }}>
                     <span style={{ fontWeight: 800 }}>Full rerun:</span> {EW_RERUN_ONLY_IF}
                   </div>
