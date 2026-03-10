@@ -10,8 +10,8 @@ Repo boundary
 
 Branch / worktree
 - Base from: develop
-- Work on: feat/ai-planner-fallback-no-pressure-cue
-- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-fallback-no-pressure-cue
+- Work on: feat/ai-planner-fallback-pause-has-no-penalty-cue
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-fallback-pause-has-no-penalty-cue
 
 Scope
 - Improve fallback wording in the existing Today AI Planner guidance area.
