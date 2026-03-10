@@ -1,0 +1,55 @@
+Implement rise-and-shine packet 63: AI Planner re-entry decision bundle.
+
+Goal
+- Build on the today momentum and revisit bundle by making planner re-entry feel more deliberate and lower-friction: clarify when to keep working, when a short revisit is enough, and when a full new planner run is actually the best next move.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat/ai-planner-reentry-decision-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-reentry-decision-bundle
+
+Scope
+- Bundle adjacent continue-working, quick revisit, and full-rerun decision guidance into one coherent Today planner layer.
+- Improve the planner experience so users can more clearly understand after applying one suggestion:
+  - when to simply keep working from the updated plan,
+  - when a quick later-today suggestion check is enough,
+  - when changed priorities or completed work make a new planner run worth the interruption,
+  - and what the lightest next step is in each case.
+- Prefer one coherent re-entry treatment over scattered reassurance copy or broad page changes.
+- Keep the change narrow and local to Today planner guidance / review / apply surfaces.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth, analytics, or backend prompt/model changes.
+- No broad redesign of the Today page.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a small hook or summary treatment is clearly warranted
+- related planner review/apply components only if clearly necessary
+
+Acceptance criteria
+- After applying one suggestion, users can tell when to keep working versus revisit suggestions later.
+- Users can tell when a fresh planner run is actually worth it.
+- Users can identify the lightest next step without reopening the planner too early.
+- Users can keep moving today without feeling trapped in repeated planner loops.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups
