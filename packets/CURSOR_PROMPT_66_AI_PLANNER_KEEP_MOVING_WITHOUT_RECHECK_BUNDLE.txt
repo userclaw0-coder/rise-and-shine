@@ -1,0 +1,55 @@
+Implement rise-and-shine packet 66: AI Planner keep-moving-without-recheck bundle.
+
+Goal
+- Build on the AI Planner post-apply confidence bundle by making the post-apply state feel decisively action-ready: combine next-step momentum, planner-can-wait guardrails, and revisit threshold guidance so users can keep moving without repeated rechecking.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat-ai-planner-keep-moving-without-recheck-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-keep-moving-without-recheck-bundle
+
+Scope
+- Bundle adjacent next-step momentum, planner-can-wait clarity, and revisit-threshold guidance into one coherent Today planner layer.
+- Improve the planner experience so users can more clearly understand after applying one suggestion:
+  - what to do next without hesitation,
+  - when they should keep working instead of rechecking the planner,
+  - what specific conditions make a later revisit worth it,
+  - and when a full rerun is still unnecessary.
+- Prefer one coherent keep-moving treatment over scattered reassurance copy or broad page changes.
+- Keep the change narrow and local to Today planner guidance / review / apply surfaces.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth, analytics, or backend prompt/model changes.
+- No broad redesign of the Today page.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a small hook or summary treatment is clearly warranted
+- related planner review/apply components only if clearly necessary
+
+Acceptance criteria
+- After applying one suggestion, users can tell the best immediate next move without reopening the planner.
+- Users can tell when they should keep working rather than rechecking planner output.
+- Users can tell the concrete threshold for a useful revisit versus unnecessary recheck.
+- Users can keep moving today with less pressure to reopen or rerun the planner.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups
