@@ -121,6 +121,9 @@ function getFallbackReasonCopy(aiStatus, aiError) {
   return humanizePlannerReason(aiError);
 }
 
+const APPLIED_CONTINUATION_NO_RERUN =
+  "To continue without another planner round-trip: your updated plan is ready. Run \"Refine these 3 with AI\" later only if you want a fresh set of suggestions.";
+
 const PHASE_CONTENT = {
   "idle-no-queue": {
     label: "Waiting for your Next 3",
@@ -202,15 +205,15 @@ const PHASE_CONTENT = {
         "Staying steady: one approval or one dismiss keeps momentum. You can leave the rest for later or run \"Refine these 3 with AI\" again anytime for a fresh set.",
     },
     appliedStateBundle: {
-      // Coherent post-apply momentum summary: payoff, next move, no rerun, keep momentum
-      immediatePayoff:
-        "That one change is already in your Next 3 or queue — you got a concrete improvement without touching anything else.",
+      // Coherent post-apply continuation: use updated plan for rest of today, what can wait, next move, no planner round-trip
+      useUpdatedPlan:
+        "For the rest of today: use your updated Next 3 or queue as your guide. That one change is already applied — no need to do anything else to \"lock it in.\"",
+      whatCanWait:
+        "What can safely wait: the rest of the suggestions, a full review of every card, and another planner run. Ignore or dismiss the remaining suggestions for now; you can run \"Refine these 3 with AI\" later if you want a fresh set.",
       smallestNextMove:
-        "Smallest next move: work your updated queue as-is, or approve or dismiss one more suggestion. No need to do a full review.",
-      noRerunNeeded:
-        "You don’t need to run the planner again right away. Your updated plan is ready; run \"Refine these 3 with AI\" later if you want a fresh set.",
-      keepMomentum:
-        "To keep momentum: use your updated Next 3 or queue as your guide. One applied change is enough to continue today.",
+        "Smallest next move: keep working from your updated plan. If you want one more tweak, approve or dismiss one more suggestion — no need to reopen the whole planner flow or review everything.",
+      continueWithoutRerun:
+        "To keep moving without another planner round-trip: work your queue as-is. Your updated plan is ready; the planner stays available whenever you want a new pass.",
     },
     icon: "●",
     color: "#059669",
@@ -237,6 +240,7 @@ const PHASE_CONTENT = {
     border: "#86efac",
   },
 };
+PHASE_CONTENT.review.appliedStateBundle.continueWithoutRerun = APPLIED_CONTINUATION_NO_RERUN;
 
 function isAppliedSuccessMessage(msg) {
   if (!msg || typeof msg !== "string") return false;
@@ -250,13 +254,16 @@ export default function AiPlannerGuidance({
   aiSuggestions,
   queueReady,
   appliedMessage,
+  appliedSuccessVisible = false,
 }) {
   const phase = getPhase({ aiLoading, aiError, aiStatus, aiSuggestions, queueReady });
   const content = PHASE_CONTENT[phase];
   const reasonCopy = getFallbackReasonCopy(aiStatus, aiError);
   const reviewSummary = getReviewSummary(aiSuggestions);
   const showAppliedState =
-    phase === "review" && content?.appliedStateBundle && appliedMessage && isAppliedSuccessMessage(appliedMessage);
+    phase === "review" &&
+    content?.appliedStateBundle &&
+    (appliedSuccessVisible || (appliedMessage && isAppliedSuccessMessage(appliedMessage)));
   if (!content) return null;
 
   return (
@@ -389,7 +396,7 @@ export default function AiPlannerGuidance({
           {showAppliedState && content.appliedStateBundle && (
             <div
               role="region"
-              aria-label="After applying — keep momentum with your updated plan"
+              aria-label="How to use your updated plan for the rest of today and what can wait"
               style={{
                 marginTop: 8,
                 padding: "10px 12px",
@@ -402,13 +409,15 @@ export default function AiPlannerGuidance({
               }}
             >
               <div style={{ fontWeight: 600, marginBottom: 4, color: "#047857" }}>
-                Keep moving — applied and ready
+                Use your updated plan for the rest of today — what can wait and how to continue
               </div>
               <ol style={{ margin: 0, paddingLeft: 18 }}>
-                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.immediatePayoff}</li>
+                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.useUpdatedPlan}</li>
+                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.whatCanWait}</li>
                 <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.smallestNextMove}</li>
-                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.noRerunNeeded}</li>
-                <li style={{ marginBottom: 0 }}>{content.appliedStateBundle.keepMomentum}</li>
+                <li style={{ marginBottom: 0 }}>
+                  {content.appliedStateBundle.continueWithoutRerun}
+                </li>
               </ol>
             </div>
           )}

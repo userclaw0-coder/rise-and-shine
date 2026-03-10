@@ -123,6 +123,7 @@ export default function TodayPage() {
   const [aiStatus, setAiStatus] = useState("idle");
   const [aiCached, setAiCached] = useState(false);
   const [appliedMessage, setAppliedMessage] = useState("");
+  const [appliedSuccessVisible, setAppliedSuccessVisible] = useState(false);
   const [subtaskApplying, setSubtaskApplying] = useState(false);
   const [subtaskApplyError, setSubtaskApplyError] = useState("");
 
@@ -412,6 +413,7 @@ export default function TodayPage() {
 
   async function handleRefineWithAi() {
     if (!user || aiLoading) return;
+    setAppliedSuccessVisible(false);
     setAiLoading(true);
     setAiError("");
     setAiStatus("loading");
@@ -569,6 +571,7 @@ export default function TodayPage() {
 
       const label = taskUpdate.title || item.suggested_title || "task";
       setAppliedMessage(`Refinement applied to "${label}".`);
+      setAppliedSuccessVisible(true);
       setTimeout(() => setAppliedMessage(""), 3000);
       dismissRefinement(index, null);
     } catch {
@@ -949,6 +952,7 @@ export default function TodayPage() {
           aiSuggestions={aiSuggestions}
           queueReady={queueEntries.length === 3}
           appliedMessage={appliedMessage}
+          appliedSuccessVisible={appliedSuccessVisible}
         />
         <div style={{ marginBottom: 12 }}>
           <button
