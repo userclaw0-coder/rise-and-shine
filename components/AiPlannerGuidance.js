@@ -52,6 +52,28 @@ const FULL_RERUN_WORTHWHILE =
 const FULL_RERUN_CHURN_AVOID =
   "Don't rerun to verify: your plan is already updated and trustworthy. Run Refine again when you want a new pass, not to double-check.";
 
+// Packet 70: AI Planner autonomy bundle — keep-moving proof, safe pause confidence, revisit vs rerun thresholds; self-sufficient at a glance
+const AUTONOMY_HEADLINE =
+  "Autonomy mode: keep moving without reopening the planner.";
+const AUTONOMY_DEFAULT_ACTION =
+  "Default action: close this and do the next task from your updated Next 3.";
+const AUTONOMY_KEEP_MOVING_PROOF =
+  "Keep-moving proof: only the approved item changed; everything else stayed as-is. Your Next 3 is still your working set, and any remaining suggestions are optional — they can wait.";
+const AUTONOMY_SAFE_PAUSE_RULE =
+  "Safe pause: a short break won’t invalidate anything. When you return, resume from your Next 3 — no planner recheck needed.";
+const AUTONOMY_QUICK_REVISIT_RULE =
+  "Quick revisit (useful, not urgent): only revisit if you can name the exact improvement you want (one clearer title, tighter subtasks, one automation idea). If you can’t name it, keep working.";
+const AUTONOMY_FULL_RERUN_RULE =
+  "Full rerun (worth it, not reassurance): rerun only after meaningful change — you finished a chunk, your Next 3 changed, or the plan now feels wrong/stuck. Otherwise it’s churn.";
+const AUTONOMY_WHEN_PLAN_STILL_GOOD =
+  "Plan still good enough when: next task is clear, you’re making progress, and nothing new made the plan feel wrong.";
+const AUTONOMY_WHEN_QUICK_REVISIT_HELPS =
+  "Quick revisit helps when: one remaining card clearly fits right now, or you’re on a short break and want one small upgrade. One card is enough — stop after one.";
+const AUTONOMY_WHEN_FULL_RERUN_WORTHWHILE =
+  "Full rerun becomes worthwhile when: you completed at least one task (or a real chunk), your Next 3 is different, or constraints changed (deadline, blocker, surprise meeting).";
+const AUTONOMY_WHEN_TO_AVOID_RERUN =
+  "Avoid rerun when: you just applied one suggestion, you’re still on the same Next 3, or you’re only seeking reassurance.";
+
 // Packet 64: Updated plan recap bundle — what changed, what to do now, when safe to ignore
 const RECAP_WHAT_CHANGED_FALLBACK =
   "One suggestion was applied; your plan is updated.";
@@ -350,6 +372,7 @@ export default function AiPlannerGuidance({
   queueReady,
   appliedMessage,
   appliedSuccessVisible = false,
+  nextActionLabel = "",
 }) {
   const phase = getPhase({ aiLoading, aiError, aiStatus, aiSuggestions, queueReady });
   const content = PHASE_CONTENT[phase];
@@ -491,7 +514,7 @@ export default function AiPlannerGuidance({
           {showAppliedState && content.appliedStateBundle && (
             <div
               role="region"
-              aria-label="Steady progress and rerun readiness: signs you can keep moving, pause or continue, when to revisit or full rerun"
+              aria-label="Autonomy after apply: keep-moving proof, safe pause confidence, revisit vs rerun thresholds"
               style={{
                 marginTop: 8,
                 padding: "10px 12px",
@@ -503,9 +526,18 @@ export default function AiPlannerGuidance({
                 color: "#065f46",
               }}
             >
-              {/* Packet 69: one coherent progress-readiness layer — steady progress, pause-vs-continue, revisit vs full rerun */}
-              <div style={{ fontWeight: 600, marginBottom: 8, color: "#047857" }}>
-                {content.appliedStateBundle.steadyProgressHeadline}
+              {/* Packet 70: one coherent autonomy layer — keep-moving proof, safe pause confidence, revisit vs rerun thresholds */}
+              <div style={{ fontWeight: 700, marginBottom: 6, color: "#047857" }}>
+                {AUTONOMY_HEADLINE}
+              </div>
+              <div style={{ marginBottom: 10, color: "#047857" }}>
+                <span style={{ fontWeight: 700 }}>Default:</span> {AUTONOMY_DEFAULT_ACTION}
+                {nextActionLabel ? (
+                  <span>
+                    {" "}
+                    <span style={{ color: "#065f46" }}>({nextActionLabel})</span>
+                  </span>
+                ) : null}
               </div>
               <div
                 style={{
@@ -516,21 +548,48 @@ export default function AiPlannerGuidance({
                   border: "1px solid #6ee7b7",
                 }}
               >
-                <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, color: "#047857", textTransform: "uppercase", letterSpacing: "0.02em" }}>
-                  Steady progress
+                <div
+                  style={{
+                    fontWeight: 700,
+                    marginBottom: 6,
+                    fontSize: 11,
+                    color: "#047857",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.02em",
+                  }}
+                >
+                  Keep-moving proof
                 </div>
-                <div style={{ marginBottom: 8 }}>{content.appliedStateBundle.steadyProgressSigns}</div>
-                <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, color: "#047857", textTransform: "uppercase", letterSpacing: "0.02em" }}>
-                  Pause or continue
+                <div style={{ marginBottom: 10 }}>{AUTONOMY_KEEP_MOVING_PROOF}</div>
+
+                <div
+                  style={{
+                    fontWeight: 700,
+                    marginBottom: 6,
+                    fontSize: 11,
+                    color: "#047857",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.02em",
+                  }}
+                >
+                  Pause vs revisit vs rerun
                 </div>
-                <div style={{ marginBottom: 4 }}>{content.appliedStateBundle.pauseSafe}</div>
-                <div style={{ marginBottom: 8 }}>{content.appliedStateBundle.whenRevisitAddsValue}</div>
-                <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, color: "#047857", textTransform: "uppercase", letterSpacing: "0.02em" }}>
-                  Revisit vs full rerun
-                </div>
-                <div style={{ marginBottom: 4 }}>{content.appliedStateBundle.quickRevisitSignals}</div>
-                <div style={{ marginBottom: 4 }}>{content.appliedStateBundle.fullRerunWorthwhile}</div>
-                <div style={{ marginBottom: 0 }}>{content.appliedStateBundle.fullRerunChurnAvoid}</div>
+                <ul style={{ margin: 0, paddingLeft: 16 }}>
+                  <li style={{ marginBottom: 6 }}>
+                    <span style={{ fontWeight: 700 }}>Keep going:</span> {AUTONOMY_WHEN_PLAN_STILL_GOOD}
+                  </li>
+                  <li style={{ marginBottom: 6 }}>
+                    <span style={{ fontWeight: 700 }}>Safe pause:</span> {AUTONOMY_SAFE_PAUSE_RULE}
+                  </li>
+                  <li style={{ marginBottom: 6 }}>
+                    <span style={{ fontWeight: 700 }}>Quick revisit:</span> {AUTONOMY_QUICK_REVISIT_RULE}{" "}
+                    {AUTONOMY_WHEN_QUICK_REVISIT_HELPS}
+                  </li>
+                  <li style={{ marginBottom: 0 }}>
+                    <span style={{ fontWeight: 700 }}>Full rerun:</span> {AUTONOMY_FULL_RERUN_RULE}{" "}
+                    {AUTONOMY_WHEN_FULL_RERUN_WORTHWHILE} {AUTONOMY_WHEN_TO_AVOID_RERUN}
+                  </li>
+                </ul>
               </div>
               <div style={{ fontWeight: 600, marginBottom: 4, color: "#047857" }}>
                 Best next move

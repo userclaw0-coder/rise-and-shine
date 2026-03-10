@@ -312,6 +312,13 @@ export default function TodayPage() {
     [queueEntries]
   );
   const queueTaskIdsKey = useMemo(() => queueTaskIds.join(","), [queueTaskIds]);
+
+  const nextActionLabel = useMemo(() => {
+    if (!Array.isArray(queueEntries) || queueEntries.length === 0) return "";
+    const next = queueEntries.find((e) => e?.task?.id && !completionMap[e.task.id]);
+    if (!next?.task?.title) return "";
+    return `Up next: "${next.task.title}"`;
+  }, [queueEntries, completionMap]);
   useEffect(() => {
     if (!user || !queueTaskIdsKey || !todayStr) return;
     const ids = queueTaskIdsKey.split(",").filter(Boolean);
@@ -598,6 +605,7 @@ export default function TodayPage() {
     setSubtaskApplying(true);
     setSubtaskApplyError("");
     setAppliedMessage("");
+    setAppliedSuccessVisible(false);
 
     const total = approvedSubtasks.length;
     try {
@@ -681,6 +689,7 @@ export default function TodayPage() {
         parts.push(`${failures.length} failed to create.`);
       }
       setAppliedMessage(parts.join(" "));
+      setAppliedSuccessVisible(true);
       setTimeout(() => setAppliedMessage(""), 6000);
     } catch (e) {
       setSubtaskApplyError(e?.message || "Failed to apply subtask orchestration. Please try again.");
@@ -953,6 +962,7 @@ export default function TodayPage() {
           queueReady={queueEntries.length === 3}
           appliedMessage={appliedMessage}
           appliedSuccessVisible={appliedSuccessVisible}
+          nextActionLabel={nextActionLabel}
         />
         <div style={{ marginBottom: 12 }}>
           <button
