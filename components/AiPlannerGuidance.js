@@ -455,17 +455,18 @@ const PHASE_CONTENT = {
   },
   fallback: {
     label: "Backup path — you’re still in good shape",
-    hint: "The full AI pass didn’t complete this time. A calm backup review is ready so you can still make progress.",
-    detail: "Your tasks haven’t changed. You stay in control of if and when any single suggestion is applied.",
+    hint: "The full AI pass didn’t complete this time. A calm backup review is ready so you can keep moving at your own pace.",
+    detail:
+      "Nothing changed without your approval. You can skim what’s here, use one helpful tweak, pause entirely, or retry for a full pass later.",
     trustBundle: {
       safety:
-        "Each suggestion is optional and applied one at a time — approving one only updates that single task and leaves the rest exactly as they are.",
-      useful:
-        "Scan for a single suggestion that clearly helps your Next 3; approve just that one and ignore or dismiss anything that doesn’t feel useful.",
+        "It’s okay to pause here — nothing breaks, nothing expires, and each suggestion only changes a single task if you approve it.",
       resume:
-        "If nothing feels right, keep working your current queue as-is and try another AI pass later — there’s no penalty for waiting.",
+        "When you come back, you resume from this same backup review; you don’t need to catch up or start over.",
+      useful:
+        "Use what helps and ignore the rest — even one small improvement still counts for today.",
       nextStep:
-        "Next step: either take one low-pressure tweak, or keep your existing plan and revisit suggestions when you have more energy.",
+        "Next step: if you’re ready, review one suggestion or take the next task in your queue; if not, close this and return when it fits.",
     },
     icon: "◇",
     color: "#92400e",
@@ -1432,6 +1433,32 @@ export default function AiPlannerGuidance({
           )}
         </div>
       </div>
+
+      {reviewSummary && (
+        <div
+          style={{
+            padding: "10px 12px",
+            borderRadius: 8,
+            background: "#f9fafb",
+            border: "1px solid #e5e7eb",
+            fontSize: 12,
+            lineHeight: 1.5,
+            color: "#374151",
+          }}
+        >
+          <div style={{ fontWeight: 600, color: "#111827" }}>
+            Ready to review: {reviewSummary.total} suggestion{reviewSummary.total === 1 ? "" : "s"}
+          </div>
+          <div style={{ color: "#4b5563", marginTop: 2 }}>
+            {reviewSummary.items.join(" · ")}
+          </div>
+          <div style={{ color: "#6b7280", marginTop: 4 }}>
+            {phase === "fallback"
+              ? "You only need one good option. You don’t need to decide everything now — pick what feels useful, or come back and review later; your place here is saved."
+              : "Review them one at a time — approving one suggestion won’t apply the others."}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
