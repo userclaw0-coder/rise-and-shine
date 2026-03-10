@@ -1,0 +1,54 @@
+Implement rise-and-shine packet 86: AI Planner morning execution stability bundle.
+
+Goal
+- Build on the morning momentum protection bundle by turning early-day momentum into a clearer morning execution stability contract: combine stronger proof that the current block should stay intact, better distinction between harmless drift and a real morning break, clearer guidance on when to make a small manual adjustment instead of rerunning AI, and a more confident late-morning threshold for keeping the day on track without planner thrash.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat-ai-planner-morning-execution-stability-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-morning-execution-stability-bundle
+
+Scope
+- Bundle adjacent stay-with-the-block proof, harmless-drift tolerance, manual-adjustment guidance, and rerun-threshold confidence into one coherent Today planner treatment.
+- Improve the planner experience so users can more clearly tell during the morning execution window:
+  - why the current block still deserves protection,
+  - what drift is normal versus what actually breaks the plan,
+  - when to make a tiny local adjustment instead of reopening the planner,
+  - and what kind of morning change truly justifies a rerun before lunch.
+- Prefer one coherent morning-stability treatment over scattered reassurance copy or broad page changes.
+- Keep the change narrow and local to Today planner guidance / review / apply surfaces.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth, analytics, or backend prompt/model changes.
+- No broad redesign of the Today page.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a small hook or summary treatment is clearly warranted
+- related planner review/apply components only if clearly necessary
+
+Acceptance criteria
+- During the morning execution window, users can tell why the current block still fits, what drift is harmless, when a manual tweak is enough, and what real shift justifies reopening the planner.
+- The planner feels more like a stable morning execution contract and less like something that should be rerun because the morning feels imperfect.
+- The change stays narrow, local, and reviewable.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups
