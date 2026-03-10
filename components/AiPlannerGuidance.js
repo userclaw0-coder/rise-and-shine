@@ -1,4 +1,5 @@
 // Packet 63: AI Planner re-entry decision bundle — when to keep working, quick revisit, or full rerun; lightest next step
+// Packet 65: AI Planner post-apply confidence bundle — what stayed the same, planner can wait, trustworthy at a glance
 const APPLIED_KEEP_WORKING =
   "Keep working: your best move is from the updated plan. Pick the next task in your queue and keep going — no need to review every remaining suggestion or run Refine again. Lightest step: work your Next 3.";
 const APPLIED_QUICK_REVISIT =
@@ -17,6 +18,12 @@ const RECAP_SAFE_TO_IGNORE =
   "You can close this and keep working — no need to reopen the planner until you've done a chunk of work, your Next 3 has changed, or you want a fresh set. Right now, another run would be an interruption.";
 const RECAP_WHEN_REVISIT_WORTH_IT =
   "Revisit later today only if one remaining suggestion clearly helps; otherwise keep moving. Run \"Refine these 3 with AI\" when you want a fresh pass — not required to keep today moving.";
+
+// Packet 65: Post-apply confidence bundle — what stayed the same, planner can wait
+const RECAP_WHAT_STAYED_SAME =
+  "Only the item you approved was updated; your queue order, other tasks, and any unapproved suggestions are unchanged — stable enough to trust.";
+const RECAP_PLANNER_CAN_WAIT =
+  "The planner can safely stay out of the way: close this and keep working. You don't need to reopen it until you've done a chunk of work, your Next 3 has changed, or you want a fresh set.";
 
 function getReviewSummary(aiSuggestions) {
   if (!aiSuggestions) return null;
@@ -223,10 +230,14 @@ const PHASE_CONTENT = {
     },
     // Packet 63: re-entry decision bundle — keep working, quick revisit, full rerun, stay in motion
     // Packet 64: updated plan recap — what changed, do now, safe to ignore, when revisit worth it
+    // Packet 65: post-apply confidence — what stayed the same, planner can wait
     appliedStateBundle: {
       title: "Updated plan recap",
+      confidenceHeadline: "Your plan is updated and trustworthy at a glance.",
       recapWhatChangedFallback: RECAP_WHAT_CHANGED_FALLBACK,
+      recapWhatStayedSame: RECAP_WHAT_STAYED_SAME,
       recapDoNow: RECAP_DO_NOW,
+      recapPlannerCanWait: RECAP_PLANNER_CAN_WAIT,
       recapSafeToIgnore: RECAP_SAFE_TO_IGNORE,
       recapWhenRevisitWorthIt: RECAP_WHEN_REVISIT_WORTH_IT,
       reEntryTitle: "Re-entry: your next move",
@@ -415,7 +426,7 @@ export default function AiPlannerGuidance({
           {showAppliedState && content.appliedStateBundle && (
             <div
               role="region"
-              aria-label="Updated plan recap: what changed, what to do now, when safe to ignore the planner"
+              aria-label="Post-apply confidence: what changed, what stayed the same, what to do now, when the planner can wait"
               style={{
                 marginTop: 8,
                 padding: "10px 12px",
@@ -430,6 +441,11 @@ export default function AiPlannerGuidance({
               <div style={{ fontWeight: 600, marginBottom: 6, color: "#047857" }}>
                 {content.appliedStateBundle.title}
               </div>
+              {content.appliedStateBundle.confidenceHeadline && (
+                <div style={{ marginBottom: 6, color: "#047857" }}>
+                  {content.appliedStateBundle.confidenceHeadline}
+                </div>
+              )}
               <div style={{ marginBottom: 6 }}>
                 <span style={{ fontWeight: 600, color: "#047857" }}>What changed:</span>{" "}
                 {appliedMessage && isAppliedSuccessMessage(appliedMessage)
@@ -437,12 +453,16 @@ export default function AiPlannerGuidance({
                   : content.appliedStateBundle.recapWhatChangedFallback}
               </div>
               <div style={{ marginBottom: 6 }}>
+                <span style={{ fontWeight: 600, color: "#047857" }}>What stayed the same:</span>{" "}
+                {content.appliedStateBundle.recapWhatStayedSame}
+              </div>
+              <div style={{ marginBottom: 6 }}>
                 <span style={{ fontWeight: 600, color: "#047857" }}>Do now:</span>{" "}
                 {content.appliedStateBundle.recapDoNow}
               </div>
               <div style={{ marginBottom: 6 }}>
-                <span style={{ fontWeight: 600, color: "#047857" }}>Safe to ignore for now:</span>{" "}
-                {content.appliedStateBundle.recapSafeToIgnore}
+                <span style={{ fontWeight: 600, color: "#047857" }}>Planner can wait:</span>{" "}
+                {content.appliedStateBundle.recapPlannerCanWait}
               </div>
               <div style={{ marginBottom: reviewSummary?.total > 0 ? 6 : 8 }}>
                 <span style={{ fontWeight: 600, color: "#047857" }}>When to revisit or rerun:</span>{" "}
