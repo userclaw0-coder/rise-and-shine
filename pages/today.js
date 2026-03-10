@@ -345,6 +345,19 @@ export default function TodayPage() {
     if (!hasEvidenceOfProgressOrRefill) return false;
     return true;
   }, [queueEntries, completionMap, dailyPlan]);
+
+  const isAfterLunchExecution = useMemo(() => {
+    if (!Array.isArray(queueEntries) || queueEntries.length === 0) return false;
+    const now = new Date();
+    const hourFraction = now.getHours() + now.getMinutes() / 60;
+    const isAfternoonBlock = hourFraction >= 12 && hourFraction < 17.5;
+    if (!isAfternoonBlock) return false;
+    const anyQueueCompleted = queueEntries.some((e) => !!completionMap[e.task?.id]);
+    const refilledCount = dailyPlan?.refilled_count ?? 0;
+    const hasEvidenceOfProgressOrRefill = anyQueueCompleted || refilledCount > 0;
+    if (!hasEvidenceOfProgressOrRefill) return false;
+    return true;
+  }, [queueEntries, completionMap, dailyPlan]);
   useEffect(() => {
     if (!user || !queueTaskIdsKey || !todayStr) return;
     const ids = queueTaskIdsKey.split(",").filter(Boolean);
@@ -1057,6 +1070,7 @@ export default function TodayPage() {
           nextActionLabel={nextActionLabel}
           isMorningFirstBlock={isMorningFirstBlock}
           isLateMorningExecution={isLateMorningExecution}
+          isAfterLunchExecution={isAfterLunchExecution}
         />
         <div style={{ marginBottom: 12 }}>
           <button

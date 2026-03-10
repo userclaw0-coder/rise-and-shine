@@ -251,6 +251,24 @@ const PRE_LUNCH_AFTERNOON_INHERIT_RULE =
 const PRE_LUNCH_AFTERNOON_RERUN_THRESHOLD =
   "Afternoon rerun threshold: only treat the afternoon as a new plan when more than half of what you expect to do after lunch is different in kind from your current Next 3, or a clear new constraint reshapes the rest of the day. Otherwise, let this plan carry you into lunch and out the other side — you can always rerun calmly later if the afternoon truly becomes a different day.";
 
+// Packet 89: AI Planner after-lunch inheritance bundle — builds on the pre-lunch execution contract:
+// afternoon plan-carry proof, harmless lunch disruption thresholds, carry-forward triage, and a calm post-lunch rerun rule.
+const AFTER_LUNCH_TITLE = "After-lunch inheritance contract";
+const AFTER_LUNCH_HEADLINE =
+  "Treat the afternoon as inheriting this Morning+Lunch lane by default — your plan usually survives lunch, and only a real half-day change should trigger a fresh planner run.";
+const AFTER_LUNCH_WHEN_PLAN_CARRIES =
+  "When the existing plan still carries the afternoon: your Next 3 still mostly matches how you meant to use the rest of today, at least one Next-3 item still looks like a good use of post-lunch energy, and nothing new has rewritten what this half of the day is for. In that case, start from the first not-done item and keep going — no rerun needed just because lunch happened.";
+const AFTER_LUNCH_HARMLESS_DISRUPTIONS =
+  "Harmless lunch-time disruption: your lunch break was longer or shorter than planned; you skimmed messages or chats; a quick check-in meeting touched the same work; or you needed a few minutes of warm-up or context re-reading after coming back. As long as your first Next-3 task still roughly fits this block, those bumps don’t invalidate the plan.";
+const AFTER_LUNCH_PLAN_BREAKERS =
+  "Lunch actually broke the plan when: a new meeting or request eats most of the afternoon, a deadline or blocker clearly reshapes what “after lunch” should be about, or more than half of your current Next 3 now belongs to the wrong kind of day (for example, deep work vs errands). That’s a sign the lane itself changed, not just the pacing.";
+const AFTER_LUNCH_CARRY_FORWARD_TRIAGE =
+  "Carry forward without guilt: keep only the tasks that still matter for this afternoon, park anything that truly slid out of today’s focus into backlog or another day, and treat unchanged-but-less-important items as safely optional. You don’t have to “catch up” on every pre-lunch intention for the plan to count as intact.";
+const AFTER_LUNCH_RERUN_WORTH_IT =
+  "When a calm post-lunch rerun is worth it: more than half of what you expect to do after lunch is different in kind from your current Next 3, or a clear new constraint (deadline, blocker, surprise project) reshapes the rest of the day. In that case, a single fresh pass in your first post-lunch block is better than forcing the old half-day lane to fit.";
+const AFTER_LUNCH_RERUN_NOT_NEEDED =
+  "When rerun is not needed: your first Next-3 task still looks reasonable after a few minutes of trying, the afternoon is still pointed at the same overall focus, and any friction is mostly “getting back into it” rather than being stuck for >10–15 minutes. In that case, treat reopening the planner as reassurance churn — keep executing from the inherited plan instead.";
+
 // Packet 64: Updated plan recap bundle — what changed, what to do now, when safe to ignore
 const RECAP_WHAT_CHANGED_FALLBACK =
   "One suggestion was applied; your plan is updated.";
@@ -523,6 +541,15 @@ const PHASE_CONTENT = {
       morningRestartWhatStaysUntouched: MORNING_RESTART_WHAT_STAYS_UNTOUCHED,
       morningRestartFrictionNormal: MORNING_RESTART_FRICTION_NORMAL,
       morningRestartRerunOnlyIf: MORNING_RESTART_RERUN_ONLY_IF,
+      // Packet 89: after-lunch inheritance bundle
+      afterLunchTitle: AFTER_LUNCH_TITLE,
+      afterLunchHeadline: AFTER_LUNCH_HEADLINE,
+      afterLunchWhenPlanCarries: AFTER_LUNCH_WHEN_PLAN_CARRIES,
+      afterLunchHarmlessDisruptions: AFTER_LUNCH_HARMLESS_DISRUPTIONS,
+      afterLunchPlanBreakers: AFTER_LUNCH_PLAN_BREAKERS,
+      afterLunchCarryForwardTriage: AFTER_LUNCH_CARRY_FORWARD_TRIAGE,
+      afterLunchRerunWorthIt: AFTER_LUNCH_RERUN_WORTH_IT,
+      afterLunchRerunNotNeeded: AFTER_LUNCH_RERUN_NOT_NEEDED,
     },
     icon: "●",
     color: "#059669",
@@ -567,6 +594,7 @@ export default function AiPlannerGuidance({
   nextActionLabel = "",
   isMorningFirstBlock = false,
   isLateMorningExecution = false,
+  isAfterLunchExecution = false,
 }) {
   const phase = getPhase({ aiLoading, aiError, aiStatus, aiSuggestions, queueReady });
   const content = PHASE_CONTENT[phase];
@@ -961,6 +989,64 @@ export default function AiPlannerGuidance({
                       </li>
                     </ol>
                   </div>
+                </div>
+              )}
+
+              {isAfterLunchExecution && !isMorningFirstBlock && !isLateMorningExecution && (
+                <div
+                  role="region"
+                  aria-label="After-lunch inheritance contract"
+                  style={{
+                    marginTop: 10,
+                    padding: "10px 10px 8px",
+                    borderRadius: 6,
+                    background: "#eff6ff",
+                    border: "1px solid #bfdbfe",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontWeight: 900,
+                      marginBottom: 4,
+                      color: "#1d4ed8",
+                    }}
+                  >
+                    {content.appliedStateBundle.afterLunchTitle}
+                  </div>
+                  <div style={{ marginBottom: 6, color: "#1e3a8a", fontSize: 12 }}>
+                    {content.appliedStateBundle.afterLunchHeadline}
+                  </div>
+                  <ol
+                    style={{
+                      margin: 0,
+                      paddingLeft: 18,
+                      fontSize: 12,
+                      color: "#1f2937",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    <li style={{ marginBottom: 4 }}>
+                      <span style={{ fontWeight: 600 }}>When the existing plan still carries:</span>{" "}
+                      {content.appliedStateBundle.afterLunchWhenPlanCarries}
+                    </li>
+                    <li style={{ marginBottom: 4 }}>
+                      <span style={{ fontWeight: 600 }}>Harmless lunch-time disruption:</span>{" "}
+                      {content.appliedStateBundle.afterLunchHarmlessDisruptions}
+                    </li>
+                    <li style={{ marginBottom: 4 }}>
+                      <span style={{ fontWeight: 600 }}>When lunch actually broke the plan:</span>{" "}
+                      {content.appliedStateBundle.afterLunchPlanBreakers}
+                    </li>
+                    <li style={{ marginBottom: 4 }}>
+                      <span style={{ fontWeight: 600 }}>Carry forward without guilt:</span>{" "}
+                      {content.appliedStateBundle.afterLunchCarryForwardTriage}
+                    </li>
+                    <li style={{ marginBottom: 0 }}>
+                      <span style={{ fontWeight: 600 }}>Calm post-lunch rerun rule:</span>{" "}
+                      {content.appliedStateBundle.afterLunchRerunWorthIt}{" "}
+                      {content.appliedStateBundle.afterLunchRerunNotNeeded}
+                    </li>
+                  </ol>
                 </div>
               )}
 
