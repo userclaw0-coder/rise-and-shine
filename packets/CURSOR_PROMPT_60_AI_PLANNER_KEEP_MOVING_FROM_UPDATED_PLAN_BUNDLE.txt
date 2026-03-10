@@ -1,0 +1,54 @@
+Implement rise-and-shine packet 60: AI Planner keep-moving-from-updated-plan bundle.
+
+Goal
+- Build on the applied-state light-review bundle by turning the post-apply state into a clearer Today workflow: make it obvious how to keep moving from the updated plan, what deserves one more glance, and what can stay deferred without reopening the planner loop.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat/ai-planner-keep-moving-from-updated-plan-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-keep-moving-from-updated-plan-bundle
+
+Scope
+- Bundle adjacent post-apply keep-moving, next-step, and defer-safely improvements into one coherent Today planner layer.
+- Improve the planner experience so users can more clearly understand after applying one suggestion:
+  - what the best immediate move is from the updated plan,
+  - whether any remaining suggestions deserve a quick second look,
+  - what can be deferred without losing momentum,
+  - and how to continue today without restarting another planner round.
+- Prefer one coherent continue-working treatment over extra scattered reassurance copy.
+- Keep the change narrow and local to Today planner guidance / review / apply surfaces.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth, analytics, or backend prompt/model changes.
+- No broad redesign of the Today page.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a small hook or summary treatment is clearly warranted
+- related planner review/apply components only if clearly necessary
+
+Acceptance criteria
+- After applying one suggestion, users can tell the best immediate move from the updated plan.
+- Users can distinguish between suggestions worth a quick glance and suggestions that can wait.
+- Users can keep moving without feeling pushed back into a full planner rerun.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups
