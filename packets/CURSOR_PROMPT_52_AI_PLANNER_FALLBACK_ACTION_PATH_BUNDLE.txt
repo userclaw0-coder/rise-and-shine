@@ -1,0 +1,54 @@
+Implement rise-and-shine packet 52: AI Planner fallback action path bundle.
+
+Goal
+- Build on the fallback trust bundle by making the Today fallback state more actionable: show a clearer next move, reinforce one-at-a-time apply safety, and make tweak/apply/revisit choices feel easy and low pressure.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat/ai-planner-fallback-action-path-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-fallback-action-path-bundle
+
+Scope
+- Bundle adjacent fallback action-path improvements in the existing Today planner guidance / review area.
+- Improve the fallback state so it more clearly communicates:
+  - one useful next move,
+  - apply safety and one-at-a-time control,
+  - tweak/apply/revisit choices without pressure,
+  - and a calm path from fallback suggestions to progress.
+- Keep the change narrow and local to Today.
+- Prefer one coherent action-path block over scattered one-line cues.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth, analytics, or backend prompt/model changes.
+- No broad redesign of the planner surface.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a tiny wording or layout hook is clearly warranted
+- related small planner review components only if clearly necessary
+
+Acceptance criteria
+- Fallback review feels clearer and more actionable as one bundled experience.
+- Users can quickly understand what to do next and that applying suggestions remains safe and controlled.
+- The change remains narrow, user-facing, and reviewable.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups
