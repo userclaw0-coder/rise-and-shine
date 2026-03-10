@@ -269,6 +269,23 @@ const AFTER_LUNCH_RERUN_WORTH_IT =
 const AFTER_LUNCH_RERUN_NOT_NEEDED =
   "When rerun is not needed: your first Next-3 task still looks reasonable after a few minutes of trying, the afternoon is still pointed at the same overall focus, and any friction is mostly “getting back into it” rather than being stuck for >10–15 minutes. In that case, treat reopening the planner as reassurance churn — keep executing from the inherited plan instead.";
 
+// Packet 90: AI Planner late-afternoon continuity bundle — builds on after-lunch inheritance:
+// late-afternoon plan-carry proof, normal slowdown thresholds, still-worth-doing triage,
+// and end-of-day vs tomorrow-rerun guidance.
+const LATE_AFTERNOON_TITLE = "Late-afternoon continuity contract";
+const LATE_AFTERNOON_HEADLINE =
+  "Treat the last work block as the tail of the same plan — most afternoons don’t need a new planner run, just a calmer finish inside the lane you already chose.";
+const LATE_AFTERNOON_WHEN_PLAN_STILL_CARRIES =
+  "Your existing plan still carries the rest of today when: at least one Next-3 task still looks like a good use of your remaining energy, the overall focus of your queue matches what you meant this day to be about, and nothing big has rewritten your constraints (no new deadline, blocker, or surprise project that eats the whole block). In that case, keep working from the first not-done task instead of reopening the planner.";
+const LATE_AFTERNOON_NORMAL_SLOWDOWN =
+  "Normal late-day slowdown: moving more slowly than hoped, shrinking what “done” means for a task, or letting something spill slightly into tomorrow. Feeling tired, needing extra rereads, or doing smaller-than-ideal chunks inside the same task is still compatible with the plan fitting — it doesn’t mean the day needs a new plan.";
+const LATE_AFTERNOON_REAL_SCOPE_RESET =
+  "Real scope reset: most of the work you can realistically do with the time and energy left is clearly different in kind from what’s in your current Next 3 (for example, you meant to finish deep work but now only have energy for small admin), or a new constraint genuinely rewrites what the rest of today should be for. That’s a signal the lane itself changed, not just the pace inside it.";
+const LATE_AFTERNOON_CARRY_FORWARD_TRIAGE =
+  "Late-day carry-forward triage: keep only the tasks that still feel meaningfully worth doing today or tomorrow, park anything that clearly no longer belongs to this week or this version of today into backlog or another day, and let “nice-to-have but no longer realistic” items go without guilt. Your plan is allowed to end smaller than it started.";
+const LATE_AFTERNOON_END_OF_DAY_VS_TOMORROW =
+  "End-of-day vs tomorrow rerun: if at least one Next-3 task still fits and you’re not stuck for more than ~10–15 minutes once you try it, finish the day by doing a small chunk and then use the existing plan as your overnight carryforward. Only plan a fresh rerun (tonight or tomorrow) when more than half of what should happen next is different in kind from your current Next 3 or a real constraint changed — not just because the day felt slow or imperfect.";
+
 // Packet 64: Updated plan recap bundle — what changed, what to do now, when safe to ignore
 const RECAP_WHAT_CHANGED_FALLBACK =
   "One suggestion was applied; your plan is updated.";
@@ -595,6 +612,7 @@ export default function AiPlannerGuidance({
   isMorningFirstBlock = false,
   isLateMorningExecution = false,
   isAfterLunchExecution = false,
+  isLateAfternoonExecution = false,
 }) {
   const phase = getPhase({ aiLoading, aiError, aiStatus, aiSuggestions, queueReady });
   const content = PHASE_CONTENT[phase];
@@ -992,7 +1010,10 @@ export default function AiPlannerGuidance({
                 </div>
               )}
 
-              {isAfterLunchExecution && !isMorningFirstBlock && !isLateMorningExecution && (
+              {isAfterLunchExecution &&
+                !isMorningFirstBlock &&
+                !isLateMorningExecution &&
+                !isLateAfternoonExecution && (
                 <div
                   role="region"
                   aria-label="After-lunch inheritance contract"
@@ -1045,6 +1066,63 @@ export default function AiPlannerGuidance({
                       <span style={{ fontWeight: 600 }}>Calm post-lunch rerun rule:</span>{" "}
                       {content.appliedStateBundle.afterLunchRerunWorthIt}{" "}
                       {content.appliedStateBundle.afterLunchRerunNotNeeded}
+                    </li>
+                  </ol>
+                </div>
+              )}
+
+              {isLateAfternoonExecution && !isMorningFirstBlock && !isLateMorningExecution && (
+                <div
+                  role="region"
+                  aria-label="Late-afternoon continuity contract"
+                  style={{
+                    marginTop: 10,
+                    padding: "10px 10px 8px",
+                    borderRadius: 6,
+                    background: "#fef2f2",
+                    border: "1px solid #fecaca",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontWeight: 900,
+                      marginBottom: 4,
+                      color: "#991b1b",
+                    }}
+                  >
+                    {LATE_AFTERNOON_TITLE}
+                  </div>
+                  <div style={{ marginBottom: 6, color: "#7f1d1d", fontSize: 12 }}>
+                    {LATE_AFTERNOON_HEADLINE}
+                  </div>
+                  <ol
+                    style={{
+                      margin: 0,
+                      paddingLeft: 18,
+                      fontSize: 12,
+                      color: "#111827",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    <li style={{ marginBottom: 4 }}>
+                      <span style={{ fontWeight: 600 }}>When the existing plan still deserves to carry:</span>{" "}
+                      {LATE_AFTERNOON_WHEN_PLAN_STILL_CARRIES}
+                    </li>
+                    <li style={{ marginBottom: 4 }}>
+                      <span style={{ fontWeight: 600 }}>Normal late-day slowdown vs a broken day:</span>{" "}
+                      {LATE_AFTERNOON_NORMAL_SLOWDOWN}
+                    </li>
+                    <li style={{ marginBottom: 4 }}>
+                      <span style={{ fontWeight: 600 }}>When today actually changed shape:</span>{" "}
+                      {LATE_AFTERNOON_REAL_SCOPE_RESET}
+                    </li>
+                    <li style={{ marginBottom: 4 }}>
+                      <span style={{ fontWeight: 600 }}>Keep only the still-valuable tasks:</span>{" "}
+                      {LATE_AFTERNOON_CARRY_FORWARD_TRIAGE}
+                    </li>
+                    <li style={{ marginBottom: 0 }}>
+                      <span style={{ fontWeight: 600 }}>Calm end-of-day carryforward vs rerun:</span>{" "}
+                      {LATE_AFTERNOON_END_OF_DAY_VS_TOMORROW}
                     </li>
                   </ol>
                 </div>
