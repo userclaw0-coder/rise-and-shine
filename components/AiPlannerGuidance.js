@@ -201,6 +201,22 @@ const MORNING_MOMENTUM_STAY_WITH_BLOCK =
 const MORNING_MOMENTUM_RERUN_THRESHOLD =
   "Mid-morning rerun threshold: only reopen the planner after you’ve either finished this first block or given it a real try (one solid attempt, not just a few minutes of wobble) and one of the “real plan mismatch” conditions is true. Otherwise, keep executing from the current Next 3.";
 
+// Packet 86: AI Planner morning execution stability bundle — one coherent morning-stability contract:
+// stay-with-the-block proof, harmless-drift vs real break, manual-adjustment guidance, and a clearer late-morning rerun threshold.
+const MORNING_STABILITY_TITLE = "Morning execution stability contract";
+const MORNING_STABILITY_HEADLINE =
+  "For the first half of the morning, treat this block as a stable contract: small wobble is allowed inside it, and only a real break in what this block is for should send you back to the planner.";
+const MORNING_STABILITY_PROOF =
+  "Why this block still deserves protection: it’s anchored to the top task you already chose, your updated Next 3 still matches how you meant to use this morning, and nothing big has changed in your constraints. You’re not waiting on a better plan — you’re executing the one that already fits.";
+const MORNING_STABILITY_HARMLESS_DRIFT =
+  "Harmless drift: glancing at messages once, needing a few minutes to warm up, briefly tidying a small related detail, or sliding between tiny sub-steps of the same task for ≤10–15 minutes still counts as being inside this block. That wobble is normal, not a reason to reopen the planner.";
+const MORNING_STABILITY_REAL_BREAK =
+  "Real morning break: a surprise meeting that eats this whole block, a new deadline that clearly wants a different focus, or realizing that most of your effort in this block is going to a different task than the one at the top of your Next 3. That’s when this block has actually been repurposed.";
+const MORNING_STABILITY_MANUAL_ADJUST =
+  "When a small manual adjustment is enough: if the shape of the work is still right but the details need a tweak — renaming the task, trimming scope, changing effort, or reordering within the same cluster — edit the task or Next 3 directly instead of rerunning AI. Those small edits keep the contract intact without planner churn.";
+const MORNING_STABILITY_RERUN_THRESHOLD =
+  "Late-morning rerun threshold: only reopen the planner once you’ve given this block a real attempt and one of the real-break conditions is true — your first task no longer fits this time at all, more than half of your Next 3 clearly belongs to a different kind of day, or a new constraint reshapes what the rest of the morning should be. Below that bar, stay with the current block and keep nudging it forward.";
+
 // Packet 64: Updated plan recap bundle — what changed, what to do now, when safe to ignore
 const RECAP_WHAT_CHANGED_FALLBACK =
   "One suggestion was applied; your plan is updated.";
@@ -738,7 +754,7 @@ export default function AiPlannerGuidance({
               {isMorningFirstBlock && (
                 <div
                   role="region"
-                  aria-label="Morning momentum protection contract"
+                  aria-label="Morning execution stability and momentum contract"
                   style={{
                     marginTop: 10,
                     padding: "10px 10px 8px",
@@ -754,10 +770,10 @@ export default function AiPlannerGuidance({
                       color: "#1d4ed8",
                     }}
                   >
-                    {MORNING_MOMENTUM_TITLE}
+                    {MORNING_STABILITY_TITLE}
                   </div>
                   <div style={{ marginBottom: 6, color: "#1e3a8a", fontSize: 12 }}>
-                    {MORNING_MOMENTUM_HEADLINE}
+                    {MORNING_STABILITY_HEADLINE}
                   </div>
                   <ol
                     style={{
@@ -769,8 +785,9 @@ export default function AiPlannerGuidance({
                     }}
                   >
                     <li style={{ marginBottom: 4 }}>
-                      <span style={{ fontWeight: 600 }}>Keep going from here:</span>{" "}
-                      {MORNING_MOMENTUM_KEEP_GOING_PROOF} {FIRST_BLOCK_KEEP_DOING}{" "}
+                      <span style={{ fontWeight: 600 }}>Why this block still fits:</span>{" "}
+                      {MORNING_STABILITY_PROOF} {MORNING_MOMENTUM_KEEP_GOING_PROOF}{" "}
+                      {FIRST_BLOCK_KEEP_DOING}{" "}
                       {nextActionLabel ? (
                         <span style={{ fontWeight: 600 }}>
                           First-block focus: {nextActionLabel}
@@ -778,24 +795,26 @@ export default function AiPlannerGuidance({
                       ) : null}
                     </li>
                     <li style={{ marginBottom: 4 }}>
-                      <span style={{ fontWeight: 600 }}>This wobble is harmless:</span>{" "}
-                      {FIRST_BLOCK_WOBBLE_NORMAL} {MORNING_MOMENTUM_WOBBLE_NORMAL}
+                      <span style={{ fontWeight: 600 }}>Harmless drift vs real break:</span>{" "}
+                      {FIRST_BLOCK_WOBBLE_NORMAL} {MORNING_MOMENTUM_WOBBLE_NORMAL}{" "}
+                      {MORNING_STABILITY_HARMLESS_DRIFT}
                     </li>
                     <li style={{ marginBottom: 4 }}>
                       <span style={{ fontWeight: 600 }}>Signs the plan still fits:</span>{" "}
                       {FIRST_BLOCK_WHEN_PLAN_STILL_GOOD}
                     </li>
                     <li style={{ marginBottom: 4 }}>
-                      <span style={{ fontWeight: 600 }}>When it’s a real mismatch:</span>{" "}
-                      {MORNING_MOMENTUM_REAL_MISMATCH}
+                      <span style={{ fontWeight: 600 }}>When the morning actually broke:</span>{" "}
+                      {MORNING_MOMENTUM_REAL_MISMATCH} {MORNING_STABILITY_REAL_BREAK}
                     </li>
                     <li style={{ marginBottom: 4 }}>
-                      <span style={{ fontWeight: 600 }}>Stay-with-the-block rule:</span>{" "}
-                      {MORNING_MOMENTUM_STAY_WITH_BLOCK}
+                      <span style={{ fontWeight: 600 }}>Small manual tweak vs rerun:</span>{" "}
+                      {MORNING_STABILITY_MANUAL_ADJUST} {MORNING_MOMENTUM_STAY_WITH_BLOCK}
                     </li>
                     <li style={{ marginBottom: 0 }}>
-                      <span style={{ fontWeight: 600 }}>Rerun only when:</span>{" "}
-                      {FIRST_BLOCK_RERUN_ONLY_IF} {MORNING_MOMENTUM_RERUN_THRESHOLD}
+                      <span style={{ fontWeight: 600 }}>Late-morning rerun threshold:</span>{" "}
+                      {FIRST_BLOCK_RERUN_ONLY_IF} {MORNING_MOMENTUM_RERUN_THRESHOLD}{" "}
+                      {MORNING_STABILITY_RERUN_THRESHOLD}
                     </li>
                   </ol>
                 </div>
