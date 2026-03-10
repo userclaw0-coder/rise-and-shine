@@ -1,0 +1,55 @@
+Implement rise-and-shine packet 64: AI Planner updated plan recap bundle.
+
+Goal
+- Build on the AI Planner re-entry decision bundle by making the post-apply state easier to trust at a glance: give users a compact recap of what changed, what to do now, and when they can safely ignore the planner for a while.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat/ai-planner-updated-plan-recap-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-updated-plan-recap-bundle
+
+Scope
+- Bundle adjacent updated-plan recap, keep-working-now, and safe-to-ignore-for-now guidance into one coherent Today planner layer.
+- Improve the planner experience so users can more clearly understand after applying one suggestion:
+  - what changed in their plan,
+  - what the best immediate next move is,
+  - when they can simply keep working without checking the planner again,
+  - and when another revisit or rerun is actually useful.
+- Prefer one coherent recap treatment over scattered reassurance copy or broad page changes.
+- Keep the change narrow and local to Today planner guidance / review / apply surfaces.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth, analytics, or backend prompt/model changes.
+- No broad redesign of the Today page.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a small hook or summary treatment is clearly warranted
+- related planner review/apply components only if clearly necessary
+
+Acceptance criteria
+- After applying one suggestion, users can quickly see what changed and what to do next.
+- Users can tell when they can safely keep working without reopening the planner.
+- Users can tell when a later revisit or fresh planner run is actually worth it.
+- Users can keep moving today without feeling pulled back into repeated planner checks.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups
