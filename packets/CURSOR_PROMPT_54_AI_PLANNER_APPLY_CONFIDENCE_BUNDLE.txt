@@ -1,0 +1,54 @@
+Implement rise-and-shine packet 54: AI Planner apply confidence bundle.
+
+Goal
+- Build on the fallback trust, action-path, and review-readiness bundles by making the Today planner review state easier to act on: clarify exactly what approving one suggestion does now, what dismissing or skipping means, and how to take the lowest-risk path from review to progress.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat/ai-planner-apply-confidence-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-apply-confidence-bundle
+
+Scope
+- Bundle adjacent planner apply-confidence improvements into one coherent readiness-to-action layer on Today.
+- Improve the review experience so it more clearly communicates:
+  - what changes immediately when one suggestion is approved,
+  - what remains untouched until separately approved or dismissed,
+  - what dismissing/ignoring a suggestion means for the current plan,
+  - and the quickest low-risk way to move from review into real progress.
+- Keep the change narrow and local to Today planner guidance/review surfaces.
+- Prefer one coherent apply-confidence summary over scattered micro-cues.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth, analytics, or backend prompt/model changes.
+- No broad redesign of the planner surface.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a tiny wording or layout hook is clearly warranted
+- related small planner review components only if clearly necessary
+
+Acceptance criteria
+- The planner review state feels safer to act on, not just safer to read.
+- Users can quickly understand what approving one suggestion does now, what stays untouched, and what dismiss/skip means.
+- The change remains narrow, user-facing, and reviewable.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups
