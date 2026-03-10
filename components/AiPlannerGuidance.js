@@ -83,6 +83,8 @@ const RERUN_AVOID_THRESHOLD =
 // Packet 76: AI Planner execution pace bundle — one dense Today layer: focus-now, what-can-wait, later-today revisit timing, rerun escalation triggers
 // Packet 78: AI Planner continue-until-blocked bundle — unify keep-going proof, can-wait boundaries,
 // optional checkpoint timing, and interruption-vs-rerun thresholds into one denser post-apply layer.
+// Packet 79: AI Planner checkpoint-and-resume bundle — short checkpoint timing, resume-without-rerun confidence,
+// what-can-stay-untouched guidance, and blocker-vs-rerun boundaries in one Today planner layer.
 const EXECUTION_WINDOW_TITLE = "Continue until blocked (today)";
 const EXECUTION_WINDOW_SUBTITLE =
   "A single post-apply contract: keep executing from your updated Next 3 until you’re meaningfully blocked — with clear can-wait boundaries, an optional checkpoint, and rerun-only-if triggers.";
@@ -96,10 +98,16 @@ const EW_CHECKPOINT_WINDOW =
   "Checkpoint (optional): after you finish one task or after ~60–120 minutes, take ≤2 minutes to confirm your Next 3 still fits.";
 const EW_CHECKPOINT_DECISION =
   "If it still fits, close and continue. If it doesn’t, either adjust your Next 3 manually or do one quick card revisit (one card, then stop). Escalate to a full rerun only if a trigger below is true.";
+const EW_RESUME_LATER_WITHOUT_RERUN =
+  "When you come back later today — even after a break or context switch — simply resume from your updated Next 3; you don’t need to reopen the planner unless a rerun trigger is true.";
 const EW_INTERRUPTION_RULE =
   "Interruption rule: interruptions (meetings/messages/context switches) don’t require a rerun by themselves — resume from your Next 3 unless the interruption changed constraints.";
 const EW_RERUN_ONLY_IF =
   "Full rerun only if: your Next 3 changed, constraints changed (deadline/blocker/surprise meeting), you finished a real chunk and want a fresh set, or you’re stuck/wrong for >10 minutes. Otherwise keep executing.";
+const EW_WHAT_CAN_STAY_UNTOUCHED =
+  "You don’t need to re-plan backlog items, other days, or remaining cards at every checkpoint — they can stay exactly as they are until a rerun trigger is true.";
+const EW_BLOCKER_BOUNDARY =
+  "Treat “blocked for >10 minutes or plan feels wrong for this session” as the boundary — that’s when a single rerun is worth it; below that, keep working from the current Next 3.";
 
 // Packet 64: Updated plan recap bundle — what changed, what to do now, when safe to ignore
 const RECAP_WHAT_CHANGED_FALLBACK =
@@ -668,6 +676,9 @@ export default function AiPlannerGuidance({
                   <div style={{ color: "#065f46" }}>
                     <span style={{ fontWeight: 800 }}>Stop rule:</span> {SELF_TRUST_STOP_RULE}
                   </div>
+                  <div style={{ marginTop: 4, color: "#065f46" }}>
+                    <span style={{ fontWeight: 800 }}>Can stay untouched:</span> {EW_WHAT_CAN_STAY_UNTOUCHED}
+                  </div>
                 </div>
 
                 <div
@@ -684,8 +695,11 @@ export default function AiPlannerGuidance({
                   <div style={{ marginBottom: 6 }}>
                     <span style={{ fontWeight: 800 }}>Timing:</span> {EW_CHECKPOINT_WINDOW}
                   </div>
-                  <div style={{ color: "#065f46" }}>
+                  <div style={{ color: "#065f46", marginBottom: 6 }}>
                     <span style={{ fontWeight: 800 }}>Decision:</span> {EW_CHECKPOINT_DECISION}
+                  </div>
+                  <div style={{ color: "#065f46" }}>
+                    <span style={{ fontWeight: 800 }}>Resume later:</span> {EW_RESUME_LATER_WITHOUT_RERUN}
                   </div>
                 </div>
 
@@ -708,6 +722,9 @@ export default function AiPlannerGuidance({
                   </div>
                   <div style={{ color: "#065f46" }}>
                     <span style={{ fontWeight: 800 }}>Avoid rerun when:</span> {RERUN_AVOID_THRESHOLD}
+                  </div>
+                  <div style={{ marginTop: 4, color: "#065f46" }}>
+                    <span style={{ fontWeight: 800 }}>Blocker boundary:</span> {EW_BLOCKER_BOUNDARY}
                   </div>
                 </div>
               </div>
