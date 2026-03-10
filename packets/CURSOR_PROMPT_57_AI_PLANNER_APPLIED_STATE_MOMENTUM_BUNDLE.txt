@@ -1,0 +1,54 @@
+Implement rise-and-shine packet 57: AI Planner applied-state momentum bundle.
+
+Goal
+- Build on the applied-state confidence bundle by making the Today planner feel easier to continue using after one applied suggestion: clarify the immediate payoff, the smallest next move, whether a planner rerun is unnecessary for now, and how to keep momentum with the updated Next 3 or queue.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat/ai-planner-applied-state-momentum-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-applied-state-momentum-bundle
+
+Scope
+- Bundle adjacent applied-state momentum improvements into one coherent Today planner layer.
+- Improve the planner experience so users can more clearly understand after applying one suggestion:
+  - the immediate payoff of the change,
+  - the smallest useful next move,
+  - what can safely wait,
+  - and that they do not need another full planner pass to keep moving today.
+- Prefer one coherent post-apply momentum summary over scattered reassurance lines.
+- Keep the change narrow and local to Today planner guidance / review / apply surfaces.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth, analytics, or backend prompt/model changes.
+- No broad redesign of the Today page.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a small hook or summary treatment is clearly warranted
+- related planner review/apply components only if clearly necessary
+
+Acceptance criteria
+- After applying one suggestion, the planner feels easier to continue from without extra review overhead.
+- Users can tell the immediate payoff, the next low-risk move, and that another full planner run is optional.
+- The change remains narrow, user-facing, and reviewable.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups
