@@ -55,8 +55,6 @@ const FULL_RERUN_CHURN_AVOID =
 // Packet 70: AI Planner autonomy bundle — keep-moving proof, safe pause confidence, revisit vs rerun thresholds; self-sufficient at a glance
 const AUTONOMY_HEADLINE =
   "Autonomy mode: keep moving without reopening the planner.";
-const AUTONOMY_DEFAULT_ACTION =
-  "Default action: close this and do the next task from your updated Next 3.";
 const AUTONOMY_KEEP_MOVING_PROOF =
   "Keep-moving proof: only the approved item changed; everything else stayed as-is. Your Next 3 is still your working set, and any remaining suggestions are optional — they can wait.";
 const AUTONOMY_SAFE_PAUSE_RULE =
@@ -74,20 +72,26 @@ const AUTONOMY_WHEN_FULL_RERUN_WORTHWHILE =
 const AUTONOMY_WHEN_TO_AVOID_RERUN =
   "Avoid rerun when: you just applied one suggestion, you’re still on the same Next 3, or you’re only seeking reassurance.";
 
-// Packet 71: AI Planner self-trust bundle — clearer what-changed, plan-still-valid proof, decisive thresholds
-const SELF_TRUST_PANEL_TITLE = "Self‑trust after apply";
-const SELF_TRUST_SUBTITLE =
-  "Use this to keep executing without reopening the planner for reassurance.";
-const SELF_TRUST_PROOF_INTRO =
-  "Plan still valid enough to follow when these are true right now:";
-const SELF_TRUST_KEEP_WORKING_TRIGGER =
-  "Keep working when your next task is clear and you’re still on the updated Next 3.";
-const SELF_TRUST_QUICK_REVISIT_TRIGGER =
-  "Quick revisit is useful (not urgent) when you can name one exact upgrade you want and you have a short break.";
-const SELF_TRUST_FULL_RERUN_TRIGGER =
-  "Full rerun is worth the interruption only after meaningful change: you finished a task (or real chunk), your Next 3 changed, or constraints changed / plan feels wrong-stuck.";
+// Packet 71: AI Planner self-trust bundle — decisive stop rule to prevent reassurance loops
 const SELF_TRUST_STOP_RULE =
   "Stop rule: if you can’t name the exact improvement you want, don’t reopen the planner — keep working.";
+
+// Packet 72: execution confidence + rerun thresholds bundle — a clearer keep-working contract after apply
+const EXECUTION_CONTRACT_TITLE = "Keep‑working contract";
+const EXECUTION_CONTRACT_SUBTITLE =
+  "Three tiers: keep working, quick revisit, full rerun — with crisp triggers so you can stay in execution mode.";
+const EXECUTION_CONFIDENCE_PROOF_INTRO =
+  "Execution confidence proof (why this plan is still actionable right now):";
+const EXECUTION_CONFIDENCE_DEFAULT =
+  "Default: close the planner panel and do the next task from your updated Next 3.";
+const KEEP_WORKING_THRESHOLD =
+  "Keep working when: you can name the next task in one sentence and you’re not meaningfully stuck (≤10 minutes of friction).";
+const QUICK_REVISIT_THRESHOLD =
+  "Quick revisit when: you can name one exact upgrade you want (one title tweak, one subtask plan, one automation idea) and you have ≤5 minutes — stop after one card.";
+const FULL_RERUN_THRESHOLD =
+  "Full rerun when: something materially changed (you finished a task / real chunk, Next 3 changed, constraints changed) or you’re stuck/wrong for >10 minutes — that’s when interruption pays back.";
+const RERUN_AVOID_THRESHOLD =
+  "Avoid rerun when: you just applied one suggestion and are still on the same Next 3 — that’s reassurance churn, not progress.";
 
 // Packet 64: Updated plan recap bundle — what changed, what to do now, when safe to ignore
 const RECAP_WHAT_CHANGED_FALLBACK =
@@ -430,13 +434,14 @@ export default function AiPlannerGuidance({
     return null;
   })();
 
-  const planStillValidProof = [
-    nextActionLabel ? `Your next action is clear (${nextActionLabel}).` : "Your next action is clear.",
-    "Only the approved item changed — everything else stayed stable.",
+  const executionConfidenceProof = [
+    nextActionLabel ? `Next action is concrete: ${nextActionLabel}.` : "Next action is concrete: you can start the next task now.",
+    "Scope stayed bounded: only the approved item changed; everything else is unchanged unless you approve another card.",
     reviewSummary && reviewSummary.total > 0
-      ? "Remaining suggestions are optional and still in review (nothing applies itself)."
-      : "No remaining suggestions need attention to keep moving.",
-    "You can pause and resume from the same Next 3 — no recheck required.",
+      ? `Optionality is explicit: ${reviewSummary.total} remaining suggestion${reviewSummary.total === 1 ? "" : "s"} are still just suggestions — you can ignore them and still be correct.`
+      : "No pending cards: nothing is waiting on review to keep moving.",
+    AUTONOMY_SAFE_PAUSE_RULE,
+    "Re-open isn’t required to validate: the plan is already updated; execution is the winning move unless a threshold below is met.",
   ];
 
   return (
@@ -585,11 +590,11 @@ export default function AiPlannerGuidance({
                 {AUTONOMY_HEADLINE}
               </div>
               <div style={{ fontSize: 12, color: "#047857", marginBottom: 10 }}>
-                <span style={{ fontWeight: 700 }}>{SELF_TRUST_PANEL_TITLE}:</span>{" "}
-                {SELF_TRUST_SUBTITLE}
+                <span style={{ fontWeight: 700 }}>{EXECUTION_CONTRACT_TITLE}:</span>{" "}
+                {EXECUTION_CONTRACT_SUBTITLE}
               </div>
               <div style={{ marginBottom: 10, color: "#047857" }}>
-                <span style={{ fontWeight: 700 }}>Default:</span> {AUTONOMY_DEFAULT_ACTION}
+                <span style={{ fontWeight: 700 }}>Default:</span> {EXECUTION_CONFIDENCE_DEFAULT}
                 {nextActionLabel ? <span> <span style={{ color: "#065f46" }}>({nextActionLabel})</span></span> : null}
               </div>
               <div
@@ -644,11 +649,11 @@ export default function AiPlannerGuidance({
                     letterSpacing: "0.02em",
                   }}
                 >
-                  Proof: plan still valid enough to follow
+                  Proof: plan is still actionable now
                 </div>
-                <div style={{ marginBottom: 6 }}>{SELF_TRUST_PROOF_INTRO}</div>
+                <div style={{ marginBottom: 6 }}>{EXECUTION_CONFIDENCE_PROOF_INTRO}</div>
                 <ul style={{ margin: 0, paddingLeft: 16 }}>
-                  {planStillValidProof.map((line) => (
+                  {executionConfidenceProof.map((line) => (
                     <li key={line} style={{ marginBottom: 4 }}>
                       {line}
                     </li>
@@ -656,7 +661,7 @@ export default function AiPlannerGuidance({
                 </ul>
               </div>
               <div style={{ fontWeight: 600, marginBottom: 4, color: "#047857" }}>
-                Decision thresholds (no reassurance loops)
+                Decision thresholds (keep working vs quick revisit vs full rerun)
               </div>
               <div style={{ marginBottom: 6 }}>{content.appliedStateBundle.recapDoNow}</div>
               {reviewSummary && reviewSummary.total > 0 && (
@@ -668,16 +673,16 @@ export default function AiPlannerGuidance({
               )}
               <ul style={{ margin: 0, paddingLeft: 16 }}>
                 <li style={{ marginBottom: 6 }}>
-                  <span style={{ fontWeight: 700 }}>Keep working:</span> {SELF_TRUST_KEEP_WORKING_TRIGGER}{" "}
+                  <span style={{ fontWeight: 700 }}>Keep working:</span> {KEEP_WORKING_THRESHOLD}{" "}
                   {AUTONOMY_WHEN_PLAN_STILL_GOOD}
                 </li>
                 <li style={{ marginBottom: 6 }}>
-                  <span style={{ fontWeight: 700 }}>Quick revisit:</span> {SELF_TRUST_QUICK_REVISIT_TRIGGER}{" "}
+                  <span style={{ fontWeight: 700 }}>Quick revisit:</span> {QUICK_REVISIT_THRESHOLD}{" "}
                   {AUTONOMY_QUICK_REVISIT_RULE} {AUTONOMY_WHEN_QUICK_REVISIT_HELPS}
                 </li>
                 <li style={{ marginBottom: 6 }}>
-                  <span style={{ fontWeight: 700 }}>Full rerun:</span> {SELF_TRUST_FULL_RERUN_TRIGGER}{" "}
-                  {AUTONOMY_FULL_RERUN_RULE} {AUTONOMY_WHEN_FULL_RERUN_WORTHWHILE} {AUTONOMY_WHEN_TO_AVOID_RERUN}
+                  <span style={{ fontWeight: 700 }}>Full rerun:</span> {FULL_RERUN_THRESHOLD}{" "}
+                  {RERUN_AVOID_THRESHOLD} {AUTONOMY_FULL_RERUN_RULE} {AUTONOMY_WHEN_FULL_RERUN_WORTHWHILE}
                 </li>
                 <li style={{ marginBottom: 0 }}>
                   <span style={{ fontWeight: 700 }}>Stop rule:</span> {SELF_TRUST_STOP_RULE}
