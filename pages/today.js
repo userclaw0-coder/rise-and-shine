@@ -320,6 +320,18 @@ export default function TodayPage() {
     if (!next?.task?.title) return "";
     return `Up next: "${next.task.title}"`;
   }, [queueEntries, completionMap]);
+
+  const isMorningFirstBlock = useMemo(() => {
+    if (!Array.isArray(queueEntries) || queueEntries.length === 0) return false;
+    const now = new Date();
+    const hour = now.getHours();
+    const isMorning = hour < 12;
+    if (!isMorning) return false;
+    const anyQueueCompleted = queueEntries.some((e) => !!completionMap[e.task?.id]);
+    if (anyQueueCompleted) return false;
+    const refilledCount = dailyPlan?.refilled_count ?? 0;
+    return refilledCount === 0;
+  }, [queueEntries, completionMap, dailyPlan]);
   useEffect(() => {
     if (!user || !queueTaskIdsKey || !todayStr) return;
     const ids = queueTaskIdsKey.split(",").filter(Boolean);
@@ -1030,6 +1042,7 @@ export default function TodayPage() {
           appliedSuccessVisible={appliedSuccessVisible}
           appliedDetails={appliedDetails}
           nextActionLabel={nextActionLabel}
+          isMorningFirstBlock={isMorningFirstBlock}
         />
         <div style={{ marginBottom: 12 }}>
           <button

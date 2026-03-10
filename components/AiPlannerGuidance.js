@@ -171,6 +171,20 @@ const MORNING_RESTART_FRICTION_NORMAL =
 const MORNING_RESTART_RERUN_ONLY_IF =
   "Rerun is worth it tomorrow only when something real shifted: a new blocker or deadline, surprise work that reshapes the day, or your Next 3 still feels wrong after ~10 minutes of trying the first task. Not just because it’s a new day or you feel wobbly.";
 
+// Packet 84: AI Planner first-block morning flow bundle — first-block execution contract:
+// keep-doing clarity, harmless wobble tolerance, and rerun-only-if-the-morning-breaks.
+const FIRST_BLOCK_TITLE = "First-block morning execution contract";
+const FIRST_BLOCK_HEADLINE =
+  "Treat your first work block as a focused lane, not another planning loop — this block is about starting and continuing from your updated Next 3.";
+const FIRST_BLOCK_KEEP_DOING =
+  "Keep doing what you opened: stay with the first task in your updated Next 3 until you either finish it or hit a real blocker. Glancing at other tabs or feeling warm-up resistance is still compatible with the plan fitting.";
+const FIRST_BLOCK_WOBBLE_NORMAL =
+  "Harmless morning wobble: rereading the task, needing a few minutes to remember context, or drifting for ≤10 minutes still counts as “normal first-block friction.” That’s not a sign the plan is wrong — keep working the same task.";
+const FIRST_BLOCK_WHEN_PLAN_STILL_GOOD =
+  "Plan still good enough when: the first task still roughly matches how you meant to use this block, your energy is okay-enough to make progress, and once you get moving you’re not stuck for more than ~10 minutes at a time.";
+const FIRST_BLOCK_RERUN_ONLY_IF =
+  "Reopen the planner only if the morning actually changed: a new blocker or deadline reshaped the day, surprise work crowded out this focus block, or the first task still feels wrong after ~10 solid minutes of trying to move it forward. Not just because the first few minutes felt wobbly.";
+
 // Packet 64: Updated plan recap bundle — what changed, what to do now, when safe to ignore
 const RECAP_WHAT_CHANGED_FALLBACK =
   "One suggestion was applied; your plan is updated.";
@@ -485,6 +499,7 @@ export default function AiPlannerGuidance({
   appliedSuccessVisible = false,
   appliedDetails = null,
   nextActionLabel = "",
+  isMorningFirstBlock = false,
 }) {
   const phase = getPhase({ aiLoading, aiError, aiStatus, aiSuggestions, queueReady });
   const content = PHASE_CONTENT[phase];
@@ -703,6 +718,54 @@ export default function AiPlannerGuidance({
                   <span style={{ fontWeight: 800 }}>Stable:</span> {AUTONOMY_KEEP_MOVING_PROOF}
                 </div>
               </div>
+
+              {isMorningFirstBlock && (
+                <div
+                  role="region"
+                  aria-label="First-block morning flow contract"
+                  style={{
+                    marginTop: 10,
+                    padding: "10px 10px 8px",
+                    borderRadius: 6,
+                    background: "#eff6ff",
+                    border: "1px solid #bfdbfe",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontWeight: 900,
+                      marginBottom: 4,
+                      color: "#1d4ed8",
+                    }}
+                  >
+                    {FIRST_BLOCK_TITLE}
+                  </div>
+                  <div style={{ marginBottom: 6, color: "#1e3a8a", fontSize: 12 }}>
+                    {FIRST_BLOCK_HEADLINE}
+                  </div>
+                  <ol
+                    style={{
+                      margin: 0,
+                      paddingLeft: 18,
+                      fontSize: 12,
+                      color: "#1f2937",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    <li style={{ marginBottom: 4 }}>
+                      {FIRST_BLOCK_KEEP_DOING}{" "}
+                      {nextActionLabel ? (
+                        <span style={{ fontWeight: 600 }}>
+                          First-block focus: {nextActionLabel}
+                        </span>
+                      ) : null}
+                    </li>
+                    <li style={{ marginBottom: 4 }}>{FIRST_BLOCK_WOBBLE_NORMAL}</li>
+                    <li style={{ marginBottom: 4 }}>{FIRST_BLOCK_WHEN_PLAN_STILL_GOOD}</li>
+                    <li style={{ marginBottom: 0 }}>{FIRST_BLOCK_RERUN_ONLY_IF}</li>
+                  </ol>
+                </div>
+              )}
 
               <div
                 style={{
