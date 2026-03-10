@@ -153,6 +153,7 @@ const PHASE_CONTENT = {
     label: "Safer backup path used",
     hint: "The planner couldn’t finish the full AI pass this time, so it set up a quick backup review you can try right now.",
     detail: "You only need one good option to keep moving. Nothing changes unless you approve it, and you can retry for a fresh pass anytime.",
+    noPressureCue: "No pressure to decide or act now — pausing is safe and nothing is lost.",
     comeBackCue: "No catch-up when you return — you'll pick up right here.",
     icon: "◇",
     color: "#92400e",
@@ -246,6 +247,25 @@ export default function AiPlannerGuidance({
           )}
           {phase === "fallback" && (
             <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
+              {content.noPressureCue && (
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "4px 8px",
+                    borderRadius: 999,
+                    background: "#f0fdf4",
+                    border: "1px solid #86efac",
+                    fontSize: 12,
+                    fontWeight: 500,
+                    color: "#059669",
+                  }}
+                >
+                  <span aria-hidden="true">✓</span>
+                  <span>{content.noPressureCue}</span>
+                </div>
+              )}
               <div
                 style={{
                   display: "inline-flex",
