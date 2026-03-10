@@ -1,0 +1,55 @@
+Implement rise-and-shine packet 70: AI Planner autonomy bundle.
+
+Goal
+- Build on the AI Planner steady-progress and rerun-readiness bundle by making the post-apply work loop feel self-sufficient in one glance: combine stronger keep-moving proof, clearer pause-versus-revisit thresholds, and more decisive rerun guidance so users can trust the updated plan and keep making progress today without reopening the planner for reassurance.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat-ai-planner-autonomy-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-autonomy-bundle
+
+Scope
+- Bundle adjacent keep-moving proof, safe-pause confidence, and revisit-versus-rerun thresholds into one coherent Today planner layer.
+- Improve the planner experience so users can more clearly understand after applying one suggestion:
+  - what signals mean the updated plan is still good enough to keep working,
+  - when a short pause is harmless,
+  - what concrete change means a quick revisit would help,
+  - and when a full rerun becomes genuinely worthwhile instead of reassurance churn.
+- Prefer one coherent autonomy treatment over scattered reassurance copy or broad page changes.
+- Keep the change narrow and local to Today planner guidance / review / apply surfaces.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth, analytics, or backend prompt/model changes.
+- No broad redesign of the Today page.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a small hook or summary treatment is clearly warranted
+- related planner review/apply components only if clearly necessary
+
+Acceptance criteria
+- After applying one suggestion, users can tell whether the updated plan is stable enough to keep following without another planner pass.
+- Users can distinguish between a harmless pause, a useful quick revisit, and a genuinely worthwhile rerun.
+- Users can keep moving today with less reassurance-seeking and less planner reopening.
+- The change stays narrow, local, and reviewable.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups
