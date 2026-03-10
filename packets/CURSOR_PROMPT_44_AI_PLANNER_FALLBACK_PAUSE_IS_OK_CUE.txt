@@ -1,0 +1,32 @@
+Implement rise-and-shine packet 44: AI Planner fallback pause-is-ok cue.
+
+Read first:
+- packets/CURSOR_PACKET_44_AI_PLANNER_FALLBACK_PAUSE_IS_OK_CUE.md
+- PROJECT_NORTH_STAR.md
+- CURRENT_STATE_SNAPSHOT.md
+
+Constraints:
+- Repo: rise-and-shine only
+- Base branch: develop
+- Work on: feat/ai-planner-fallback-pause-is-ok-cue
+- Keep scope narrow and local to the Today AI Planner fallback guidance
+- No auth changes, no backend prompt/model changes, no broad redesign, no cross-repo edits
+
+Goal:
+Add a compact cue that reassures the user pausing is okay if none of the fallback options feels right yet, so the backup path stays supportive without forcing a choice.
+
+Expected files:
+- components/AiPlannerGuidance.js
+- pages/today.js only if clearly warranted
+
+Verification:
+- npm run lint
+- npm run build
+
+Completion report must include:
+- branch name
+- commit hash
+- concise change summary
+- verification commands run
+- results
+- risks / follow-ups
