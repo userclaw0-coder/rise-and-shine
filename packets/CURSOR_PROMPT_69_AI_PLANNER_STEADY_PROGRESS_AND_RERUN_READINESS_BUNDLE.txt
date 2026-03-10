@@ -1,0 +1,55 @@
+Implement rise-and-shine packet 69: AI Planner steady-progress and rerun-readiness bundle.
+
+Goal
+- Build on the AI Planner progress-check and re-entry bundle by making the post-apply work loop feel steadier and more decisive in one glance: combine steady-progress cues, pause-versus-continue confidence, and clearer rerun-readiness signals so users can keep moving today without second-guessing whether the planner needs to be reopened.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat-ai-planner-steady-progress-and-rerun-readiness-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-steady-progress-and-rerun-readiness-bundle
+
+Scope
+- Bundle adjacent steady-progress cues, continue-versus-pause confidence, and rerun-readiness guidance into one coherent Today planner layer.
+- Improve the planner experience so users can more clearly understand after applying one suggestion:
+  - what signs mean today is still advancing well enough to keep working,
+  - when a short pause is harmless versus when momentum is actually fading,
+  - what concrete signals mean a quick revisit helps,
+  - and when a full rerun becomes genuinely worthwhile instead of reassurance churn.
+- Prefer one coherent progress-readiness treatment over scattered reassurance copy or broad page changes.
+- Keep the change narrow and local to Today planner guidance / review / apply surfaces.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth, analytics, or backend prompt/model changes.
+- No broad redesign of the Today page.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a small hook or summary treatment is clearly warranted
+- related planner review/apply components only if clearly necessary
+
+Acceptance criteria
+- After applying one suggestion, users can tell whether they are in a steady enough progress state to keep moving without another planner pass.
+- Users can tell when a short pause is still safe versus when a revisit would add real value.
+- Users can tell the difference between a useful revisit and a genuinely worthwhile full rerun.
+- Users can keep moving today with less reassurance-seeking and less planner reopening.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups
