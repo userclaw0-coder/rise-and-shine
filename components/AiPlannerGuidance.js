@@ -1,3 +1,9 @@
+// Continue-today confidence bundle copy (avoid Unicode apostrophe in PHASE_CONTENT)
+const APPLIED_WHEN_RERUN_WORTH_IT =
+  "When to run Refine again: run \"Refine these 3 with AI\" when you want a fresh set (e.g. after you've done a chunk of work or your Next 3 has changed). Right after one apply, another run isn't necessary — your plan is already updated.";
+const APPLIED_CONTINUE_WITHOUT_RERUN =
+  "Keep moving: your queue is updated and you don't need to second-guess it. Work your Next 3; the planner is there whenever you want another pass, but you don't need one to stay in motion.";
+
 function getReviewSummary(aiSuggestions) {
   if (!aiSuggestions) return null;
 
@@ -201,14 +207,16 @@ const PHASE_CONTENT = {
       momentum:
         "Staying steady: one approval or one dismiss keeps momentum. You can leave the rest for later or run \"Refine these 3 with AI\" again anytime for a fresh set.",
     },
-    // Keep-moving-from-updated-plan: one coherent Today workflow after apply — best move, glance vs defer, defer safely, continue without planner rerun
+    // Continue-today confidence bundle: one coherent Today follow-through after apply — do now, later-today vs can wait, when rerun worth it, continue without second-guessing
     appliedStateBundle: {
-      bestImmediateMove:
-        "Best immediate move: work from your updated plan. Pick the next task and keep going — no need to review every remaining suggestion or run Refine again.",
-      worthGlanceVsCanWait:
-        "Remaining suggestions are worth a quick glance if one catches your eye; otherwise they can wait. Approve or dismiss one more only if it clearly helps; the rest can stay deferred without reopening the planner.",
-      deferSafely:
-        "Safe to defer: the rest of the cards, a full pass over every suggestion, and another planner run. Dismiss or ignore what’s left; run \"Refine these 3 with AI\" later only when you want a fresh set.",
+      doNow:
+        "Do this now: work from your updated plan. Pick the next task in your queue and keep going — no need to review every remaining suggestion or run Refine again.",
+      laterTodayVsCanWait:
+        "Later today vs can wait: if one remaining suggestion clearly helps, you can approve or dismiss it when you take a short break. The rest can wait until another day — no need to clear every card today.",
+      whenRerunWorthIt: APPLIED_WHEN_RERUN_WORTH_IT,
+      continueWithoutRerun: APPLIED_CONTINUE_WITHOUT_RERUN,
+      __ORPHAN:
+        " Dismiss or ignore what’s left; run \"Refine these 3 with AI\" later only when you want a fresh set.",
       continueWithoutRerun:
         "Continue today: your queue is updated. Keep working your Next 3 — the planner is there whenever you want another pass, but you don’t need one to stay in motion.",
     },
@@ -392,7 +400,7 @@ export default function AiPlannerGuidance({
           {showAppliedState && content.appliedStateBundle && (
             <div
               role="region"
-              aria-label="Keep moving from your updated plan"
+              aria-label="Today follow-through: what to do now, later today, and when to refine again"
               style={{
                 marginTop: 8,
                 padding: "10px 12px",
@@ -405,20 +413,19 @@ export default function AiPlannerGuidance({
               }}
             >
               <div style={{ fontWeight: 600, marginBottom: 4, color: "#047857" }}>
-                Keep moving from your updated plan
+                Today follow-through
               </div>
               {reviewSummary && reviewSummary.total > 0 && (
                 <div style={{ marginBottom: 6, color: "#047857" }}>
                   <span style={{ fontWeight: 600 }}>Remaining:</span>{" "}
                   {reviewSummary.total} suggestion{reviewSummary.total === 1 ? "" : "s"} ·{" "}
-                  {reviewSummary.items.join(" · ")}. Worth a quick glance if one helps; otherwise
-                  safe to defer.
+                  {reviewSummary.items.join(" · ")}. Revisit later today if one helps; the rest can wait.
                 </div>
               )}
               <ol style={{ margin: 0, paddingLeft: 18 }}>
-                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.bestImmediateMove}</li>
-                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.worthGlanceVsCanWait}</li>
-                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.deferSafely}</li>
+                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.doNow}</li>
+                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.laterTodayVsCanWait}</li>
+                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.whenRerunWorthIt}</li>
                 <li style={{ marginBottom: 0 }}>{content.appliedStateBundle.continueWithoutRerun}</li>
               </ol>
             </div>
