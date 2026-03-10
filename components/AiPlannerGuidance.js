@@ -127,6 +127,22 @@ const SAFE_STOP_AVOID_RERUN_FOR_REASSURANCE =
 const SAFE_STOP_PAUSE_WITHOUT_GUILT =
   "Pause without guilt: closing the planner is a valid completion for today. You’re not abandoning the plan — you’re parking it in a stable state you can restart from later.";
 
+// Packet 81: AI Planner done-for-today and tomorrow re-entry bundle — end-of-day closure,
+// tomorrow restart confidence, overnight leave-it-alone, and clearer rerun thresholds.
+const DONE_FOR_TODAY_TITLE = "Done for today & tomorrow restart";
+const DONE_FOR_TODAY_HEADLINE =
+  "Today can count as complete from here — your updated plan is strong enough to rest overnight.";
+const DONE_FOR_TODAY_COMPLETION_RULE =
+  "Complete-enough for today: after applying one suggestion and doing a bit of work from your updated Next 3, it’s valid to call Today “done” — you don’t need to empty every card, hit inbox zero, or chase another AI pass.";
+const DONE_FOR_TODAY_TOMORROW_RESTART =
+  "Tomorrow restart point: when you open Today again, start by looking at the first not-done task in your updated Next 3. If that still fits, begin there and keep going without rerunning the planner.";
+const DONE_FOR_TODAY_OVERNIGHT_CAN_WAIT =
+  "Overnight can-wait list: remaining cards, untouched backlog, and other days do not need another look tonight. They can stay exactly as they are until a real overnight change makes a new pass worthwhile.";
+const DONE_FOR_TODAY_NORMAL_RESUME_VS_RERUN =
+  "Normal resume vs rerun: tomorrow, treat “open Today and work from your Next 3” as the default. Only reopen the planner when something actually changed — new constraints, a different priority for the day, or your Next 3 no longer matches what you want from this session.";
+const DONE_FOR_TODAY_RERUN_TRIGGERS =
+  "Overnight rerun is worth it when: your day’s focus shifted (new deadline, new blocker, big surprise work), your Next 3 feels wrong for more than ~10 minutes, or you want a fresh set after finishing a real chunk tomorrow. It’s not needed just because a night passed.";
+
 // Packet 64: Updated plan recap bundle — what changed, what to do now, when safe to ignore
 const RECAP_WHAT_CHANGED_FALLBACK =
   "One suggestion was applied; your plan is updated.";
@@ -793,6 +809,51 @@ export default function AiPlannerGuidance({
                   <li style={{ marginBottom: 0 }}>
                     {SAFE_STOP_AVOID_RERUN_FOR_REASSURANCE} {SAFE_STOP_PAUSE_WITHOUT_GUILT}
                   </li>
+                </ol>
+              </div>
+
+              <div
+                style={{
+                  marginTop: 10,
+                  padding: "10px 10px 8px",
+                  borderRadius: 6,
+                  background: "#f0fdf4",
+                  border: "1px solid #6ee7b7",
+                }}
+              >
+                <div
+                  style={{
+                    fontWeight: 900,
+                    marginBottom: 4,
+                    color: "#047857",
+                  }}
+                >
+                  {DONE_FOR_TODAY_TITLE}
+                </div>
+                <div style={{ marginBottom: 6, color: "#047857" }}>
+                  {DONE_FOR_TODAY_HEADLINE}
+                </div>
+                <ol
+                  style={{
+                    margin: 0,
+                    paddingLeft: 18,
+                    fontSize: 12,
+                    color: "#065f46",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  <li style={{ marginBottom: 4 }}>{DONE_FOR_TODAY_COMPLETION_RULE}</li>
+                  <li style={{ marginBottom: 4 }}>
+                    {DONE_FOR_TODAY_TOMORROW_RESTART}{" "}
+                    {nextActionLabel ? (
+                      <span style={{ fontWeight: 600 }}>
+                        Tomorrow restart cue: {nextActionLabel}
+                      </span>
+                    ) : null}
+                  </li>
+                  <li style={{ marginBottom: 4 }}>{DONE_FOR_TODAY_OVERNIGHT_CAN_WAIT}</li>
+                  <li style={{ marginBottom: 4 }}>{DONE_FOR_TODAY_NORMAL_RESUME_VS_RERUN}</li>
+                  <li style={{ marginBottom: 0 }}>{DONE_FOR_TODAY_RERUN_TRIGGERS}</li>
                 </ol>
               </div>
             </div>
