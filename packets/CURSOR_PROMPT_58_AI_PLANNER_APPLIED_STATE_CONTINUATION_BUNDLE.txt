@@ -1,0 +1,54 @@
+Implement rise-and-shine packet 58: AI Planner applied-state continuation bundle.
+
+Goal
+- Build on the applied-state momentum bundle by making the Today planner easier to continue from after one applied suggestion: clarify how to use the updated plan for the rest of today, what can be safely ignored for now, and the cleanest low-friction path to keep moving without another planner round-trip.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat/ai-planner-applied-state-continuation-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-applied-state-continuation-bundle
+
+Scope
+- Bundle adjacent post-apply continuation improvements into one coherent Today planner layer.
+- Improve the planner experience so users can more clearly understand after applying one suggestion:
+  - how to use the updated Next 3 or queue for the rest of today,
+  - what review or rerun work can safely wait,
+  - what the smallest next move is if they want to keep momentum,
+  - and how to continue without reopening the whole planner flow.
+- Prefer one coherent continuation summary over scattered reassurance lines.
+- Keep the change narrow and local to Today planner guidance / review / apply surfaces.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth, analytics, or backend prompt/model changes.
+- No broad redesign of the Today page.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a small hook or summary treatment is clearly warranted
+- related planner review/apply components only if clearly necessary
+
+Acceptance criteria
+- After applying one suggestion, users can continue from the updated plan with less hesitation and less need for another planner pass.
+- Users can tell what can wait, the next low-risk move, and how to use the updated plan for the rest of today.
+- The change remains narrow, user-facing, and reviewable.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups
