@@ -1,0 +1,54 @@
+Implement rise-and-shine packet 91: AI Planner end-of-day handoff readiness bundle.
+
+Goal
+- Build on the late-afternoon continuity bundle by turning late-day stability into a clearer end-of-day handoff contract: combine stronger proof that the carried plan can usually close the day without another rerun, clearer distinction between ordinary end-of-day fatigue and a true need to reshuffle the plan, better guidance for keeping only the tasks worth handing to tonight or tomorrow, and a more decisive threshold for when a calm carryforward beats squeezing in one more same-day planner pass.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat-ai-planner-end-of-day-handoff-readiness-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-end-of-day-handoff-readiness-bundle
+
+Scope
+- Bundle adjacent end-of-day plan continuity, normal late-day fatigue thresholds, worth-carrying triage, and tonight-vs-tomorrow handoff guidance into one coherent Today planner treatment.
+- Improve the planner experience so users can more clearly tell near closeout:
+  - when the existing plan still deserves to carry the rest of the day,
+  - what low-energy slowdown is normal versus what means the plan has genuinely broken,
+  - how to keep only the still-worth-doing tasks without guilt,
+  - and when a calm end-of-day handoff is better than forcing another planner rerun.
+- Prefer one coherent end-of-day handoff contract over scattered reassurance copy or broad page changes.
+- Keep the change narrow and local to Today planner guidance / review / apply surfaces.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth, analytics, or backend prompt/model changes.
+- No broad redesign of the Today page.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a small hook or summary treatment is clearly warranted
+- related planner review/apply components only if clearly necessary
+
+Acceptance criteria
+- Near the end of the day, users can tell whether the existing plan still holds, what slowdown counts as normal, how to keep only the still-valuable tasks, and when a calm tonight/tomorrow handoff is better than another same-day rerun.
+- The planner feels like a stable day-shaping tool through end-of-day closeout rather than something that must be reopened whenever energy drops.
+- The change stays narrow, local, and reviewable.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups
