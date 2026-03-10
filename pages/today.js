@@ -948,6 +948,7 @@ export default function TodayPage() {
           aiStatus={aiStatus}
           aiSuggestions={aiSuggestions}
           queueReady={queueEntries.length === 3}
+          appliedMessage={appliedMessage}
         />
         <div style={{ marginBottom: 12 }}>
           <button

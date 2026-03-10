@@ -201,6 +201,16 @@ const PHASE_CONTENT = {
       momentum:
         "Staying steady: one approval or one dismiss keeps momentum. You can leave the rest for later or run \"Refine these 3 with AI\" again anytime for a fresh set.",
     },
+    appliedStateBundle: {
+      whatChanged:
+        "The suggestion you approved was applied: that one task or subtask set is updated in your Next 3 or queue; nothing else was changed.",
+      whatStayedSame:
+        "Everything else stayed the same: other suggestions (if any) remain in review, other queue tasks are unchanged, and your backlog is untouched.",
+      nextMove:
+        "Lowest-risk next move: work your updated queue as-is, approve or dismiss another suggestion, or stop here — no need to run the planner again right away.",
+      oneMoveEnough:
+        "Stopping after one useful change is a successful outcome. You can leave the rest for later or run \"Refine these 3 with AI\" anytime for a fresh set.",
+    },
     icon: "●",
     color: "#059669",
     bg: "#ecfdf5",
@@ -227,17 +237,25 @@ const PHASE_CONTENT = {
   },
 };
 
+function isAppliedSuccessMessage(msg) {
+  if (!msg || typeof msg !== "string") return false;
+  return !msg.trim().toLowerCase().includes("failed");
+}
+
 export default function AiPlannerGuidance({
   aiLoading,
   aiError,
   aiStatus,
   aiSuggestions,
   queueReady,
+  appliedMessage,
 }) {
   const phase = getPhase({ aiLoading, aiError, aiStatus, aiSuggestions, queueReady });
   const content = PHASE_CONTENT[phase];
   const reasonCopy = getFallbackReasonCopy(aiStatus, aiError);
   const reviewSummary = getReviewSummary(aiSuggestions);
+  const showAppliedState =
+    phase === "review" && content?.appliedStateBundle && appliedMessage && isAppliedSuccessMessage(appliedMessage);
   if (!content) return null;
 
   return (
@@ -341,7 +359,7 @@ export default function AiPlannerGuidance({
               </ol>
             </div>
           )}
-          {phase === "review" && content.continuityBundle && (
+          {phase === "review" && content.continuityBundle && !showAppliedState && (
             <div
               role="region"
               aria-label="Post-review continuity"
@@ -364,6 +382,32 @@ export default function AiPlannerGuidance({
                 <li style={{ marginBottom: 4 }}>{content.continuityBundle.afterDismiss}</li>
                 <li style={{ marginBottom: 4 }}>{content.continuityBundle.oneStep}</li>
                 <li style={{ marginBottom: 0 }}>{content.continuityBundle.momentum}</li>
+              </ol>
+            </div>
+          )}
+          {showAppliedState && content.appliedStateBundle && (
+            <div
+              role="region"
+              aria-label="After applying — what changed and what to do next"
+              style={{
+                marginTop: 8,
+                padding: "10px 12px",
+                borderRadius: 8,
+                background: "#ecfdf5",
+                border: "1px solid #10b981",
+                fontSize: 12,
+                lineHeight: 1.5,
+                color: "#065f46",
+              }}
+            >
+              <div style={{ fontWeight: 600, marginBottom: 4, color: "#047857" }}>
+                Applied — what that means
+              </div>
+              <ol style={{ margin: 0, paddingLeft: 18 }}>
+                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.whatChanged}</li>
+                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.whatStayedSame}</li>
+                <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.nextMove}</li>
+                <li style={{ marginBottom: 0 }}>{content.appliedStateBundle.oneMoveEnough}</li>
               </ol>
             </div>
           )}
