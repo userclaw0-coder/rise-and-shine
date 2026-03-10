@@ -180,16 +180,16 @@ const PHASE_CONTENT = {
   review: {
     label: "Suggestions ready — optional review below",
     hint: "Each suggestion stands on its own: approve only the ones you want, or dismiss any you don’t.",
-    detail: "Nothing is applied in bulk or automatically. Your current plan stays unchanged until you approve a specific suggestion.",
+    detail: "Nothing is applied in bulk or automatically. Your current plan stays unchanged until you approve a specific suggestion, and dismissing only hides a card without changing any tasks.",
     readinessBundle: {
       whatChanges:
-        "Approving one suggestion only updates that single item (one task title, one subtask set, or one automation idea). Nothing else in your plan changes.",
+        "Approving one suggestion only updates that single item (one task title, one subtask set, or one automation idea) right away. You can always refine again later for a fresh pass.",
       whatStaysUntouched:
-        "Every other suggestion stays in review until you approve it. There is no bulk apply — your queue and tasks stay as they are except for the ones you explicitly approve.",
+        "Every other suggestion stays in review until you approve it. There is no bulk apply — your queue and tasks stay as they are except for the ones you explicitly approve. Dismissing or skipping a card simply removes that suggestion from view; your underlying tasks and queue stay exactly as they are.",
       whyNow:
         "This set was built for your current Next 3 and is ready for a quick one-at-a-time pass. You can do one approval and stop, or work through as many as you like.",
       nextStep:
-        "Quickest low-risk move: scan the list below, approve one suggestion that clearly helps, or dismiss and keep working your queue as-is. No need to do everything.",
+        "Quickest low-risk move: scan the list below, approve one suggestion that clearly helps, or dismiss and keep working your queue as-is. You can safely ignore anything that feels off and ask for a new set later.",
     },
     icon: "●",
     color: "#059669",

@@ -1003,7 +1003,7 @@ export default function TodayPage() {
                   Task refinements
                 </h3>
                 <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 8px" }}>
-                  Approve updates the task title, tags, or effort in place. Dismiss leaves the task unchanged.
+                  Approve updates the task title, tags, or effort in place for that one task only. Dismiss or ignore leaves both the task and the rest of your plan unchanged.
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {(aiSuggestions.task_refinements || []).map((item, idx) => (
@@ -1161,7 +1161,7 @@ export default function TodayPage() {
                 </p>
               ) : (
                 <p style={{ fontSize: 11, color: "#9ca3af", margin: "8px 0 0" }}>
-                  You can dismiss everything safely. Your tasks only change when you approve.
+                  You can dismiss everything safely — that only hides suggestions. Your tasks and queue only change when you approve.
                 </p>
               )}
           </div>
