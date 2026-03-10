@@ -234,6 +234,23 @@ const LATE_MORNING_MANUAL_RESEQUENCE =
 const LATE_MORNING_RERUN_THRESHOLD =
   "Pre-lunch rerun threshold: only reopen the planner when the rest of the morning should genuinely be about something else — a new blocker or deadline rewrites what “before lunch” is for, you’ve given the current focus a solid attempt and it still feels wrong for >10–15 minutes, or your Next 3 now mostly represents the wrong kind of work. Below that bar, keep finishing, trimming, or resequencing manually and let this plan carry you into lunch.";
 
+// Packet 88: AI Planner pre-lunch execution contract bundle — builds on late-morning continuity:
+// clearer through-lunch stability proof, manageable drift vs half-day break,
+// lunch-approaching trim/resequence guidance, and an afternoon-inheritance vs rerun threshold.
+const PRE_LUNCH_TITLE = "Pre-lunch execution contract";
+const PRE_LUNCH_HEADLINE =
+  "Treat the rest of the morning plus the lunch edge as one half-day lane — the current plan usually carries you through lunch, and only a real half-day change should force a fresh planner run right now.";
+const PRE_LUNCH_THROUGH_LUNCH_PROOF =
+  "Why this plan usually holds through lunch: it’s already anchored to today’s priorities, you have visible evidence of progress or at least one refill, and nothing has rewritten what “this half of the day” is for. You don’t need a new AI pass just because the clock is close to lunch.";
+const PRE_LUNCH_MANAGEABLE_DRIFT =
+  "Manageable drift: working more slowly than hoped, a task spilling across blocks, nibbling at a second Next-3 item, or doing small context swaps between 2–3 related tasks over ≤30 minutes. As long as you’re still inside the same cluster and your top task roughly matches how you meant to use the rest of this morning, the half-day contract is intact.";
+const PRE_LUNCH_TRIM_RESEQUENCE_GUIDE =
+  "When a quick trim or resequence is enough near lunch: if the ingredients are still right but the shape needs to tighten, manually shorten a task, swap the order of two items, or park one card and pull in an already-related task from your backlog. Make those edits directly in the queue instead of rerunning AI — they keep the lane continuous without a heavy reset.";
+const PRE_LUNCH_AFTERNOON_INHERIT_RULE =
+  "Default afternoon rule: let the afternoon inherit this plan unless something real changes — a new meeting eats the block, a deadline moves up, or most of your remaining energy clearly belongs to a different kind of work. In those cases, it’s better to run a fresh planner pass in your first post-lunch block than to squeeze in a rushed rerun right before lunch.";
+const PRE_LUNCH_AFTERNOON_RERUN_THRESHOLD =
+  "Afternoon rerun threshold: only treat the afternoon as a new plan when more than half of what you expect to do after lunch is different in kind from your current Next 3, or a clear new constraint reshapes the rest of the day. Otherwise, let this plan carry you into lunch and out the other side — you can always rerun calmly later if the afternoon truly becomes a different day.";
+
 // Packet 64: Updated plan recap bundle — what changed, what to do now, when safe to ignore
 const RECAP_WHAT_CHANGED_FALLBACK =
   "One suggestion was applied; your plan is updated.";
@@ -841,7 +858,7 @@ export default function AiPlannerGuidance({
               {isLateMorningExecution && !isMorningFirstBlock && (
                 <div
                   role="region"
-                  aria-label="Late-morning continuity contract"
+                  aria-label="Late-morning continuity and pre-lunch execution contract"
                   style={{
                     marginTop: 10,
                     padding: "10px 10px 8px",
@@ -892,6 +909,58 @@ export default function AiPlannerGuidance({
                       {LATE_MORNING_RERUN_THRESHOLD}
                     </li>
                   </ol>
+                  <div
+                    style={{
+                      marginTop: 10,
+                      padding: "8px 10px",
+                      borderRadius: 6,
+                      background: "#fefce8",
+                      border: "1px dashed #eab308",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontWeight: 900,
+                        marginBottom: 4,
+                        color: "#854d0e",
+                      }}
+                    >
+                      {PRE_LUNCH_TITLE}
+                    </div>
+                    <div style={{ marginBottom: 6, color: "#713f12", fontSize: 12 }}>
+                      {PRE_LUNCH_HEADLINE}
+                    </div>
+                    <ol
+                      style={{
+                        margin: 0,
+                        paddingLeft: 18,
+                        fontSize: 12,
+                        color: "#1f2937",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      <li style={{ marginBottom: 4 }}>
+                        <span style={{ fontWeight: 600 }}>Why this plan carries through lunch:</span>{" "}
+                        {PRE_LUNCH_THROUGH_LUNCH_PROOF}
+                      </li>
+                      <li style={{ marginBottom: 4 }}>
+                        <span style={{ fontWeight: 600 }}>Manageable drift vs a broken half-day:</span>{" "}
+                        {PRE_LUNCH_MANAGEABLE_DRIFT}
+                      </li>
+                      <li style={{ marginBottom: 4 }}>
+                        <span style={{ fontWeight: 600 }}>As lunch approaches, trim/resequence by hand:</span>{" "}
+                        {PRE_LUNCH_TRIM_RESEQUENCE_GUIDE}
+                      </li>
+                      <li style={{ marginBottom: 4 }}>
+                        <span style={{ fontWeight: 600 }}>Default afternoon behavior:</span>{" "}
+                        {PRE_LUNCH_AFTERNOON_INHERIT_RULE}
+                      </li>
+                      <li style={{ marginBottom: 0 }}>
+                        <span style={{ fontWeight: 600 }}>When the afternoon deserves a fresh rerun:</span>{" "}
+                        {PRE_LUNCH_AFTERNOON_RERUN_THRESHOLD}
+                      </li>
+                    </ol>
+                  </div>
                 </div>
               )}
 
