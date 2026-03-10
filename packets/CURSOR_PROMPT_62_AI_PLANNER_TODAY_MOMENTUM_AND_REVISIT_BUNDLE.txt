@@ -1,0 +1,55 @@
+Implement rise-and-shine packet 62: AI Planner today momentum and revisit bundle.
+
+Goal
+- Build on the continue-today confidence bundle by turning the post-apply state into a more complete Today momentum flow: make it clearer what to keep doing now, what deserves a later-today revisit, and when reopening the planner actually becomes worth the interruption.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat/ai-planner-today-momentum-and-revisit-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-today-momentum-and-revisit-bundle
+
+Scope
+- Bundle adjacent keep-moving, later-today revisit, and planner-rerun threshold improvements into one coherent Today planner layer.
+- Improve the planner experience so users can more clearly understand after applying one suggestion:
+  - what to keep doing immediately from the updated plan,
+  - what deserves a later-today revisit versus can wait longer,
+  - what signals mean a new planner run is actually worth it,
+  - and how to keep today moving without reopening the planner too early.
+- Prefer one coherent momentum treatment over scattered reassurance copy or broad page changes.
+- Keep the change narrow and local to Today planner guidance / review / apply surfaces.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth, analytics, or backend prompt/model changes.
+- No broad redesign of the Today page.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a small hook or summary treatment is clearly warranted
+- related planner review/apply components only if clearly necessary
+
+Acceptance criteria
+- After applying one suggestion, users can tell the best immediate move from the updated plan.
+- Users can distinguish later-today revisit from suggestions that can wait longer.
+- Users can tell when another planner run is worth doing versus unnecessary.
+- Users can keep moving today without feeling pushed back into a full planner rerun.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups
