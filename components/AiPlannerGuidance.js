@@ -263,7 +263,7 @@ export default function AiPlannerGuidance({
                 <span>Pick a workable option now — you can tweak it later.</span>
               </div>
               <div style={{ fontSize: 12, color: "#6b7280", fontStyle: "italic" }}>
-                You do not need to decide right now — revisit when it feels right.
+                Pausing is okay — if none of these feels right yet, come back when you&apos;re ready.
               </div>
             </div>
           )}
