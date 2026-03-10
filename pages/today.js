@@ -124,6 +124,7 @@ export default function TodayPage() {
   const [aiCached, setAiCached] = useState(false);
   const [appliedMessage, setAppliedMessage] = useState("");
   const [appliedSuccessVisible, setAppliedSuccessVisible] = useState(false);
+  const [appliedDetails, setAppliedDetails] = useState(null);
   const [subtaskApplying, setSubtaskApplying] = useState(false);
   const [subtaskApplyError, setSubtaskApplyError] = useState("");
 
@@ -421,6 +422,7 @@ export default function TodayPage() {
   async function handleRefineWithAi() {
     if (!user || aiLoading) return;
     setAppliedSuccessVisible(false);
+    setAppliedDetails(null);
     setAiLoading(true);
     setAiError("");
     setAiStatus("loading");
@@ -509,6 +511,19 @@ export default function TodayPage() {
 
   async function handleApproveRefinement(item, index) {
     if (!user) return;
+    const existingTask =
+      queueEntries.find((e) => e?.task?.id === item.task_id)?.task ||
+      backlogTasks.find((t) => t?.id === item.task_id) ||
+      null;
+    const before = existingTask
+      ? {
+          title: existingTask.title ?? null,
+          effort_hours: existingTask.effort_hours ?? null,
+          tags: Array.isArray(existingTask.tags)
+            ? existingTask.tags.map((t) => t?.tag?.name).filter(Boolean)
+            : [],
+        }
+      : null;
     const payload = {
       task_id: item.task_id,
       suggested_title: item.suggested_title,
@@ -545,6 +560,41 @@ export default function TodayPage() {
 
       const taskUpdate = data.task || {};
       const tagNames = Array.isArray(data.tags) ? data.tags : null;
+      const after = {
+        title: taskUpdate.title ?? before?.title ?? null,
+        effort_hours:
+          taskUpdate.effort_hours ?? before?.effort_hours ?? null,
+        tags:
+          tagNames != null
+            ? tagNames
+            : before?.tags || [],
+      };
+      const changes = [];
+      if (before?.title != null && after.title != null && before.title !== after.title) {
+        changes.push({ field: "title", from: before.title, to: after.title });
+      }
+      if (
+        before?.effort_hours != null &&
+        after.effort_hours != null &&
+        before.effort_hours !== after.effort_hours
+      ) {
+        changes.push({
+          field: "effort",
+          from: `${before.effort_hours}h`,
+          to: `${after.effort_hours}h`,
+        });
+      }
+      if (tagNames != null) {
+        const beforeTags = new Set(before?.tags || []);
+        const afterTags = new Set(after.tags || []);
+        const added = [...afterTags].filter((t) => !beforeTags.has(t));
+        if (added.length > 0) {
+          changes.push({
+            field: "tags_added",
+            to: added.join(", "),
+          });
+        }
+      }
 
       setQueueEntries((prev) =>
         prev.map((e) => {
@@ -579,6 +629,13 @@ export default function TodayPage() {
       const label = taskUpdate.title || item.suggested_title || "task";
       setAppliedMessage(`Refinement applied to "${label}".`);
       setAppliedSuccessVisible(true);
+      setAppliedDetails({
+        kind: "task_refinement",
+        task_id: item.task_id,
+        before,
+        after,
+        changes,
+      });
       setTimeout(() => setAppliedMessage(""), 3000);
       dismissRefinement(index, null);
     } catch {
@@ -606,6 +663,7 @@ export default function TodayPage() {
     setSubtaskApplyError("");
     setAppliedMessage("");
     setAppliedSuccessVisible(false);
+    setAppliedDetails(null);
 
     const total = approvedSubtasks.length;
     try {
@@ -690,6 +748,14 @@ export default function TodayPage() {
       }
       setAppliedMessage(parts.join(" "));
       setAppliedSuccessVisible(true);
+      setAppliedDetails({
+        kind: "subtasks_created",
+        created: created.length,
+        attempted: total,
+        promoted,
+        promoted_title: promoted ? bestLabel : null,
+        failures: failures.length,
+      });
       setTimeout(() => setAppliedMessage(""), 6000);
     } catch (e) {
       setSubtaskApplyError(e?.message || "Failed to apply subtask orchestration. Please try again.");
@@ -962,6 +1028,7 @@ export default function TodayPage() {
           queueReady={queueEntries.length === 3}
           appliedMessage={appliedMessage}
           appliedSuccessVisible={appliedSuccessVisible}
+          appliedDetails={appliedDetails}
           nextActionLabel={nextActionLabel}
         />
         <div style={{ marginBottom: 12 }}>

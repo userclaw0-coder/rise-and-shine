@@ -74,6 +74,21 @@ const AUTONOMY_WHEN_FULL_RERUN_WORTHWHILE =
 const AUTONOMY_WHEN_TO_AVOID_RERUN =
   "Avoid rerun when: you just applied one suggestion, you’re still on the same Next 3, or you’re only seeking reassurance.";
 
+// Packet 71: AI Planner self-trust bundle — clearer what-changed, plan-still-valid proof, decisive thresholds
+const SELF_TRUST_PANEL_TITLE = "Self‑trust after apply";
+const SELF_TRUST_SUBTITLE =
+  "Use this to keep executing without reopening the planner for reassurance.";
+const SELF_TRUST_PROOF_INTRO =
+  "Plan still valid enough to follow when these are true right now:";
+const SELF_TRUST_KEEP_WORKING_TRIGGER =
+  "Keep working when your next task is clear and you’re still on the updated Next 3.";
+const SELF_TRUST_QUICK_REVISIT_TRIGGER =
+  "Quick revisit is useful (not urgent) when you can name one exact upgrade you want and you have a short break.";
+const SELF_TRUST_FULL_RERUN_TRIGGER =
+  "Full rerun is worth the interruption only after meaningful change: you finished a task (or real chunk), your Next 3 changed, or constraints changed / plan feels wrong-stuck.";
+const SELF_TRUST_STOP_RULE =
+  "Stop rule: if you can’t name the exact improvement you want, don’t reopen the planner — keep working.";
+
 // Packet 64: Updated plan recap bundle — what changed, what to do now, when safe to ignore
 const RECAP_WHAT_CHANGED_FALLBACK =
   "One suggestion was applied; your plan is updated.";
@@ -372,6 +387,7 @@ export default function AiPlannerGuidance({
   queueReady,
   appliedMessage,
   appliedSuccessVisible = false,
+  appliedDetails = null,
   nextActionLabel = "",
 }) {
   const phase = getPhase({ aiLoading, aiError, aiStatus, aiSuggestions, queueReady });
@@ -383,6 +399,45 @@ export default function AiPlannerGuidance({
     content?.appliedStateBundle &&
     (appliedSuccessVisible || (appliedMessage && isAppliedSuccessMessage(appliedMessage)));
   if (!content) return null;
+
+  const appliedChangedLines = (() => {
+    if (!appliedDetails || typeof appliedDetails !== "object") return null;
+    if (appliedDetails.kind === "task_refinement") {
+      const changes = Array.isArray(appliedDetails.changes) ? appliedDetails.changes : [];
+      if (changes.length === 0) return ["Task updated (no visible field changes detected)."];
+      return changes.map((c) => {
+        if (!c || typeof c !== "object") return null;
+        if (c.field === "title") return `Title: “${c.from}” → “${c.to}”.`;
+        if (c.field === "effort") return `Effort: ${c.from} → ${c.to}.`;
+        if (c.field === "tags_added") return `Tags added: ${c.to}.`;
+        return null;
+      }).filter(Boolean);
+    }
+    if (appliedDetails.kind === "subtasks_created") {
+      const created = Number(appliedDetails.created || 0);
+      const attempted = Number(appliedDetails.attempted || 0);
+      const failures = Number(appliedDetails.failures || 0);
+      const lines = [];
+      lines.push(`Subtasks created: ${created} of ${attempted}.`);
+      if (appliedDetails.promoted && appliedDetails.promoted_title) {
+        lines.push(`Next‑3 updated: “${appliedDetails.promoted_title}” is now in your queue.`);
+      } else {
+        lines.push("Next‑3 stayed the same (subtasks were added to backlog unless promoted).");
+      }
+      if (failures > 0) lines.push(`Failed to create: ${failures}.`);
+      return lines;
+    }
+    return null;
+  })();
+
+  const planStillValidProof = [
+    nextActionLabel ? `Your next action is clear (${nextActionLabel}).` : "Your next action is clear.",
+    "Only the approved item changed — everything else stayed stable.",
+    reviewSummary && reviewSummary.total > 0
+      ? "Remaining suggestions are optional and still in review (nothing applies itself)."
+      : "No remaining suggestions need attention to keep moving.",
+    "You can pause and resume from the same Next 3 — no recheck required.",
+  ];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
@@ -526,18 +581,16 @@ export default function AiPlannerGuidance({
                 color: "#065f46",
               }}
             >
-              {/* Packet 70: one coherent autonomy layer — keep-moving proof, safe pause confidence, revisit vs rerun thresholds */}
-              <div style={{ fontWeight: 700, marginBottom: 6, color: "#047857" }}>
+              <div style={{ fontWeight: 700, marginBottom: 2, color: "#047857" }}>
                 {AUTONOMY_HEADLINE}
+              </div>
+              <div style={{ fontSize: 12, color: "#047857", marginBottom: 10 }}>
+                <span style={{ fontWeight: 700 }}>{SELF_TRUST_PANEL_TITLE}:</span>{" "}
+                {SELF_TRUST_SUBTITLE}
               </div>
               <div style={{ marginBottom: 10, color: "#047857" }}>
                 <span style={{ fontWeight: 700 }}>Default:</span> {AUTONOMY_DEFAULT_ACTION}
-                {nextActionLabel ? (
-                  <span>
-                    {" "}
-                    <span style={{ color: "#065f46" }}>({nextActionLabel})</span>
-                  </span>
-                ) : null}
+                {nextActionLabel ? <span> <span style={{ color: "#065f46" }}>({nextActionLabel})</span></span> : null}
               </div>
               <div
                 style={{
@@ -558,9 +611,28 @@ export default function AiPlannerGuidance({
                     letterSpacing: "0.02em",
                   }}
                 >
-                  Keep-moving proof
+                  What changed (and what stayed stable)
                 </div>
-                <div style={{ marginBottom: 10 }}>{AUTONOMY_KEEP_MOVING_PROOF}</div>
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ marginBottom: 4 }}>
+                    <span style={{ fontWeight: 700 }}>Changed:</span>{" "}
+                    {appliedMessage && isAppliedSuccessMessage(appliedMessage)
+                      ? appliedMessage.trim()
+                      : content.appliedStateBundle.recapWhatChangedFallback}
+                  </div>
+                  {appliedChangedLines && appliedChangedLines.length > 0 && (
+                    <ul style={{ margin: "6px 0 0", paddingLeft: 16 }}>
+                      {appliedChangedLines.map((line) => (
+                        <li key={line} style={{ marginBottom: 4 }}>
+                          {line}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <div style={{ marginBottom: 10 }}>
+                  <span style={{ fontWeight: 700 }}>Stable:</span> {AUTONOMY_KEEP_MOVING_PROOF}
+                </div>
 
                 <div
                   style={{
@@ -572,31 +644,21 @@ export default function AiPlannerGuidance({
                     letterSpacing: "0.02em",
                   }}
                 >
-                  Pause vs revisit vs rerun
+                  Proof: plan still valid enough to follow
                 </div>
+                <div style={{ marginBottom: 6 }}>{SELF_TRUST_PROOF_INTRO}</div>
                 <ul style={{ margin: 0, paddingLeft: 16 }}>
-                  <li style={{ marginBottom: 6 }}>
-                    <span style={{ fontWeight: 700 }}>Keep going:</span> {AUTONOMY_WHEN_PLAN_STILL_GOOD}
-                  </li>
-                  <li style={{ marginBottom: 6 }}>
-                    <span style={{ fontWeight: 700 }}>Safe pause:</span> {AUTONOMY_SAFE_PAUSE_RULE}
-                  </li>
-                  <li style={{ marginBottom: 6 }}>
-                    <span style={{ fontWeight: 700 }}>Quick revisit:</span> {AUTONOMY_QUICK_REVISIT_RULE}{" "}
-                    {AUTONOMY_WHEN_QUICK_REVISIT_HELPS}
-                  </li>
-                  <li style={{ marginBottom: 0 }}>
-                    <span style={{ fontWeight: 700 }}>Full rerun:</span> {AUTONOMY_FULL_RERUN_RULE}{" "}
-                    {AUTONOMY_WHEN_FULL_RERUN_WORTHWHILE} {AUTONOMY_WHEN_TO_AVOID_RERUN}
-                  </li>
+                  {planStillValidProof.map((line) => (
+                    <li key={line} style={{ marginBottom: 4 }}>
+                      {line}
+                    </li>
+                  ))}
                 </ul>
               </div>
               <div style={{ fontWeight: 600, marginBottom: 4, color: "#047857" }}>
-                Best next move
+                Decision thresholds (no reassurance loops)
               </div>
-              <div style={{ marginBottom: 6 }}>
-                {content.appliedStateBundle.recapDoNow}
-              </div>
+              <div style={{ marginBottom: 6 }}>{content.appliedStateBundle.recapDoNow}</div>
               {reviewSummary && reviewSummary.total > 0 && (
                 <div style={{ marginBottom: 6, color: "#047857" }}>
                   <span style={{ fontWeight: 600 }}>Remaining:</span>{" "}
@@ -604,16 +666,23 @@ export default function AiPlannerGuidance({
                   {reviewSummary.items.join(" · ")}. Quick peek later if one helps; the rest can wait.
                 </div>
               )}
-              <div style={{ marginBottom: 4 }}>
-                <span style={{ fontWeight: 600, color: "#047857" }}>What changed:</span>{" "}
-                {appliedMessage && isAppliedSuccessMessage(appliedMessage)
-                  ? appliedMessage.trim()
-                  : content.appliedStateBundle.recapWhatChangedFallback}
-              </div>
-              <div style={{ marginBottom: 0 }}>
-                <span style={{ fontWeight: 600, color: "#047857" }}>What stayed the same:</span>{" "}
-                {content.appliedStateBundle.recapWhatStayedSame}
-              </div>
+              <ul style={{ margin: 0, paddingLeft: 16 }}>
+                <li style={{ marginBottom: 6 }}>
+                  <span style={{ fontWeight: 700 }}>Keep working:</span> {SELF_TRUST_KEEP_WORKING_TRIGGER}{" "}
+                  {AUTONOMY_WHEN_PLAN_STILL_GOOD}
+                </li>
+                <li style={{ marginBottom: 6 }}>
+                  <span style={{ fontWeight: 700 }}>Quick revisit:</span> {SELF_TRUST_QUICK_REVISIT_TRIGGER}{" "}
+                  {AUTONOMY_QUICK_REVISIT_RULE} {AUTONOMY_WHEN_QUICK_REVISIT_HELPS}
+                </li>
+                <li style={{ marginBottom: 6 }}>
+                  <span style={{ fontWeight: 700 }}>Full rerun:</span> {SELF_TRUST_FULL_RERUN_TRIGGER}{" "}
+                  {AUTONOMY_FULL_RERUN_RULE} {AUTONOMY_WHEN_FULL_RERUN_WORTHWHILE} {AUTONOMY_WHEN_TO_AVOID_RERUN}
+                </li>
+                <li style={{ marginBottom: 0 }}>
+                  <span style={{ fontWeight: 700 }}>Stop rule:</span> {SELF_TRUST_STOP_RULE}
+                </li>
+              </ul>
             </div>
           )}
         </div>
