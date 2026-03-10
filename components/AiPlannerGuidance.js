@@ -109,6 +109,24 @@ const EW_WHAT_CAN_STAY_UNTOUCHED =
 const EW_BLOCKER_BOUNDARY =
   "Treat “blocked for >10 minutes or plan feels wrong for this session” as the boundary — that’s when a single rerun is worth it; below that, keep working from the current Next 3.";
 
+// Packet 80: AI Planner safe-stop and next-resume bundle — done-for-now confidence,
+// one best restart point, what can stay untouched, and when a rerun is actually warranted.
+const SAFE_STOP_TITLE = "Safe stop & next resume";
+const SAFE_STOP_HEADLINE =
+  "You can safely stop here — today’s plan is updated and can hold until tomorrow.";
+const SAFE_STOP_DONE_FOR_NOW =
+  "Done-for-now rule: after one apply and a bit of work, it’s valid to close the planner and end today from your updated Next 3 — you don’t need to clear every card or rerun to count today as a success.";
+const SAFE_STOP_NEXT_RESTART_POINT =
+  "Next restart point: when you come back later (tonight or tomorrow), restart by looking at your updated Next 3 and picking the first not-done task. If that still fits, you can keep going without reopening the planner.";
+const SAFE_STOP_CAN_STAY_UNTOUCHED_UNTIL_TOMORROW =
+  "Can stay untouched until tomorrow: remaining cards, backlog items, and other days don’t need a second look tonight. They stay valid as-is until a real change in constraints or priorities makes a fresh pass worthwhile.";
+const SAFE_STOP_RERUN_WORTH_IT =
+  "Rerun is actually worth it when: your constraints really changed (new blocker, deadline, surprise work), your Next 3 no longer matches what today should focus on, or you feel stuck/wrong for more than ~10 minutes even after trying the next task.";
+const SAFE_STOP_AVOID_RERUN_FOR_REASSURANCE =
+  "Avoid rerun for reassurance only: if you’re mostly looking for a “did I do it right?” feeling, treat that as a signal to stop, not to rerun — your current plan is already stable enough.";
+const SAFE_STOP_PAUSE_WITHOUT_GUILT =
+  "Pause without guilt: closing the planner is a valid completion for today. You’re not abandoning the plan — you’re parking it in a stable state you can restart from later.";
+
 // Packet 64: Updated plan recap bundle — what changed, what to do now, when safe to ignore
 const RECAP_WHAT_CHANGED_FALLBACK =
   "One suggestion was applied; your plan is updated.";
@@ -727,6 +745,55 @@ export default function AiPlannerGuidance({
                     <span style={{ fontWeight: 800 }}>Blocker boundary:</span> {EW_BLOCKER_BOUNDARY}
                   </div>
                 </div>
+              </div>
+
+              <div
+                style={{
+                  marginTop: 10,
+                  padding: "10px 10px 8px",
+                  borderRadius: 6,
+                  background: "#ecfdf5",
+                  border: "1px solid #6ee7b7",
+                }}
+              >
+                <div
+                  style={{
+                    fontWeight: 900,
+                    marginBottom: 4,
+                    color: "#047857",
+                  }}
+                >
+                  {SAFE_STOP_TITLE}
+                </div>
+                <div style={{ marginBottom: 6, color: "#047857" }}>
+                  {SAFE_STOP_HEADLINE}
+                </div>
+                <ol
+                  style={{
+                    margin: 0,
+                    paddingLeft: 18,
+                    fontSize: 12,
+                    color: "#065f46",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  <li style={{ marginBottom: 4 }}>{SAFE_STOP_DONE_FOR_NOW}</li>
+                  <li style={{ marginBottom: 4 }}>
+                    {SAFE_STOP_NEXT_RESTART_POINT}{" "}
+                    {nextActionLabel ? (
+                      <span style={{ fontWeight: 600 }}>
+                        Restart cue: {nextActionLabel}
+                      </span>
+                    ) : null}
+                  </li>
+                  <li style={{ marginBottom: 4 }}>
+                    {SAFE_STOP_CAN_STAY_UNTOUCHED_UNTIL_TOMORROW}
+                  </li>
+                  <li style={{ marginBottom: 4 }}>{SAFE_STOP_RERUN_WORTH_IT}</li>
+                  <li style={{ marginBottom: 0 }}>
+                    {SAFE_STOP_AVOID_RERUN_FOR_REASSURANCE} {SAFE_STOP_PAUSE_WITHOUT_GUILT}
+                  </li>
+                </ol>
               </div>
             </div>
           )}
