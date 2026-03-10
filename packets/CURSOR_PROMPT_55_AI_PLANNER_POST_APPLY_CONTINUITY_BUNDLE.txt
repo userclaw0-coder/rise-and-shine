@@ -1,0 +1,54 @@
+Implement rise-and-shine packet 55: AI Planner post-apply continuity bundle.
+
+Goal
+- Build on the fallback trust, action-path, review-readiness, and apply-confidence bundles by making the Today planner feel steady immediately after review decisions: clarify what to do right after approving a suggestion, what happens after dismissing one, and how to keep momentum without feeling forced into a full planner pass.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat/ai-planner-post-apply-continuity-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-post-apply-continuity-bundle
+
+Scope
+- Bundle adjacent post-review continuity improvements into one coherent Today planner layer.
+- Improve the planner review/apply experience so it more clearly communicates:
+  - what the user should do immediately after approving one suggestion,
+  - how the planner should feel after dismissing or skipping suggestions,
+  - how to continue with one small next step instead of feeling pressure to review everything,
+  - and how to preserve momentum after a single approval or dismissal.
+- Keep the change narrow and local to Today planner guidance/review surfaces.
+- Prefer one coherent continuity summary over scattered micro-cues.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth, analytics, or backend prompt/model changes.
+- No broad redesign of the planner surface.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a tiny wording or layout hook is clearly warranted
+- related small planner review components only if clearly necessary
+
+Acceptance criteria
+- The planner feels easier to continue using immediately after approval or dismissal.
+- Users can understand the next low-risk move after acting on one suggestion without feeling pulled into a full review pass.
+- The change remains narrow, user-facing, and reviewable.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups
