@@ -217,6 +217,23 @@ const MORNING_STABILITY_MANUAL_ADJUST =
 const MORNING_STABILITY_RERUN_THRESHOLD =
   "Late-morning rerun threshold: only reopen the planner once you’ve given this block a real attempt and one of the real-break conditions is true — your first task no longer fits this time at all, more than half of your Next 3 clearly belongs to a different kind of day, or a new constraint reshapes what the rest of the morning should be. Below that bar, stay with the current block and keep nudging it forward.";
 
+// Packet 87: AI Planner late-morning continuity bundle — adjacent to morning stability:
+// carry-forward proof for the rest of the morning, ordinary slowdown tolerance,
+// manual resequencing guidance, and a firmer pre-lunch rerun threshold.
+const LATE_MORNING_TITLE = "Late-morning continuity contract";
+const LATE_MORNING_HEADLINE =
+  "Late in the morning, treat your current Next 3 as a stable lane through lunch — slow or imperfect progress inside it is normal, and only a real shift in what the rest of this morning should be is a reason to reopen the planner.";
+const LATE_MORNING_CARRY_PROOF =
+  "Why the current plan still carries: your updated Next 3 is already anchored to today’s priorities, you’ve made at least some progress or refilled once, and nothing big has invalidated what this morning is for. You’re not waiting on a better plan for before lunch — you’re executing the one you already chose.";
+const LATE_MORNING_SLOWDOWN_NORMAL =
+  "Ordinary slowdown that doesn’t break the plan: working more slowly than expected, a task spilling over into the next block, or needing small context swaps between the same 2–3 tasks. As long as you’re still inside the same cluster and your first task roughly matches how you meant to use this morning, the contract is intact.";
+const LATE_MORNING_REAL_MISMATCH =
+  "Real pre-lunch mismatch: most of your effort has drifted to tasks that are not in your current Next 3, a new constraint makes a different focus clearly more important for the rest of the morning, or more than half of your Next 3 now looks like it belongs to a different kind of day (for example, deep work vs errands). That’s a sign the lane itself needs to change, not just the pacing inside it.";
+const LATE_MORNING_MANUAL_RESEQUENCE =
+  "When a manual reshuffle is enough: if the same ingredients still belong in this morning but the order or shape needs a tweak — trimming scope on a task, swapping the order of two Next-3 items, or parking one task to the backlog and pulling an already-related task in — edit the queue by hand. Those adjustments keep the plan continuous without inviting a fresh AI pass.";
+const LATE_MORNING_RERUN_THRESHOLD =
+  "Pre-lunch rerun threshold: only reopen the planner when the rest of the morning should genuinely be about something else — a new blocker or deadline rewrites what “before lunch” is for, you’ve given the current focus a solid attempt and it still feels wrong for >10–15 minutes, or your Next 3 now mostly represents the wrong kind of work. Below that bar, keep finishing, trimming, or resequencing manually and let this plan carry you into lunch.";
+
 // Packet 64: Updated plan recap bundle — what changed, what to do now, when safe to ignore
 const RECAP_WHAT_CHANGED_FALLBACK =
   "One suggestion was applied; your plan is updated.";
@@ -532,6 +549,7 @@ export default function AiPlannerGuidance({
   appliedDetails = null,
   nextActionLabel = "",
   isMorningFirstBlock = false,
+  isLateMorningExecution = false,
 }) {
   const phase = getPhase({ aiLoading, aiError, aiStatus, aiSuggestions, queueReady });
   const content = PHASE_CONTENT[phase];
@@ -815,6 +833,63 @@ export default function AiPlannerGuidance({
                       <span style={{ fontWeight: 600 }}>Late-morning rerun threshold:</span>{" "}
                       {FIRST_BLOCK_RERUN_ONLY_IF} {MORNING_MOMENTUM_RERUN_THRESHOLD}{" "}
                       {MORNING_STABILITY_RERUN_THRESHOLD}
+                    </li>
+                  </ol>
+                </div>
+              )}
+
+              {isLateMorningExecution && !isMorningFirstBlock && (
+                <div
+                  role="region"
+                  aria-label="Late-morning continuity contract"
+                  style={{
+                    marginTop: 10,
+                    padding: "10px 10px 8px",
+                    borderRadius: 6,
+                    background: "#fefce8",
+                    border: "1px solid #facc15",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontWeight: 900,
+                      marginBottom: 4,
+                      color: "#854d0e",
+                    }}
+                  >
+                    {LATE_MORNING_TITLE}
+                  </div>
+                  <div style={{ marginBottom: 6, color: "#713f12", fontSize: 12 }}>
+                    {LATE_MORNING_HEADLINE}
+                  </div>
+                  <ol
+                    style={{
+                      margin: 0,
+                      paddingLeft: 18,
+                      fontSize: 12,
+                      color: "#1f2937",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    <li style={{ marginBottom: 4 }}>
+                      <span style={{ fontWeight: 600 }}>Why this plan can carry the rest of the morning:</span>{" "}
+                      {LATE_MORNING_CARRY_PROOF}
+                    </li>
+                    <li style={{ marginBottom: 4 }}>
+                      <span style={{ fontWeight: 600 }}>Slowdown vs a broken plan:</span>{" "}
+                      {LATE_MORNING_SLOWDOWN_NORMAL}
+                    </li>
+                    <li style={{ marginBottom: 4 }}>
+                      <span style={{ fontWeight: 600 }}>When the lane actually changed:</span>{" "}
+                      {LATE_MORNING_REAL_MISMATCH}
+                    </li>
+                    <li style={{ marginBottom: 4 }}>
+                      <span style={{ fontWeight: 600 }}>Finish/trim/resequence manually first:</span>{" "}
+                      {LATE_MORNING_MANUAL_RESEQUENCE}
+                    </li>
+                    <li style={{ marginBottom: 0 }}>
+                      <span style={{ fontWeight: 600 }}>Pre-lunch rerun threshold:</span>{" "}
+                      {LATE_MORNING_RERUN_THRESHOLD}
                     </li>
                   </ol>
                 </div>
