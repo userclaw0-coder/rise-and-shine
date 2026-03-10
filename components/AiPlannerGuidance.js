@@ -8,6 +8,16 @@ const APPLIED_WHEN_FULL_RERUN_WORTH_IT =
 const APPLIED_STAY_IN_MOTION =
   "Stay in motion: your queue is updated. Work your Next 3; the planner is there whenever you want another pass, but you don't need one to keep today moving — so you can keep going without feeling trapped in repeated planner loops.";
 
+// Packet 64: Updated plan recap bundle — what changed, what to do now, when safe to ignore
+const RECAP_WHAT_CHANGED_FALLBACK =
+  "One suggestion was applied; your plan is updated.";
+const RECAP_DO_NOW =
+  "Your best move is from the updated plan: work your Next 3. No need to review every remaining suggestion or run Refine again.";
+const RECAP_SAFE_TO_IGNORE =
+  "You can close this and keep working — no need to reopen the planner until you've done a chunk of work, your Next 3 has changed, or you want a fresh set. Right now, another run would be an interruption.";
+const RECAP_WHEN_REVISIT_WORTH_IT =
+  "Revisit later today only if one remaining suggestion clearly helps; otherwise keep moving. Run \"Refine these 3 with AI\" when you want a fresh pass — not required to keep today moving.";
+
 function getReviewSummary(aiSuggestions) {
   if (!aiSuggestions) return null;
 
@@ -212,8 +222,14 @@ const PHASE_CONTENT = {
         "Staying steady: one approval or one dismiss keeps momentum. You can leave the rest for later or run \"Refine these 3 with AI\" again anytime for a fresh set.",
     },
     // Packet 63: re-entry decision bundle — keep working, quick revisit, full rerun, stay in motion
+    // Packet 64: updated plan recap — what changed, do now, safe to ignore, when revisit worth it
     appliedStateBundle: {
-      title: "Re-entry: your next move",
+      title: "Updated plan recap",
+      recapWhatChangedFallback: RECAP_WHAT_CHANGED_FALLBACK,
+      recapDoNow: RECAP_DO_NOW,
+      recapSafeToIgnore: RECAP_SAFE_TO_IGNORE,
+      recapWhenRevisitWorthIt: RECAP_WHEN_REVISIT_WORTH_IT,
+      reEntryTitle: "Re-entry: your next move",
       keepWorking: APPLIED_KEEP_WORKING,
       quickRevisit: APPLIED_QUICK_REVISIT,
       whenFullRerunWorthIt: APPLIED_WHEN_FULL_RERUN_WORTH_IT,
@@ -399,7 +415,7 @@ export default function AiPlannerGuidance({
           {showAppliedState && content.appliedStateBundle && (
             <div
               role="region"
-              aria-label="Planner re-entry: when to keep working, quick revisit, or run Refine again"
+              aria-label="Updated plan recap: what changed, what to do now, when safe to ignore the planner"
               style={{
                 marginTop: 8,
                 padding: "10px 12px",
@@ -411,16 +427,37 @@ export default function AiPlannerGuidance({
                 color: "#065f46",
               }}
             >
-              <div style={{ fontWeight: 600, marginBottom: 4, color: "#047857" }}>
+              <div style={{ fontWeight: 600, marginBottom: 6, color: "#047857" }}>
                 {content.appliedStateBundle.title}
               </div>
+              <div style={{ marginBottom: 6 }}>
+                <span style={{ fontWeight: 600, color: "#047857" }}>What changed:</span>{" "}
+                {appliedMessage && isAppliedSuccessMessage(appliedMessage)
+                  ? appliedMessage.trim()
+                  : content.appliedStateBundle.recapWhatChangedFallback}
+              </div>
+              <div style={{ marginBottom: 6 }}>
+                <span style={{ fontWeight: 600, color: "#047857" }}>Do now:</span>{" "}
+                {content.appliedStateBundle.recapDoNow}
+              </div>
+              <div style={{ marginBottom: 6 }}>
+                <span style={{ fontWeight: 600, color: "#047857" }}>Safe to ignore for now:</span>{" "}
+                {content.appliedStateBundle.recapSafeToIgnore}
+              </div>
+              <div style={{ marginBottom: reviewSummary?.total > 0 ? 6 : 8 }}>
+                <span style={{ fontWeight: 600, color: "#047857" }}>When to revisit or rerun:</span>{" "}
+                {content.appliedStateBundle.recapWhenRevisitWorthIt}
+              </div>
               {reviewSummary && reviewSummary.total > 0 && (
-                <div style={{ marginBottom: 6, color: "#047857" }}>
+                <div style={{ marginBottom: 8, color: "#047857" }}>
                   <span style={{ fontWeight: 600 }}>Remaining:</span>{" "}
                   {reviewSummary.total} suggestion{reviewSummary.total === 1 ? "" : "s"} ·{" "}
-                  {reviewSummary.items.join(" · ")}. Quick revisit later today if one helps; the rest can wait.
+                  {reviewSummary.items.join(" · ")}. Quick peek later if one helps; the rest can wait.
                 </div>
               )}
+              <div style={{ fontWeight: 600, marginBottom: 4, color: "#047857" }}>
+                {content.appliedStateBundle.reEntryTitle}
+              </div>
               <ol style={{ margin: 0, paddingLeft: 18 }}>
                 <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.keepWorking}</li>
                 <li style={{ marginBottom: 4 }}>{content.appliedStateBundle.quickRevisit}</li>
