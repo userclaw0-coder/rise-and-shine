@@ -81,17 +81,19 @@ const RERUN_AVOID_THRESHOLD =
 // Packet 74: keep-working contract bundle — prior denser post-apply layer. Packet 75 refines it into a clearer "continue with confidence" surface.
 
 // Packet 76: AI Planner execution pace bundle — one dense Today layer: focus-now, what-can-wait, later-today revisit timing, rerun escalation triggers
-const EXECUTION_PACE_TITLE = "Execution pace (today)";
-const EXECUTION_PACE_SUBTITLE =
-  "A single at-a-glance pace layer: focus now, what can wait, an optional later-today revisit window, and clear rerun triggers.";
-const EP_NOW =
-  "Focus now: start the next task from your updated Next 3 (then keep going).";
-const EP_CAN_WAIT =
-  "Can wait: remaining cards + any “verify again” urge. Your plan is already updated and bounded to what you approved.";
-const EP_LATER_TODAY =
-  "Later today (optional): after you finish one task (or after ~60–120 minutes), take ≤2 minutes to confirm your Next 3 still feels right. If one card is an obvious upgrade, do just one — then stop.";
-const EP_RERUN_ONLY_IF =
-  "Rerun only if: you finished a real chunk, your Next 3 changed, constraints changed, or you’re stuck/wrong for >10 minutes. Otherwise keep executing.";
+const EXECUTION_WINDOW_TITLE = "Execution window (today)";
+const EXECUTION_WINDOW_SUBTITLE =
+  "One dense post-apply layer: focus now, what can wait until later today, an optional quick-check window, and clear rerun escalation triggers.";
+const EW_NOW =
+  "Focus now: start the next task from your updated Next 3 — then keep going.";
+const EW_CAN_WAIT =
+  "Can wait until later today: remaining cards + any “verify again” urge. Your plan is already updated and bounded to what you approved.";
+const EW_QUICK_CHECK_WINDOW =
+  "Quick check (optional): after you finish one task (or after ~60–120 minutes), take ≤2 minutes to confirm your Next 3 still feels right.";
+const EW_QUICK_CHECK_DECISION =
+  "If it still fits, close and continue. If it doesn’t fit, either do one quick card revisit (one card, then stop) or escalate to a full rerun only if a trigger below is true.";
+const EW_RERUN_ONLY_IF =
+  "Full rerun only if: you finished a real chunk, your Next 3 changed, constraints changed (deadline/blocker/surprise meeting), or you’re stuck/wrong for >10 minutes. Otherwise keep executing.";
 
 // Packet 64: Updated plan recap bundle — what changed, what to do now, when safe to ignore
 const RECAP_WHAT_CHANGED_FALLBACK =
@@ -564,7 +566,7 @@ export default function AiPlannerGuidance({
           {showAppliedState && content.appliedStateBundle && (
             <div
               role="region"
-              aria-label="Execution pace after apply"
+              aria-label="Execution window after apply"
               style={{
                 marginTop: 8,
                 padding: "10px 12px",
@@ -577,10 +579,10 @@ export default function AiPlannerGuidance({
               }}
             >
               <div style={{ fontWeight: 700, marginBottom: 2, color: "#047857" }}>
-                {EXECUTION_PACE_TITLE}
+                {EXECUTION_WINDOW_TITLE}
               </div>
               <div style={{ fontSize: 12, color: "#047857", marginBottom: 10 }}>
-                {EXECUTION_PACE_SUBTITLE}
+                {EXECUTION_WINDOW_SUBTITLE}
               </div>
 
               <div
@@ -629,7 +631,7 @@ export default function AiPlannerGuidance({
                 >
                   <div style={{ fontWeight: 900, marginBottom: 4, color: "#047857" }}>Now</div>
                   <div style={{ marginBottom: 6 }}>
-                    <span style={{ fontWeight: 800 }}>Do next:</span> {EP_NOW}{" "}
+                    <span style={{ fontWeight: 800 }}>Do next:</span> {EW_NOW}{" "}
                     {nextActionLabel ? (
                       <span style={{ color: "#065f46" }}>({nextActionLabel})</span>
                     ) : null}
@@ -651,8 +653,8 @@ export default function AiPlannerGuidance({
                   <div style={{ marginBottom: 6 }}>
                     <span style={{ fontWeight: 800 }}>Ignore for now:</span>{" "}
                     {reviewSummary && reviewSummary.total > 0
-                      ? `Remaining cards (${reviewSummary.total}): ${reviewSummary.items.join(" · ")}. ${EP_CAN_WAIT}`
-                      : EP_CAN_WAIT}
+                      ? `Remaining cards (${reviewSummary.total}): ${reviewSummary.items.join(" · ")}. ${EW_CAN_WAIT}`
+                      : EW_CAN_WAIT}
                   </div>
                   <div style={{ color: "#065f46" }}>
                     <span style={{ fontWeight: 800 }}>Stop rule:</span> {SELF_TRUST_STOP_RULE}
@@ -668,13 +670,13 @@ export default function AiPlannerGuidance({
                   }}
                 >
                   <div style={{ fontWeight: 900, marginBottom: 4, color: "#047857" }}>
-                    Later today (optional)
+                    Quick check window (optional)
                   </div>
                   <div style={{ marginBottom: 6 }}>
-                    <span style={{ fontWeight: 800 }}>Quick revisit:</span> {EP_LATER_TODAY}
+                    <span style={{ fontWeight: 800 }}>Timing:</span> {EW_QUICK_CHECK_WINDOW}
                   </div>
                   <div style={{ color: "#065f46" }}>
-                    <span style={{ fontWeight: 800 }}>Rule:</span> one card is enough — stop after one.
+                    <span style={{ fontWeight: 800 }}>Decision:</span> {EW_QUICK_CHECK_DECISION}
                   </div>
                 </div>
 
@@ -688,7 +690,7 @@ export default function AiPlannerGuidance({
                 >
                   <div style={{ fontWeight: 900, marginBottom: 4, color: "#047857" }}>Rerun only if…</div>
                   <div style={{ marginBottom: 6 }}>
-                    <span style={{ fontWeight: 800 }}>Full rerun:</span> {EP_RERUN_ONLY_IF}
+                    <span style={{ fontWeight: 800 }}>Full rerun:</span> {EW_RERUN_ONLY_IF}
                   </div>
                   <div style={{ color: "#065f46" }}>
                     <span style={{ fontWeight: 800 }}>Avoid rerun when:</span> {RERUN_AVOID_THRESHOLD}
