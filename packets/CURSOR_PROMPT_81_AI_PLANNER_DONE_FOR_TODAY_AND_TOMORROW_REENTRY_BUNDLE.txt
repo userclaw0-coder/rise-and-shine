@@ -1,0 +1,54 @@
+Implement rise-and-shine packet 81: AI Planner done-for-today and tomorrow re-entry bundle.
+
+Goal
+- Build on the safe-stop and next-resume bundle by turning the post-apply state into a clearer done-for-today contract: combine end-of-day closure, tomorrow restart confidence, what can wait overnight, and a sharper line between normal resume versus actual planner rerun so users can leave Today feeling finished instead of half-abandoned.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat-ai-planner-done-for-today-and-tomorrow-reentry-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-done-for-today-and-tomorrow-reentry-bundle
+
+Scope
+- Bundle adjacent end-of-day closure, tomorrow restart point, overnight leave-it-alone confidence, and rerun-threshold clarity into one coherent Today planner treatment.
+- Improve the planner experience so users can more clearly tell after applying one suggestion and making some progress:
+  - when today is complete enough to stop,
+  - what the best tomorrow restart point is,
+  - what does not need another check tonight,
+  - and which overnight changes truly justify reopening the planner.
+- Prefer one coherent done-for-today treatment over scattered reassurance copy or broad page changes.
+- Keep the change narrow and local to Today planner guidance / review / apply surfaces.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth, analytics, or backend prompt/model changes.
+- No broad redesign of the Today page.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a small hook or summary treatment is clearly warranted
+- related planner review/apply components only if clearly necessary
+
+Acceptance criteria
+- After applying one suggestion, users can tell when today is complete enough, where to restart tomorrow, what can stay untouched overnight, and when a rerun is actually warranted.
+- Users can stop with more closure and resume tomorrow with less planner thrash.
+- The change stays narrow, local, and reviewable.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups
