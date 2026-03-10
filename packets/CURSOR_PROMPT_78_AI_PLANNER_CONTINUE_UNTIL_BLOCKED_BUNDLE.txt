@@ -1,0 +1,54 @@
+Implement rise-and-shine packet 78: AI Planner continue-until-blocked bundle.
+
+Goal
+- Build on the AI Planner execution window bundle by turning the post-apply state into a clearer continue-until-blocked surface: combine keep-going proof, what can wait until later, optional checkpoint timing, and interruption-versus-rerun boundaries into one denser Today planner layer so users can keep executing without repeatedly reopening the planner for reassurance.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat-ai-planner-continue-until-blocked-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-continue-until-blocked-bundle
+
+Scope
+- Bundle adjacent keep-going guidance, can-wait boundaries, optional checkpoint timing, and interruption/rerun thresholds into one coherent Today planner treatment.
+- Improve the planner experience so users can more clearly tell after applying one suggestion:
+  - what deserves continued focus right now,
+  - what can safely wait until later today,
+  - when a lightweight checkpoint is enough,
+  - and when a true interruption, drift, or blocker means it is finally worth rerunning the planner.
+- Prefer one coherent continue-until-blocked treatment over scattered reassurance copy or broad page changes.
+- Keep the change narrow and local to Today planner guidance / review / apply surfaces.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth, analytics, or backend prompt/model changes.
+- No broad redesign of the Today page.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a small hook or summary treatment is clearly warranted
+- related planner review/apply components only if clearly necessary
+
+Acceptance criteria
+- After applying one suggestion, users can tell when to keep going, what can wait, when a lightweight checkpoint helps, and when a full rerun is actually justified.
+- Users can stay in execution mode today with less planner thrash and less reassurance-seeking.
+- The change stays narrow, local, and reviewable.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups
