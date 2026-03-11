@@ -1,14 +1,63 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import DashboardLayout from "../components/DashboardLayout";
 import { useAuth } from "../hooks/useAuth";
-import {
-  getDailyNotes,
-  getDailyNoteForDate,
-  upsertDailyNote,
-} from "../lib/db";
+import { getNotes, createNote, updateNote } from "../lib/db";
 
-function todayDateStr() {
-  return new Date().toISOString().slice(0, 10);
+function formatDayAndTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const dateStr = d.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: d.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined,
+  });
+  const timeStr = d.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  return `${dateStr} · ${timeStr}`;
+}
+
+function AutoHeightText({ value, readOnly, onChange, placeholder, style }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.max(60, el.scrollHeight)}px`;
+  }, [value]);
+  if (readOnly) {
+    return (
+      <div
+        ref={ref}
+        style={{
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-word",
+          minHeight: 24,
+          ...style,
+        }}
+      >
+        {value || "\u00a0"}
+      </div>
+    );
+  }
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      rows={3}
+      style={{
+        width: "100%",
+        resize: "none",
+        overflow: "hidden",
+        boxSizing: "border-box",
+        ...style,
+      }}
+    />
+  );
 }
 
 export default function NotesPage() {
@@ -16,50 +65,60 @@ export default function NotesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notes, setNotes] = useState([]);
-  const [todayNote, setTodayNote] = useState("");
-  const [todayDirty, setTodayDirty] = useState(false);
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
   const [saving, setSaving] = useState(false);
-  const todayStr = todayDateStr();
+  const [editingId, setEditingId] = useState(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editBody, setEditBody] = useState("");
 
   useEffect(() => {
     if (!user) return;
+    setLoading(true);
+    setError("");
+    getNotes(user.id)
+      .then((res) => {
+        if (res.error) setError(res.error.message);
+        else setNotes(res.data || []);
+      })
+      .finally(() => setLoading(false));
+  }, [user]);
 
-    async function load() {
-      setLoading(true);
-      setError("");
-      try {
-        const [listRes, todayRes] = await Promise.all([
-          getDailyNotes(user.id),
-          getDailyNoteForDate(user.id, todayStr),
-        ]);
-        if (listRes.error) setError(listRes.error.message);
-        else setNotes(listRes.data || []);
-        if (!todayRes.error && todayRes.data) {
-          setTodayNote(todayRes.data.note || "");
-        } else {
-          setTodayNote("");
-        }
-      } catch (e) {
-        setError(e.message || "Failed to load notes.");
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-  }, [user, todayStr]);
-
-  async function saveTodayNote() {
-    if (!user || !todayDirty) return;
+  async function handleSave() {
+    if (!user || !body.trim()) return;
     setSaving(true);
     setError("");
-    const res = await upsertDailyNote(user.id, todayStr, todayNote);
+    const res = await createNote(user.id, { title: title.trim() || null, body: body.trim() });
     if (res.error) setError(res.error.message);
     else {
-      setTodayDirty(false);
-      setNotes((prev) => {
-        const without = prev.filter((n) => n.date !== todayStr);
-        return [{ ...res.data, date: todayStr }, ...without];
-      });
+      setNotes((prev) => [res.data, ...prev]);
+      setTitle("");
+      setBody("");
+    }
+    setSaving(false);
+  }
+
+  function startEdit(note) {
+    setEditingId(note.id);
+    setEditTitle(note.title || "");
+    setEditBody(note.body || "");
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditTitle("");
+    setEditBody("");
+  }
+
+  async function saveEdit() {
+    if (!user || editingId == null) return;
+    setSaving(true);
+    setError("");
+    const res = await updateNote(user.id, editingId, { title: editTitle.trim() || null, body: editBody });
+    if (res.error) setError(res.error.message);
+    else {
+      setNotes((prev) => prev.map((n) => (n.id === editingId ? { ...n, ...res.data } : n)));
+      cancelEdit();
     }
     setSaving(false);
   }
@@ -92,7 +151,7 @@ export default function NotesPage() {
             color: "#6b7280",
           }}
         >
-          Daily notes. Edit today&apos;s note below.
+          Add notes anytime; multiple per day. Optional title, day and time saved automatically.
         </p>
 
         {error && (
@@ -109,29 +168,37 @@ export default function NotesPage() {
           }}
         >
           <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
-            Note for today ({todayStr})
+            New note
           </h2>
-          <textarea
-            value={todayNote}
-            onChange={(e) => {
-              setTodayNote(e.target.value);
-              setTodayDirty(true);
-            }}
-            placeholder="What's on your mind?"
-            rows={6}
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Title (optional)"
             style={{
               width: "100%",
+              padding: "8px 10px",
+              fontSize: 14,
+              borderRadius: 8,
+              border: "1px solid #e5e7eb",
+              marginBottom: 8,
+              boxSizing: "border-box",
+            }}
+          />
+          <AutoHeightText
+            value={body}
+            onChange={setBody}
+            placeholder="What's on your mind?"
+            style={{
               padding: 10,
               fontSize: 14,
               borderRadius: 8,
               border: "1px solid #e5e7eb",
-              resize: "vertical",
-              boxSizing: "border-box",
             }}
           />
           <button
-            onClick={saveTodayNote}
-            disabled={!todayDirty || saving}
+            onClick={handleSave}
+            disabled={!body.trim() || saving}
             style={{
               marginTop: 8,
               padding: "8px 14px",
@@ -140,7 +207,7 @@ export default function NotesPage() {
               background: "#111827",
               color: "#fff",
               fontSize: 13,
-              cursor: todayDirty && !saving ? "pointer" : "not-allowed",
+              cursor: body.trim() && !saving ? "pointer" : "not-allowed",
             }}
           >
             {saving ? "Saving…" : "Save"}
@@ -167,27 +234,104 @@ export default function NotesPage() {
             <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
               {notes.map((n) => (
                 <li
-                  key={n.id || n.date}
+                  key={n.id}
                   style={{
-                    padding: "10px 0",
+                    padding: "12px 0",
                     borderBottom: "1px solid #f3f4f6",
-                    fontSize: 13,
                   }}
                 >
-                  <strong>{n.date}</strong>
-                  {n.note ? (
-                    <div
-                      style={{
-                        marginTop: 4,
-                        color: "#374151",
-                        whiteSpace: "pre-wrap",
-                      }}
-                    >
-                      {n.note.slice(0, 200)}
-                      {n.note.length > 200 ? "…" : ""}
+                  {editingId === n.id ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      <input
+                        type="text"
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                        placeholder="Title (optional)"
+                        style={{
+                          padding: "6px 8px",
+                          fontSize: 13,
+                          borderRadius: 6,
+                          border: "1px solid #e5e7eb",
+                        }}
+                      />
+                      <AutoHeightText
+                        value={editBody}
+                        onChange={setEditBody}
+                        style={{
+                          padding: 8,
+                          fontSize: 13,
+                          borderRadius: 6,
+                          border: "1px solid #e5e7eb",
+                        }}
+                      />
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                          type="button"
+                          onClick={saveEdit}
+                          disabled={saving}
+                          style={{
+                            padding: "4px 10px",
+                            borderRadius: 999,
+                            border: "1px solid #111827",
+                            background: "#111827",
+                            color: "#fff",
+                            fontSize: 12,
+                            cursor: saving ? "wait" : "pointer",
+                          }}
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          onClick={cancelEdit}
+                          style={{
+                            padding: "4px 10px",
+                            borderRadius: 999,
+                            border: "1px solid #e5e7eb",
+                            background: "#fff",
+                            fontSize: 12,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
                     </div>
                   ) : (
-                    <span style={{ color: "#9ca3af", marginLeft: 6 }}>—</span>
+                    <>
+                      <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>
+                        {formatDayAndTime(n.created_at)}
+                      </div>
+                      {n.title && (
+                        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
+                          {n.title}
+                        </div>
+                      )}
+                      <AutoHeightText
+                        value={n.body || ""}
+                        readOnly
+                        style={{
+                          fontSize: 13,
+                          color: "#374151",
+                          marginBottom: 8,
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => startEdit(n)}
+                        style={{
+                          padding: "4px 10px",
+                          borderRadius: 999,
+                          border: "1px solid #6b7280",
+                          background: "#fff",
+                          color: "#4b5563",
+                          fontSize: 12,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Edit
+                      </button>
+                    </>
                   )}
                 </li>
               ))}

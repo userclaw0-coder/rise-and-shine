@@ -1010,6 +1010,89 @@ export default function TodayPage() {
 
       <QueueBehaviorHelper />
 
+      <div className="today-two-col">
+        <div>
+          <SectionCard
+            title="Daily Hits"
+            subtitle={
+              activeTemplate
+                ? activeTemplate.name
+                : "No default daily template found."
+            }
+          >
+            {(!items || items.length === 0) && (
+              <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
+                No daily items yet. Configure them on the Daily Hits page.
+              </p>
+            )}
+            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+              {items.map((it) => (
+                <li
+                  key={it.id}
+                  style={{
+                    padding: "6px 0",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    borderBottom: "1px solid #f3f4f6",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={!!completionMap[it.task?.id]}
+                    onChange={() => toggleTaskCompletion(it.task?.id)}
+                  />
+                  <div>
+                    <div style={{ fontSize: 14 }}>
+                      {it.task?.title || "Untitled task"}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#9ca3af" }}>
+                      {it.task?.priority || "Priority n/a"}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </SectionCard>
+
+          {workoutPlan && (
+            <SectionCard
+              title="Workout"
+              subtitle={
+                workoutTaskId
+                  ? `Cycle: ${workoutPlan.phase}`
+                  : "Workout tracking unavailable. Add a Daily Repeat category (e.g. in Backlog) to enable."
+              }
+            >
+              {workoutTaskId ? (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={!!completionMap[workoutPlan.id]}
+                    onChange={() => toggleTaskCompletion(workoutPlan.id)}
+                  />
+                  <div>
+                    <div style={{ fontSize: 14 }}>{workoutPlan.title}</div>
+                    <div style={{ fontSize: 12, color: "#9ca3af" }}>
+                      Tap when you complete today&apos;s workout.
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
+                  {workoutPlan.title}
+                </p>
+              )}
+            </SectionCard>
+          )}
+        </div>
+        <div>
       <SectionCard
         title="Next 3 Actions"
         subtitle={
@@ -1028,7 +1111,7 @@ export default function TodayPage() {
       >
         {queueEntries.length === 0 && (
           <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
-            No tasks available for the queue. Add tasks on the Backlog page, then
+            No tasks available for the queue. Add tasks on the Action Items page, then
             refresh the queue here.
           </p>
         )}
@@ -1355,86 +1438,8 @@ export default function TodayPage() {
           </div>
         )}
       </SectionCard>
-
-      <SectionCard
-        title="Daily template"
-        subtitle={
-          activeTemplate
-            ? activeTemplate.name
-            : "No default daily template found."
-        }
-      >
-        {(!items || items.length === 0) && (
-          <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
-            No daily items yet. Configure them on the Templates page.
-          </p>
-        )}
-        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-          {items.map((it) => (
-            <li
-              key={it.id}
-              style={{
-                padding: "6px 0",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                borderBottom: "1px solid #f3f4f6",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={!!completionMap[it.task?.id]}
-                onChange={() => toggleTaskCompletion(it.task?.id)}
-              />
-              <div>
-                <div style={{ fontSize: 14 }}>
-                  {it.task?.title || "Untitled task"}
-                </div>
-                <div style={{ fontSize: 12, color: "#9ca3af" }}>
-                  {it.task?.priority || "Priority n/a"}
-                </div>
-              </div>
-            </li>
-          ))}
-        </ul>
-      </SectionCard>
-
-      {workoutPlan && (
-        <SectionCard
-          title="Workout"
-          subtitle={
-            workoutTaskId
-              ? `Cycle: ${workoutPlan.phase}`
-              : "Workout tracking unavailable. Add a Daily Repeat category (e.g. in Backlog) to enable."
-          }
-        >
-          {workoutTaskId ? (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={!!completionMap[workoutPlan.id]}
-                onChange={() => toggleTaskCompletion(workoutPlan.id)}
-              />
-              <div>
-                <div style={{ fontSize: 14 }}>{workoutPlan.title}</div>
-                <div style={{ fontSize: 12, color: "#9ca3af" }}>
-                  Tap when you complete today&apos;s workout.
-                </div>
-              </div>
-            </div>
-          ) : (
-            <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
-              {workoutPlan.title}
-            </p>
-          )}
-        </SectionCard>
-      )}
+        </div>
+      </div>
     </DashboardLayout>
   );
 }

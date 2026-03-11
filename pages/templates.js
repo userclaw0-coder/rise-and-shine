@@ -197,7 +197,7 @@ export default function TemplatesPage() {
             letterSpacing: "-0.02em",
           }}
         >
-          Daily Templates
+          Daily Hits
         </h1>
         {msg && (
           <p style={{ color: "#6b7280", fontSize: 13, marginTop: 6 }}>{msg}</p>
