@@ -128,6 +128,16 @@ export default function TodayPage() {
   const [subtaskApplyError, setSubtaskApplyError] = useState("");
 
   const [profilePrefs, setProfilePrefs] = useState(null);
+  const [showOnboardingCompleteBanner, setShowOnboardingCompleteBanner] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const flag = window.localStorage.getItem("rs-onboarding-just-completed");
+    if (flag === "task" || flag === "done") {
+      window.localStorage.removeItem("rs-onboarding-just-completed");
+      setShowOnboardingCompleteBanner(flag);
+    }
+  }, []);
 
   const todayStr = useMemo(() => getTodayDateStr(), []);
 
@@ -948,6 +958,45 @@ export default function TodayPage() {
         </div>
       </div>
 
+      {showOnboardingCompleteBanner && (
+        <div
+          style={{
+            marginBottom: 12,
+            padding: "10px 14px",
+            background: "#f0fdf4",
+            border: "1px solid #86efac",
+            borderRadius: 12,
+            fontSize: 13,
+            color: "#166534",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <span>
+            {showOnboardingCompleteBanner === "task"
+              ? "Onboarding complete. Your first step was added as a task. Tap \"Refresh queue\" below to see it in your Next 3."
+              : "Onboarding complete. Tap \"Refresh queue\" below to get your Next 3 actions."}
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowOnboardingCompleteBanner(false)}
+            style={{
+              flexShrink: 0,
+              padding: "4px 8px",
+              fontSize: 12,
+              border: "1px solid #86efac",
+              borderRadius: 6,
+              background: "#ffffff",
+              color: "#166534",
+              cursor: "pointer",
+            }}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       {error && (
         <p style={{ color: "#b91c1c", fontSize: 13, marginBottom: 12 }}>
           {error}
@@ -964,9 +1013,17 @@ export default function TodayPage() {
       <SectionCard
         title="Next 3 Actions"
         subtitle={
-          dailyPlan != null
-            ? `Finish all 3 to unlock your next set · Refilled ${dailyPlan.refilled_count ?? 0} time(s) today`
-            : "Load or create your daily plan to see the queue."
+          dailyPlan != null ? (
+            <>
+              Finish all 3 to unlock your next set · Refilled{" "}
+              {dailyPlan.refilled_count ?? 0} time(s) today.
+              <span style={{ display: "block", marginTop: 4, fontWeight: 500 }}>
+                Queue stays the same until all 3 are done or you tap Refresh.
+              </span>
+            </>
+          ) : (
+            "Load or create your daily plan to see the queue."
+          )
         }
       >
         {queueEntries.length === 0 && (

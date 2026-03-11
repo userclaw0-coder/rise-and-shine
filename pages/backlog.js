@@ -263,6 +263,17 @@ export default function BacklogPage() {
 
   const [collapsedParents, setCollapsedParents] = useState({});
   const [isCompact, setIsCompact] = useState(false);
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const [compactListMode, setCompactListMode] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    try {
+      const stored = window.localStorage.getItem("backlog-compact-list");
+      setCompactListMode(stored === "1");
+    } catch (_) {}
+    return undefined;
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -272,6 +283,13 @@ export default function BacklogPage() {
     media.addEventListener("change", onChange);
     return () => media.removeEventListener("change", onChange);
   }, []);
+
+  function setCompactListModeAndSave(value) {
+    setCompactListMode(value);
+    try {
+      window.localStorage.setItem("backlog-compact-list", value ? "1" : "0");
+    } catch (_) {}
+  }
 
   function toggleCollapsed(taskId) {
     setCollapsedParents((prev) => ({
@@ -490,40 +508,464 @@ export default function BacklogPage() {
     const children = childrenByParent.get(task.id) || [];
     const hasChildren = children.length > 0;
     const isCollapsed = collapsedParents[task.id];
+    const isDone = task.status === "done";
 
     const tagText = task._tagsText ?? makeTagText(task);
+
+    const titleInput = (
+      <input
+        type="text"
+        value={task.title || ""}
+        onChange={(e) =>
+          updateTaskLocal(task.id, { title: e.target.value })
+        }
+        onBlur={(e) =>
+          handleInlineSave(task.id, { title: e.target.value })
+        }
+        style={{
+          width: "100%",
+          minWidth: 0,
+          fontSize: compactListMode ? 12 : isCompact ? 15 : 14,
+          lineHeight: 1.4,
+          padding: compactListMode ? "4px 6px" : isCompact ? "10px 12px" : "8px 10px",
+          borderRadius: compactListMode ? 4 : 8,
+          border: "1px solid #e5e7eb",
+          background: "#ffffff",
+          textDecoration: isDone ? "line-through" : "none",
+          color: isDone ? "#6b7280" : "#111827",
+        }}
+        placeholder="Task title…"
+      />
+    );
+
+    const checkboxControl = (
+      <label
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minWidth: compactListMode ? 20 : isCompact ? 44 : 24,
+          minHeight: compactListMode ? 20 : isCompact ? 44 : 24,
+          cursor: "pointer",
+          flexShrink: 0,
+        }}
+        title="Mark complete"
+      >
+        <input
+          type="checkbox"
+          checked={isDone}
+          onChange={(e) => handleStatusChange(task, e.target.checked ? "done" : "todo")}
+          style={{
+            width: compactListMode ? 14 : isCompact ? 22 : 18,
+            height: compactListMode ? 14 : isCompact ? 22 : 18,
+            cursor: "pointer",
+          }}
+        />
+      </label>
+    );
+
+    if (compactListMode) {
+      return (
+        <div key={task.id}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(0, 2fr) minmax(80px, 1fr) 70px 56px 70px 90px 90px minmax(60px, 1fr)",
+              gap: 6,
+              alignItems: "center",
+              padding: "4px 0",
+              borderBottom: "1px solid #f3f4f6",
+              fontSize: 12,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
+              <div style={{ width: depth * 8 }} />
+              {checkboxControl}
+              {hasChildren && (
+                <button
+                  type="button"
+                  onClick={() => toggleCollapsed(task.id)}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    padding: 2,
+                    cursor: "pointer",
+                    fontSize: 10,
+                    color: "#6b7280",
+                  }}
+                >
+                  {isCollapsed ? "▶" : "▼"}
+                </button>
+              )}
+              {!hasChildren && depth > 0 && <span style={{ fontSize: 10, color: "#d1d5db" }}>•</span>}
+              <div style={{ flex: 1, minWidth: 0 }}>{titleInput}</div>
+            </div>
+            <select
+              value={task.category_id || ""}
+              onChange={(e) => {
+                const cid = e.target.value || null;
+                updateTaskLocal(task.id, {
+                  category_id: cid,
+                  subcategory_id: null,
+                  _subcategoryText: "",
+                  subcategory: null,
+                });
+                handleInlineSave(task.id, { category_id: cid, subcategory_id: null });
+              }}
+              style={{ fontSize: 11, padding: "3px 6px", borderRadius: 4, border: "1px solid #e5e7eb", background: "#fff" }}
+            >
+              <option value="">Cat</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <select
+              value={task.priority || "Medium"}
+              onChange={(e) => handleInlineSave(task.id, { priority: e.target.value })}
+              style={{ fontSize: 11, padding: "3px 6px", borderRadius: 4, border: "1px solid #e5e7eb", background: "#fff" }}
+            >
+              <option value="Critical">P1</option>
+              <option value="High">P2</option>
+              <option value="Medium">P3</option>
+              <option value="Low">P4</option>
+            </select>
+            <input
+              type="number"
+              step="0.25"
+              value={task.effort_hours ?? ""}
+              placeholder="h"
+              onChange={(e) => updateTaskLocal(task.id, { effort_hours: e.target.value === "" ? null : Number(e.target.value) })}
+              onBlur={(e) => handleInlineSave(task.id, { effort_hours: e.target.value === "" ? null : Number(e.target.value) })}
+              style={{ fontSize: 11, padding: "3px 4px", width: 36, borderRadius: 4, border: "1px solid #e5e7eb", background: "#fff" }}
+            />
+            <input
+              type="date"
+              value={task.due_date || ""}
+              onChange={(e) => {
+                updateTaskLocal(task.id, { due_date: e.target.value || null });
+                handleInlineSave(task.id, { due_date: e.target.value || null });
+              }}
+              style={{ fontSize: 11, padding: "3px 4px", borderRadius: 4, border: "1px solid #e5e7eb", background: "#fff" }}
+            />
+            <select
+              value={task.status || "todo"}
+              onChange={(e) => handleStatusChange(task, e.target.value)}
+              style={{ fontSize: 11, padding: "3px 6px", borderRadius: 4, border: "1px solid #e5e7eb", background: "#fff" }}
+            >
+              <option value="todo">Todo</option>
+              <option value="doing">Doing</option>
+              <option value="done">Done</option>
+              <option value="archived">Arch</option>
+            </select>
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+              <button type="button" onClick={() => handleAddSubtask(task)} style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, border: "1px solid #e5e7eb", background: "#f9fafb", cursor: "pointer" }}>+Sub</button>
+              {task.status === "archived" ? (
+                <button type="button" onClick={() => handleStatusChange(task, "todo")} style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, border: "1px solid #86efac", background: "#ecfdf5", cursor: "pointer" }}>Restore</button>
+              ) : (
+                <button type="button" onClick={() => handleStatusChange(task, "archived")} style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, border: "1px solid #fecaca", background: "#fef2f2", color: "#b91c1c", cursor: "pointer" }}>Archive</button>
+              )}
+            </div>
+            <input
+              type="text"
+              value={tagText}
+              onChange={(e) => updateTaskLocal(task.id, { _tagsText: e.target.value })}
+              onBlur={(e) => handleTagsSave(task.id, e.target.value)}
+              placeholder="tags"
+              style={{ width: "100%", fontSize: 11, padding: "3px 6px", borderRadius: 4, border: "1px solid #e5e7eb", background: "#fff" }}
+            />
+          </div>
+          {!isCollapsed && children.map((child) => renderTaskRow(child, depth + 1))}
+        </div>
+      );
+    }
+
+    if (isCompact) {
+      return (
+        <div key={task.id}>
+          <div
+            style={{
+              marginBottom: 12,
+              padding: 14,
+              borderRadius: 12,
+              border: "1px solid #e5e7eb",
+              background: "#ffffff",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 10 }}>
+              <div style={{ width: depth * 16 }} />
+              {checkboxControl}
+              {hasChildren && (
+                <button
+                  type="button"
+                  onClick={() => toggleCollapsed(task.id)}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    padding: 8,
+                    cursor: "pointer",
+                    fontSize: 14,
+                    color: "#6b7280",
+                    minWidth: 44,
+                    minHeight: 44,
+                  }}
+                  aria-label={isCollapsed ? "Expand subtasks" : "Collapse subtasks"}
+                >
+                  {isCollapsed ? "▶" : "▼"}
+                </button>
+              )}
+              {!hasChildren && depth > 0 && (
+                <span style={{ fontSize: 12, color: "#9ca3af", alignSelf: "center" }}>•</span>
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>{titleInput}</div>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 8,
+                marginLeft: depth * 16 + 56,
+                fontSize: 13,
+                color: "#4b5563",
+              }}
+            >
+              <select
+                value={task.category_id || ""}
+                onChange={(e) => {
+                  const cid = e.target.value || null;
+                  updateTaskLocal(task.id, {
+                    category_id: cid,
+                    subcategory_id: null,
+                    _subcategoryText: "",
+                    subcategory: null,
+                  });
+                  handleInlineSave(task.id, { category_id: cid, subcategory_id: null });
+                }}
+                style={{
+                  fontSize: 13,
+                  padding: "8px 10px",
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                  background: "#ffffff",
+                  minHeight: 44,
+                }}
+              >
+                <option value="">Category…</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="text"
+                value={task._subcategoryText ?? task?.subcategory?.name ?? ""}
+                placeholder="Subcategory"
+                onChange={(e) => updateTaskLocal(task.id, { _subcategoryText: e.target.value })}
+                onBlur={() => handleSubcategorySave(task)}
+                list={task.category_id ? `subcategory-options-${task.category_id}` : undefined}
+                style={{
+                  fontSize: 13,
+                  padding: "8px 10px",
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                  background: "#ffffff",
+                  minHeight: 44,
+                  width: 120,
+                }}
+              />
+              <select
+                value={task.priority || "Medium"}
+                onChange={(e) =>
+                  handleInlineSave(task.id, { priority: e.target.value })
+                }
+                style={{
+                  fontSize: 13,
+                  padding: "8px 10px",
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                  background: "#ffffff",
+                  minHeight: 44,
+                }}
+              >
+                <option value="Critical">Critical</option>
+                <option value="High">High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
+              </select>
+              <input
+                type="number"
+                step="0.25"
+                value={task.effort_hours ?? ""}
+                placeholder="hrs"
+                onChange={(e) =>
+                  updateTaskLocal(task.id, {
+                    effort_hours: e.target.value === "" ? null : Number(e.target.value),
+                  })
+                }
+                onBlur={(e) =>
+                  handleInlineSave(task.id, {
+                    effort_hours:
+                      e.target.value === "" ? null : Number(e.target.value),
+                  })
+                }
+                style={{
+                  fontSize: 13,
+                  padding: "8px 10px",
+                  width: 64,
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                  background: "#ffffff",
+                  minHeight: 44,
+                }}
+              />
+              <input
+                type="date"
+                value={task.due_date || ""}
+                onChange={(e) => {
+                  updateTaskLocal(task.id, { due_date: e.target.value || null });
+                  handleInlineSave(task.id, { due_date: e.target.value || null });
+                }}
+                style={{
+                  fontSize: 13,
+                  padding: "8px 10px",
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                  background: "#ffffff",
+                  minHeight: 44,
+                }}
+              />
+            </div>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 8,
+                marginLeft: depth * 16 + 56,
+                marginTop: 8,
+                alignItems: "center",
+              }}
+            >
+              <select
+                value={task.status || "todo"}
+                onChange={(e) => handleStatusChange(task, e.target.value)}
+                style={{
+                  fontSize: 13,
+                  padding: "8px 10px",
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                  background: "#ffffff",
+                  minHeight: 44,
+                }}
+              >
+                <option value="todo">Todo</option>
+                <option value="doing">Doing</option>
+                <option value="done">Done</option>
+                <option value="archived">Archived</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => handleAddSubtask(task)}
+                style={{
+                  fontSize: 13,
+                  padding: "8px 14px",
+                  minHeight: 44,
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                  background: "#f9fafb",
+                  cursor: "pointer",
+                }}
+              >
+                + Subtask
+              </button>
+              {task.status === "archived" ? (
+                <button
+                  type="button"
+                  onClick={() => handleStatusChange(task, "todo")}
+                  style={{
+                    fontSize: 13,
+                    padding: "8px 14px",
+                    minHeight: 44,
+                    borderRadius: 8,
+                    border: "1px solid #86efac",
+                    background: "#ecfdf5",
+                    cursor: "pointer",
+                  }}
+                >
+                  Restore
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleStatusChange(task, "archived")}
+                  style={{
+                    fontSize: 13,
+                    padding: "8px 14px",
+                    minHeight: 44,
+                    borderRadius: 8,
+                    border: "1px solid #fecaca",
+                    background: "#fef2f2",
+                    color: "#b91c1c",
+                    cursor: "pointer",
+                  }}
+                >
+                  Archive
+                </button>
+              )}
+            </div>
+            <div style={{ marginLeft: depth * 16 + 56, marginTop: 8 }}>
+              <input
+                type="text"
+                value={tagText}
+                onChange={(e) =>
+                  updateTaskLocal(task.id, { _tagsText: e.target.value })
+                }
+                onBlur={(e) => handleTagsSave(task.id, e.target.value)}
+                placeholder="Tags (comma separated)"
+                style={{
+                  width: "100%",
+                  fontSize: 13,
+                  padding: "8px 10px",
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                  background: "#ffffff",
+                  minHeight: 44,
+                }}
+              />
+            </div>
+          </div>
+          {!isCollapsed &&
+            children.map((child) => renderTaskRow(child, depth + 1))}
+        </div>
+      );
+    }
 
     return (
       <div key={task.id}>
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: isCompact
-              ? "minmax(0, 1fr)"
-              : "minmax(0, 3fr) minmax(220px, 2fr) 110px minmax(150px, 1.2fr) 90px 130px 140px",
+            gridTemplateColumns:
+              "minmax(0, 3fr) minmax(220px, 2fr) 110px minmax(150px, 1.2fr) 90px 130px 140px",
             gap: 8,
-            alignItems: isCompact ? "stretch" : "center",
-            padding: isCompact ? "10px 0" : "6px 0",
+            alignItems: "center",
+            padding: "10px 0",
             borderBottom: "1px solid #f3f4f6",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
             <div style={{ width: depth * 12 }} />
-            <input
-              type="checkbox"
-              checked={task.status === "done"}
-              onChange={(e) => handleStatusChange(task, e.target.checked ? "done" : "todo")}
-              title="Mark complete"
-            />
+            {checkboxControl}
             {hasChildren && (
               <button
+                type="button"
                 onClick={() => toggleCollapsed(task.id)}
                 style={{
                   border: "none",
                   background: "transparent",
-                  padding: 0,
+                  padding: 4,
                   cursor: "pointer",
-                  fontSize: 10,
+                  fontSize: 12,
                   color: "#6b7280",
                 }}
               >
@@ -533,27 +975,10 @@ export default function BacklogPage() {
             {!hasChildren && depth > 0 && (
               <span style={{ fontSize: 10, color: "#d1d5db" }}>•</span>
             )}
-            <input
-              type="text"
-              value={task.title || ""}
-              onChange={(e) =>
-                updateTaskLocal(task.id, { title: e.target.value })
-              }
-              onBlur={(e) =>
-                handleInlineSave(task.id, { title: e.target.value })
-              }
-              style={{
-                width: "100%",
-                fontSize: 13,
-                padding: "4px 6px",
-                borderRadius: 6,
-                border: "1px solid #e5e7eb",
-                background: "#ffffff",
-              }}
-            />
+            <div style={{ flex: 1, minWidth: 0 }}>{titleInput}</div>
           </div>
 
-          <div style={{ display: "flex", gap: 4, flexWrap: isCompact ? "wrap" : "nowrap" }}>
+          <div style={{ display: "flex", gap: 6, flexWrap: "nowrap", minWidth: 0 }}>
             <select
               value={task.category_id || ""}
               onChange={(e) => {
@@ -568,9 +993,10 @@ export default function BacklogPage() {
               }}
               style={{
                 flex: 1,
-                fontSize: 12,
-                padding: "3px 6px",
-                borderRadius: 999,
+                minWidth: 0,
+                fontSize: 13,
+                padding: "6px 8px",
+                borderRadius: 8,
                 border: "1px solid #e5e7eb",
                 background: "#ffffff",
               }}
@@ -591,9 +1017,10 @@ export default function BacklogPage() {
               list={task.category_id ? `subcategory-options-${task.category_id}` : undefined}
               style={{
                 flex: 1,
-                fontSize: 12,
-                padding: "3px 8px",
-                borderRadius: 999,
+                minWidth: 0,
+                fontSize: 13,
+                padding: "6px 8px",
+                borderRadius: 8,
                 border: "1px solid #e5e7eb",
                 background: "#ffffff",
               }}
@@ -629,7 +1056,7 @@ export default function BacklogPage() {
             </div>
           )}
 
-          <div style={{ display: "flex", gap: 4, flexWrap: isCompact ? "wrap" : "nowrap" }}>
+          <div style={{ display: "flex", gap: 6, flexWrap: "nowrap", alignItems: "center" }}>
             <select
               value={task.priority || "Medium"}
               onChange={(e) =>
@@ -637,9 +1064,10 @@ export default function BacklogPage() {
               }
               style={{
                 flex: 1,
-                fontSize: 12,
-                padding: "3px 6px",
-                borderRadius: 999,
+                minWidth: 0,
+                fontSize: 13,
+                padding: "6px 8px",
+                borderRadius: 8,
                 border: "1px solid #e5e7eb",
                 background: "#ffffff",
               }}
@@ -666,10 +1094,10 @@ export default function BacklogPage() {
                 })
               }
               style={{
-                width: 60,
-                fontSize: 12,
-                padding: "3px 6px",
-                borderRadius: 6,
+                width: 56,
+                fontSize: 13,
+                padding: "6px 8px",
+                borderRadius: 8,
                 border: "1px solid #e5e7eb",
                 background: "#ffffff",
               }}
@@ -684,22 +1112,22 @@ export default function BacklogPage() {
               handleInlineSave(task.id, { due_date: e.target.value || null });
             }}
             style={{
-              fontSize: 12,
-              padding: "3px 6px",
-              borderRadius: 6,
+              fontSize: 13,
+              padding: "6px 8px",
+              borderRadius: 8,
               border: "1px solid #e5e7eb",
               background: "#ffffff",
             }}
           />
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <select
               value={task.status || "todo"}
               onChange={(e) => handleStatusChange(task, e.target.value)}
               style={{
-                fontSize: 12,
-                padding: "3px 6px",
-                borderRadius: 999,
+                fontSize: 13,
+                padding: "6px 8px",
+                borderRadius: 8,
                 border: "1px solid #e5e7eb",
                 background: "#ffffff",
               }}
@@ -709,14 +1137,14 @@ export default function BacklogPage() {
               <option value="done">Done</option>
               <option value="archived">Archived</option>
             </select>
-            <div style={{ display: "flex", gap: 4 }}>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               <button
+                type="button"
                 onClick={() => handleAddSubtask(task)}
                 style={{
-                  flex: 1,
-                  fontSize: 11,
-                  padding: "2px 4px",
-                  borderRadius: 999,
+                  fontSize: 12,
+                  padding: "6px 10px",
+                  borderRadius: 8,
                   border: "1px solid #e5e7eb",
                   background: "#f9fafb",
                   cursor: "pointer",
@@ -726,14 +1154,14 @@ export default function BacklogPage() {
               </button>
               {task.status === "archived" ? (
                 <button
+                  type="button"
                   onClick={() => handleStatusChange(task, "todo")}
                   style={{
-                    flex: 1,
-                    fontSize: 11,
-                    padding: "2px 4px",
-                    borderRadius: 999,
-                    border: "1px solid #e5e7eb",
-                    background: "#ecfdf3",
+                    fontSize: 12,
+                    padding: "6px 10px",
+                    borderRadius: 8,
+                    border: "1px solid #86efac",
+                    background: "#ecfdf5",
                     cursor: "pointer",
                   }}
                 >
@@ -741,13 +1169,13 @@ export default function BacklogPage() {
                 </button>
               ) : (
                 <button
+                  type="button"
                   onClick={() => handleStatusChange(task, "archived")}
                   style={{
-                    flex: 1,
-                    fontSize: 11,
-                    padding: "2px 4px",
-                    borderRadius: 999,
-                    border: "1px solid #fee2e2",
+                    fontSize: 12,
+                    padding: "6px 10px",
+                    borderRadius: 8,
+                    border: "1px solid #fecaca",
                     background: "#fef2f2",
                     color: "#b91c1c",
                     cursor: "pointer",
@@ -767,27 +1195,25 @@ export default function BacklogPage() {
                 updateTaskLocal(task.id, { _tagsText: e.target.value })
               }
               onBlur={(e) => handleTagsSave(task.id, e.target.value)}
-              placeholder="tags (comma separated)"
+              placeholder="Tags (comma separated)"
               style={{
                 width: "100%",
-                fontSize: 12,
-                padding: "3px 6px",
-                borderRadius: 6,
+                fontSize: 13,
+                padding: "6px 8px",
+                borderRadius: 8,
                 border: "1px solid #e5e7eb",
                 background: "#ffffff",
               }}
             />
-            {!isCompact && (
-              <div
-                style={{
-                  marginTop: 2,
-                  fontSize: 10,
-                  color: "#9ca3af",
-                }}
-              >
-                Use tags like: quick-win, high-leverage, urgent, blocked, waiting
-              </div>
-            )}
+            <div
+              style={{
+                marginTop: 4,
+                fontSize: 11,
+                color: "#9ca3af",
+              }}
+            >
+              quick-win, high-leverage, urgent, blocked, waiting
+            </div>
           </div>
         </div>
 
@@ -846,6 +1272,116 @@ export default function BacklogPage() {
           </p>
         )}
 
+        {/* Top bar: Search + Filters toggle (mobile) + Add task — always visible */}
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 10,
+            marginBottom: 12,
+            alignItems: "center",
+          }}
+        >
+          <input
+            type="text"
+            placeholder="Search tasks…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{
+              flex: "1 1 200px",
+              minWidth: 0,
+              fontSize: 14,
+              padding: "10px 14px",
+              borderRadius: 10,
+              border: "1px solid #e5e7eb",
+              background: "#ffffff",
+            }}
+          />
+          {isCompact && (
+            <button
+              type="button"
+              onClick={() => setFiltersExpanded((e) => !e)}
+              style={{
+                fontSize: 14,
+                padding: "10px 16px",
+                minHeight: 44,
+                borderRadius: 10,
+                border: "1px solid #e5e7eb",
+                background: filtersExpanded ? "#f3f4f6" : "#ffffff",
+                color: "#374151",
+                cursor: "pointer",
+                fontWeight: 500,
+              }}
+            >
+              {filtersExpanded ? "Hide filters" : "Filters"}
+            </button>
+          )}
+          <div
+            style={{
+              display: "flex",
+              border: "1px solid #e5e7eb",
+              borderRadius: 10,
+              overflow: "hidden",
+              background: "#f9fafb",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setCompactListModeAndSave(false)}
+              style={{
+                fontSize: 13,
+                padding: "8px 14px",
+                minHeight: 44,
+                border: "none",
+                background: !compactListMode ? "#ffffff" : "transparent",
+                color: !compactListMode ? "#111827" : "#6b7280",
+                cursor: "pointer",
+                fontWeight: !compactListMode ? 500 : 400,
+                boxShadow: !compactListMode ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
+              }}
+            >
+              Comfortable
+            </button>
+            <button
+              type="button"
+              onClick={() => setCompactListModeAndSave(true)}
+              style={{
+                fontSize: 13,
+                padding: "8px 14px",
+                minHeight: 44,
+                border: "none",
+                background: compactListMode ? "#ffffff" : "transparent",
+                color: compactListMode ? "#111827" : "#6b7280",
+                cursor: "pointer",
+                fontWeight: compactListMode ? 500 : 400,
+                boxShadow: compactListMode ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
+              }}
+            >
+              Compact list
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={openAddTaskModal}
+            style={{
+              fontSize: 14,
+              padding: "10px 18px",
+              minHeight: 44,
+              borderRadius: 10,
+              border: "1px solid #111827",
+              background: "#111827",
+              color: "#ffffff",
+              cursor: "pointer",
+              fontWeight: 500,
+            }}
+          >
+            + Add task
+          </button>
+        </div>
+
+        {/* Filter sections — hidden on mobile unless filters expanded */}
+        {(!isCompact || filtersExpanded) && (
+          <>
         <div
           style={{
             display: "flex",
@@ -855,7 +1391,7 @@ export default function BacklogPage() {
             alignItems: "center",
           }}
         >
-          <span style={{ fontSize: 12, color: "#6b7280", marginRight: 4 }}>
+          <span style={{ fontSize: 13, color: "#6b7280", marginRight: 4 }}>
             Show:
           </span>
           <button
@@ -1105,32 +1641,20 @@ export default function BacklogPage() {
             flexWrap: "wrap",
             gap: 8,
             marginBottom: 10,
+            alignItems: "center",
           }}
         >
-          <input
-            type="text"
-            placeholder="Search title…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{
-              flex: "1 1 180px",
-              fontSize: 13,
-              padding: "6px 8px",
-              borderRadius: 999,
-              border: "1px solid #e5e7eb",
-              background: "#ffffff",
-            }}
-          />
+          <span style={{ fontSize: 13, color: "#6b7280" }}>Status:</span>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             style={{
-              flex: "0 0 160px",
               fontSize: 13,
-              padding: "6px 8px",
-              borderRadius: 999,
+              padding: "8px 12px",
+              borderRadius: 8,
               border: "1px solid #e5e7eb",
               background: "#ffffff",
+              minWidth: 160,
             }}
             title="Fine-grained status"
           >
@@ -1141,6 +1665,8 @@ export default function BacklogPage() {
             ))}
           </select>
         </div>
+          </>
+        )}
 
         <div
           style={{
@@ -1151,23 +1677,6 @@ export default function BacklogPage() {
             flexWrap: "wrap",
           }}
         >
-          <button
-            type="button"
-            onClick={openAddTaskModal}
-            style={{
-              fontSize: 14,
-              padding: "10px 18px",
-              minHeight: 44,
-              borderRadius: 999,
-              border: "1px solid #111827",
-              background: "#111827",
-              color: "#ffffff",
-              cursor: "pointer",
-              fontWeight: 500,
-            }}
-          >
-            + Add task
-          </button>
           <button
             type="button"
             onClick={() => runPrioritizationEnrichment(false)}
@@ -1453,37 +1962,59 @@ export default function BacklogPage() {
           </div>
         </Modal>
 
-        <div className="backlog-table-wrap">
-          <div
-            className="backlog-table-inner"
-            style={{
-              marginTop: 6,
-              borderRadius: 16,
-              border: "1px solid #e5e7eb",
-              background: "#ffffff",
-              padding: "8px 10px",
-            }}
-          >
-            {!isCompact && (
+        <div
+          style={{
+            marginTop: 6,
+            borderRadius: 16,
+            border: "1px solid #e5e7eb",
+            background: "#ffffff",
+            padding: isCompact ? 12 : "12px 14px",
+            overflowX: "auto",
+          }}
+        >
+            {compactListMode && (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "minmax(0, 2fr) minmax(80px, 1fr) 70px 56px 70px 90px 90px minmax(60px, 1fr)",
+                  gap: 6,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: "#6b7280",
+                  paddingBottom: 4,
+                  borderBottom: "1px solid #e5e7eb",
+                }}
+              >
+                <div>Title</div>
+                <div>Category</div>
+                <div>Priority</div>
+                <div>Hrs</div>
+                <div>Due</div>
+                <div>Status</div>
+                <div>Actions</div>
+                <div>Tags</div>
+              </div>
+            )}
+            {!isCompact && !compactListMode && (
               <div
                 style={{
                   display: "grid",
                   gridTemplateColumns:
                     "minmax(0, 3fr) minmax(220px, 2fr) 110px minmax(150px, 1.2fr) 90px 130px 140px",
                   gap: 8,
-                  fontSize: 11,
-                  fontWeight: 500,
-                  color: "#6b7280",
-                  paddingBottom: 4,
-                  borderBottom: "1px solid #f3f4f6",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "#4b5563",
+                  paddingBottom: 8,
+                  borderBottom: "1px solid #e5e7eb",
                 }}
               >
-                <div>Title / hierarchy</div>
-                <div>Category / subcategory</div>
-                <div>AI score</div>
-                <div>Priority / effort</div>
+                <div>Title</div>
+                <div>Category</div>
+                <div>Score</div>
+                <div>Priority / Effort</div>
                 <div>Due</div>
-                <div>Status / actions</div>
+                <div>Status / Actions</div>
                 <div>Tags</div>
               </div>
             )}
@@ -1492,9 +2023,10 @@ export default function BacklogPage() {
               {filteredRootTasks.length === 0 ? (
                 <p
                   style={{
-                    fontSize: 13,
+                    fontSize: 14,
                     color: "#6b7280",
-                    margin: "8px 0 4px",
+                    margin: isCompact ? "20px 0" : "12px 0 4px",
+                    textAlign: "center",
                   }}
                 >
                   No tasks match your filters.
@@ -1504,7 +2036,6 @@ export default function BacklogPage() {
               )}
             </div>
           </div>
-        </div>
       </div>
     </DashboardLayout>
   );

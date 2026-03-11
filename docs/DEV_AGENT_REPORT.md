@@ -14,36 +14,23 @@ Owner: Rise-and-Shine Dev Agent
 ### What is implemented (confirmed in docs + code)
 - **App shell/pages**: `today`, `backlog`, `templates`, `analytics`, `notes`, `ideas`, `health`, plus `onboarding`, `vision`, `weekly-review`.
 - **Data layer**: `lib/db.js` includes CRUD for tasks/tags/templates/events/ideas/health + `daily_plans` queue helpers.
-- **Today queue**: `pages/today.js` uses `daily_plans` (`getOrCreateDailyPlan`, `updateDailyPlan`) and supports manual **Refresh queue**.
-- **Scoring**: `lib/scoring.js` aligns with documented model (priority weights, category*8, staleness, tag boosts, effort penalty, subtask boost).
+- **Today queue**: `pages/today.js` uses `daily_plans` (`getOrCreateDailyPlan`, `updateDailyPlan`), manual **Refresh queue**, refill only when all 3 complete (per `docs/NEXT_ACTION_ALGO_V2.md`), candidates exclude `blocked`/`waiting`.
+- **Scoring**: `lib/scoring.js` aligns with documented model (priority weights, category*8, staleness, tag boosts, effort penalty, subtask boost); **"Why this task now"** rationale per Next-3 item via `buildRationale` + `queueReasonByTaskId` on Today.
+- **Planner apply**: `/api/planner/apply` persists title/tag/effort; Today "Approve" wires to real writes and updates queue/backlog + success message.
 - **Analytics/health/ideas/notes**: implemented and wired to Supabase tables per `docs/SCHEMA_ALIGNMENT.md`.
 
 ### Key gaps / risks vs spec
 1. **Root `README.md` is generic Next.js boilerplate**, not project-specific onboarding/runbook.
-2. **Queue behavior mismatch** with `docs/NEXT_ACTION_ALGO_V2.md`:
-   - code auto-refills when persisted queue resolves to <3 tasks on load,
-   - selection does not explicitly exclude `blocked`/`waiting` tags,
-   - refill-on-all-done logic is partly UI-state dependent and should be hardened against stale state races.
-3. **Onboarding flow is partial** vs `docs/ONBOARDING_FLOW.md`:
-   - no explicit six-needs score capture in onboarding UI,
-   - no dedicated brain-dump structuring step,
-   - not all target fields/steps represented.
-4. **Planner/AI refinement integration is incomplete**:
-   - `/api/planner/ai-refine` UI exists,
-   - “Approve refinement” currently placeholder (console log) and not persisted.
+2. ~~**Queue behavior mismatch**~~ **Addressed:** queue locked until all 3 done or refresh; blocked/waiting excluded; refill from DB only.
+3. **Onboarding flow** — UI has identity, life domains, desired outcomes, six-needs (scores + strategies + risk patterns), brain dump (raw + tasks/projects/ideas), resources/constraints, time/energy, strategic focus, immediate step; all persisted to `user_profile.profile`. On complete: six-needs baseline seeded to `human_needs_weekly` for current week; first task created from immediate step; redirect to Today with one-time banner.
+4. ~~**Planner/AI refinement apply**~~ **Addressed:** Approve calls `/api/planner/apply`, persists task + tags, UI updates and shows success.
 5. **Quality gates are thin**:
    - `package.json` has lint/build but no test suite currently defined.
 
 ## Top 5 prioritized next tasks
 
-1. **Lock Next-3 queue behavior to spec (highest priority).**
-   - Enforce candidate exclusions (`blocked`, `waiting`),
-   - enforce stable queue semantics (only refill when all 3 complete or explicit refresh),
-   - harden completion/refill flow against state timing issues.
-
-2. **Implement planner refinement apply path end-to-end.**
-   - Add/complete API endpoint(s) to persist title/tag/effort updates with events,
-   - wire `Today` “Approve” actions to real writes.
+1. ~~**Lock Next-3 queue behavior to spec**~~ **Done.** (blocked/waiting excluded, refill-only-when-all-done, manual refresh.)
+2. ~~**Planner refinement apply path end-to-end**~~ **Done.** (API persists; Today Approve wired.)
 
 3. **Complete onboarding data capture to match canonical model.**
    - Add six-needs scoring + strategies/risk patterns,
