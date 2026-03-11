@@ -147,8 +147,11 @@ export default function VisionPage() {
       ...(existing || {}),
       user_id: user.id,
       identity_attributes: identities,
-      photo_url: existing?.photo_url ?? photoUrl || undefined,
-      vision_board_image_url: existing?.vision_board_image_url ?? visionBoardImageUrl || undefined,
+      photo_url: photoUrl || (existing && existing.photo_url) || undefined,
+      vision_board_image_url:
+        visionBoardImageUrl ||
+        (existing && existing.vision_board_image_url) ||
+        undefined,
       life_domains: lifeDomains,
       desired_outcomes: outcomes,
       leverage_focus: leverageFocus
