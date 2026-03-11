@@ -940,13 +940,15 @@ export default function BacklogPage() {
       );
     }
 
+    const desktopGridColumns =
+      "minmax(280px, 4fr) minmax(200px, 1.8fr) 100px minmax(140px, 1.2fr) 88px 120px minmax(130px, 1.2fr)";
+
     return (
       <div key={task.id}>
         <div
           style={{
             display: "grid",
-            gridTemplateColumns:
-              "minmax(0, 3fr) minmax(220px, 2fr) 110px minmax(150px, 1.2fr) 90px 130px 140px",
+            gridTemplateColumns: desktopGridColumns,
             gap: 8,
             alignItems: "center",
             padding: "10px 0",
@@ -955,7 +957,17 @@ export default function BacklogPage() {
         >
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
             <div style={{ width: depth * 12 }} />
-            {checkboxControl}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 28,
+                flexShrink: 0,
+              }}
+            >
+              {checkboxControl}
+            </div>
             {hasChildren && (
               <button
                 type="button"
@@ -975,7 +987,32 @@ export default function BacklogPage() {
             {!hasChildren && depth > 0 && (
               <span style={{ fontSize: 10, color: "#d1d5db" }}>•</span>
             )}
-            <div style={{ flex: 1, minWidth: 0 }}>{titleInput}</div>
+            <div style={{ flex: 1, minWidth: 0, alignSelf: "stretch", display: "flex" }}>
+              <textarea
+                rows={2}
+                value={task.title || ""}
+                onChange={(e) =>
+                  updateTaskLocal(task.id, { title: e.target.value })
+                }
+                onBlur={(e) =>
+                  handleInlineSave(task.id, { title: e.target.value })
+                }
+                style={{
+                  width: "100%",
+                  minWidth: 0,
+                  resize: "none",
+                  fontSize: 14,
+                  lineHeight: 1.4,
+                  padding: "8px 10px",
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                  background: "#ffffff",
+                  textDecoration: isDone ? "line-through" : "none",
+                  color: isDone ? "#6b7280" : "#111827",
+                }}
+                placeholder="Task title…"
+              />
+            </div>
           </div>
 
           <div style={{ display: "flex", gap: 6, flexWrap: "nowrap", minWidth: 0 }}>
@@ -1187,7 +1224,7 @@ export default function BacklogPage() {
             </div>
           </div>
 
-          <div>
+          <div style={{ minWidth: 0 }}>
             <input
               type="text"
               value={tagText}
@@ -1195,7 +1232,7 @@ export default function BacklogPage() {
                 updateTaskLocal(task.id, { _tagsText: e.target.value })
               }
               onBlur={(e) => handleTagsSave(task.id, e.target.value)}
-              placeholder="Tags (comma separated)"
+              placeholder="Tags"
               style={{
                 width: "100%",
                 fontSize: 13,
@@ -2000,7 +2037,7 @@ export default function BacklogPage() {
                 style={{
                   display: "grid",
                   gridTemplateColumns:
-                    "minmax(0, 3fr) minmax(220px, 2fr) 110px minmax(150px, 1.2fr) 90px 130px 140px",
+                    "minmax(280px, 4fr) minmax(200px, 1.8fr) 100px minmax(140px, 1.2fr) 88px 120px minmax(130px, 1.2fr)",
                   gap: 8,
                   fontSize: 12,
                   fontWeight: 600,
