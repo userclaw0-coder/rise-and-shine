@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import DashboardLayout from "../components/DashboardLayout";
 import { useAuth } from "../hooks/useAuth";
 import {
@@ -8,6 +8,7 @@ import {
   listUserProfileVersions,
   getUserProfileVersion,
 } from "../lib/db";
+import { supabase } from "../lib/supabaseClient";
 
 export default function VisionPage() {
   const { user, isCheckingAuth } = useAuth();
@@ -19,6 +20,11 @@ export default function VisionPage() {
   const [loadedOnce, setLoadedOnce] = useState(false);
   const [versions, setVersions] = useState([]);
   const [snapshotLabel, setSnapshotLabel] = useState("");
+  const [photoUrl, setPhotoUrl] = useState("");
+  const [visionBoardImageUrl, setVisionBoardImageUrl] = useState("");
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [generatingBoard, setGeneratingBoard] = useState(false);
+  const fileInputRef = useRef(null);
 
   const [identityAttributes, setIdentityAttributes] = useState("");
   const [lifeDomains, setLifeDomains] = useState({
@@ -60,6 +66,8 @@ export default function VisionPage() {
         setLeverageFocus((p.leverage_focus || []).join("\n"));
         setQuarterFocus((p.quarter_focus || []).join(", "));
         setImmediateStep(p.immediate_step || "");
+        setPhotoUrl(p.photo_url || "");
+        setVisionBoardImageUrl(p.vision_board_image_url || "");
       }
       setLoadedOnce(true);
       setLoading(false);
@@ -139,6 +147,8 @@ export default function VisionPage() {
       ...(existing || {}),
       user_id: user.id,
       identity_attributes: identities,
+      photo_url: existing?.photo_url ?? photoUrl || undefined,
+      vision_board_image_url: existing?.vision_board_image_url ?? visionBoardImageUrl || undefined,
       life_domains: lifeDomains,
       desired_outcomes: outcomes,
       leverage_focus: leverageFocus
@@ -171,6 +181,69 @@ export default function VisionPage() {
       }
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handlePhotoChange(e) {
+    const file = e.target?.files?.[0];
+    if (!file || !user) return;
+    setError("");
+    setUploadingPhoto(true);
+    try {
+      const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z]/g, "jpg");
+      const path = `${user.id}/photo.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("user-photos")
+        .upload(path, file, { upsert: true });
+      if (uploadError) {
+        setError(uploadError.message || "Upload failed. Ensure the user-photos bucket exists and RLS allows uploads.");
+        return;
+      }
+      const { data: urlData } = supabase.storage.from("user-photos").getPublicUrl(path);
+      const url = urlData?.publicUrl || "";
+      setPhotoUrl(url);
+      const existingRes = await getUserProfile(user.id);
+      const existing = !existingRes.error && existingRes.data ? existingRes.data.profile || {} : {};
+      await upsertUserProfile(user.id, { ...buildProfile(existing), photo_url: url });
+      setSavedMsg("Photo saved.");
+      setTimeout(() => setSavedMsg(""), 2500);
+    } catch (err) {
+      setError(err.message || "Upload failed.");
+    } finally {
+      setUploadingPhoto(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function handleGenerateVisionBoard() {
+    if (!user) return;
+    setError("");
+    setGeneratingBoard(true);
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const token = session?.session?.access_token;
+      if (!token) {
+        setError("Please sign in again.");
+        return;
+      }
+      const res = await fetch("/api/vision-board/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error || "Generation failed.");
+        return;
+      }
+      if (data.imageUrl) {
+        setVisionBoardImageUrl(data.imageUrl);
+        setSavedMsg("Vision board generated.");
+        setTimeout(() => setSavedMsg(""), 3000);
+      }
+    } catch (err) {
+      setError(err.message || "Request failed.");
+    } finally {
+      setGeneratingBoard(false);
     }
   }
 
@@ -215,6 +288,98 @@ export default function VisionPage() {
           )}
         </div>
       </div>
+      <section
+        style={{
+          marginBottom: 20,
+          padding: 16,
+          borderRadius: 16,
+          border: "1px solid #e5e7eb",
+          background: "#fafbfc",
+        }}
+      >
+        <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
+          Your photo & Vision Board
+        </h2>
+        <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 12px" }}>
+          Upload a photo of yourself. We use it with your vision text to generate an AI Vision Board that integrates your likeness.
+        </p>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 24, alignItems: "flex-start" }}>
+          <div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handlePhotoChange}
+              style={{ display: "none" }}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingPhoto}
+              style={{
+                fontSize: 13,
+                padding: "8px 14px",
+                borderRadius: 999,
+                border: "1px solid #0d9488",
+                background: "#ccfbf1",
+                color: "#0f766e",
+                cursor: uploadingPhoto ? "wait" : "pointer",
+              }}
+            >
+              {uploadingPhoto ? "Uploading…" : "Upload photo"}
+            </button>
+            {photoUrl && (
+              <div style={{ marginTop: 10 }}>
+                <img
+                  src={photoUrl}
+                  alt="You"
+                  style={{
+                    width: 120,
+                    height: 120,
+                    objectFit: "cover",
+                    borderRadius: 12,
+                    border: "1px solid #e5e7eb",
+                  }}
+                />
+              </div>
+            )}
+          </div>
+          <div>
+            <button
+              type="button"
+              onClick={handleGenerateVisionBoard}
+              disabled={!photoUrl || generatingBoard}
+              style={{
+                fontSize: 13,
+                padding: "8px 14px",
+                borderRadius: 999,
+                border: "1px solid #111827",
+                background: "#111827",
+                color: "#fff",
+                cursor: photoUrl && !generatingBoard ? "pointer" : "not-allowed",
+              }}
+            >
+              {generatingBoard ? "Generating…" : "Generate Vision Board"}
+            </button>
+            {visionBoardImageUrl && (
+              <div style={{ marginTop: 10 }}>
+                <img
+                  src={visionBoardImageUrl}
+                  alt="Vision Board"
+                  style={{
+                    maxWidth: 280,
+                    maxHeight: 200,
+                    objectFit: "contain",
+                    borderRadius: 12,
+                    border: "1px solid #e5e7eb",
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
       <section
         style={{
           padding: 16,

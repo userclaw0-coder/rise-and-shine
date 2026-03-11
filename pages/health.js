@@ -32,7 +32,7 @@ export default function HealthPage() {
 
   const [weightLogs, setWeightLogs] = useState([]);
   const [weightDate, setWeightDate] = useState(todayStr());
-  const [weightKg, setWeightKg] = useState("");
+  const [weightLb, setWeightLb] = useState("");
   const [sessions, setSessions] = useState([]);
   const [setsWithSession, setSetsWithSession] = useState([]);
   const [expandedSessionId, setExpandedSessionId] = useState(null);
@@ -79,13 +79,13 @@ export default function HealthPage() {
   }, [expandedSessionId]);
 
   async function handleAddWeight() {
-    if (!user || !weightKg.trim()) return;
+    if (!user || !weightLb.trim()) return;
     setError("");
-    const res = await insertBodyWeightLog(user.id, weightDate, parseFloat(weightKg), "lb");
+    const res = await insertBodyWeightLog(user.id, weightDate, parseFloat(weightLb), "lb");
     if (res.error) setError(res.error.message);
     else {
       setWeightLogs((prev) => [res.data, ...prev]);
-      setWeightKg("");
+      setWeightLb("");
       setWeightDate(todayStr());
     }
   }
@@ -106,7 +106,7 @@ export default function HealthPage() {
     setError("");
     const res = await addLiftingSet(user.id, sessionId, {
       exercise_name: newSetExercise.trim(),
-      weight_kg: newSetWeight ? parseFloat(newSetWeight) : null,
+      weight: newSetWeight ? parseFloat(newSetWeight) : null,
       reps: newSetReps ? parseInt(newSetReps, 10) : null,
       set_number: newSetNumber ? parseInt(newSetNumber, 10) : null,
     });
@@ -120,9 +120,20 @@ export default function HealthPage() {
     }
   }
 
+  function localDateStr(isoOrDate) {
+    if (!isoOrDate) return "";
+    const d = new Date(isoOrDate);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
   const weightChartData = [...(weightLogs || [])]
     .reverse()
-    .map((r) => ({ date: (r.measured_at || "").slice(0, 10), weight: r.weight }));
+    .map((r) => ({
+      date: localDateStr(r.measured_at),
+      weight: r.unit === "kg" ? Math.round(r.weight * 2.205) : r.weight,
+    }));
 
   // Build exercise progress: max weight per exercise per session date (for Occam's exercise plots)
   const exerciseChartData = (() => {
@@ -213,13 +224,13 @@ export default function HealthPage() {
               type="number"
               step="0.1"
               placeholder="lb"
-              value={weightKg}
-              onChange={(e) => setWeightKg(e.target.value)}
+              value={weightLb}
+              onChange={(e) => setWeightLb(e.target.value)}
               style={{ padding: "6px 8px", width: 80, borderRadius: 6, border: "1px solid #e5e7eb" }}
             />
             <button
               onClick={handleAddWeight}
-              disabled={!weightKg.trim()}
+              disabled={!weightLb.trim()}
               style={{
                 padding: "6px 12px",
                 borderRadius: 999,
@@ -227,7 +238,7 @@ export default function HealthPage() {
                 background: "#111827",
                 color: "#fff",
                 fontSize: 13,
-                cursor: weightKg.trim() ? "pointer" : "not-allowed",
+                cursor: weightLb.trim() ? "pointer" : "not-allowed",
               }}
             >
               Log
@@ -259,10 +270,10 @@ export default function HealthPage() {
             }}
           >
             <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
-              Exercise progress (max weight per session)
+              Exercise progress (max weight per session, lb)
             </h2>
             <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 12px" }}>
-              Weight over time by exercise. One line per exercise.
+              Weight (lb) over time by exercise. One line per exercise.
             </p>
             <div style={{ height: 260 }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -366,7 +377,7 @@ export default function HealthPage() {
                         <input
                           type="number"
                           step="0.5"
-                          placeholder="kg"
+                          placeholder="lb"
                           value={newSetWeight}
                           onChange={(e) => setNewSetWeight(e.target.value)}
                           style={{ padding: "4px 6px", width: 56, borderRadius: 6, border: "1px solid #e5e7eb", fontSize: 13 }}
@@ -406,7 +417,7 @@ export default function HealthPage() {
                         <thead>
                           <tr style={{ color: "#6b7280" }}>
                             <th style={{ textAlign: "left", padding: "4px 8px" }}>Exercise</th>
-                            <th style={{ textAlign: "right", padding: "4px 8px" }}>kg</th>
+                            <th style={{ textAlign: "right", padding: "4px 8px" }}>lb</th>
                             <th style={{ textAlign: "right", padding: "4px 8px" }}>Reps</th>
                             <th style={{ textAlign: "right", padding: "4px 8px" }}>Set</th>
                           </tr>
@@ -415,7 +426,7 @@ export default function HealthPage() {
                           {(setsBySession[s.id] || []).map((set) => (
                             <tr key={set.id}>
                               <td style={{ padding: "4px 8px" }}>{set.exercise}</td>
-                              <td style={{ textAlign: "right", padding: "4px 8px" }}>{set.weight ?? "—"}</td>
+                              <td style={{ textAlign: "right", padding: "4px 8px" }}>{set.weight != null ? set.weight : "—"}</td>
                               <td style={{ textAlign: "right", padding: "4px 8px" }}>{set.reps ?? "—"}</td>
                               <td style={{ textAlign: "right", padding: "4px 8px" }}>{set.set_number ?? "—"}</td>
                             </tr>

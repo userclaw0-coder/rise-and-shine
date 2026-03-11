@@ -7,6 +7,7 @@ import {
   getWeeklyReviewWeeks,
   getPlannerRefinementEventsInRange,
   getWeeklyReview,
+  getDailyTemplateTaskIds,
 } from "../lib/db";
 import {
   BarChart,
@@ -27,6 +28,14 @@ import { countRefinementActions } from "../lib/planner-refinement-events";
 
 function dateStr(d) {
   return d.toISOString().slice(0, 10);
+}
+
+/** Local date YYYY-MM-DD for grouping and display. */
+function dateStrLocal(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function addDays(d, n) {
@@ -141,29 +150,35 @@ export default function AnalyticsPage() {
       const start30 = addDays(today, -30);
 
       try {
-        const [range7, range30, last, weeks, plannerRefinements] = await Promise.all([
-          getCompletedEventsInRange(user.id, dateStr(start7), dateStr(today)),
-          getCompletedEventsInRange(user.id, dateStr(start30), dateStr(today)),
+        const [range7, range30, last, weeks, plannerRefinements, dailyTaskIdsRes] = await Promise.all([
+          getCompletedEventsInRange(user.id, dateStrLocal(start7), dateStrLocal(today)),
+          getCompletedEventsInRange(user.id, dateStrLocal(start30), dateStrLocal(today)),
           getLastCompletedEventsWithTasks(user.id, 50),
           getWeeklyReviewWeeks(user.id, 52),
           getPlannerRefinementEventsInRange(user.id, dateStr(start30), dateStr(today)),
+          getDailyTemplateTaskIds(user.id),
         ]);
+
+        const dailyTemplateTaskIds = dailyTaskIdsRes.data || new Set();
 
         if (range7.error) setError(range7.error.message);
         else {
           const byDay = {};
           for (let i = 0; i <= 7; i++) {
-            const d = dateStr(addDays(start7, i));
-            byDay[d] = { date: d, count: 0 };
+            const d = dateStrLocal(addDays(start7, i));
+            byDay[d] = { date: d, daily: 0, other: 0 };
           }
           (range7.data || []).forEach((ev) => {
-            const d = ev.created_at.slice(0, 10);
-            if (byDay[d]) byDay[d].count += 1;
+            const d = dateStrLocal(new Date(ev.created_at));
+            if (byDay[d]) {
+              if (dailyTemplateTaskIds.has(ev.task_id)) byDay[d].daily += 1;
+              else byDay[d].other += 1;
+            }
           });
           setSevenDayData(
             Object.keys(byDay)
               .sort()
-              .map((d) => byDay[d])
+              .map((d) => ({ ...byDay[d], count: byDay[d].daily + byDay[d].other }))
           );
         }
 
@@ -171,24 +186,27 @@ export default function AnalyticsPage() {
         else {
           const byDay = {};
           for (let i = 0; i <= 30; i++) {
-            const d = dateStr(addDays(start30, i));
-            byDay[d] = { date: d, count: 0 };
+            const d = dateStrLocal(addDays(start30, i));
+            byDay[d] = { date: d, daily: 0, other: 0 };
           }
           (range30.data || []).forEach((ev) => {
-            const d = ev.created_at.slice(0, 10);
-            if (byDay[d]) byDay[d].count += 1;
+            const d = dateStrLocal(new Date(ev.created_at));
+            if (byDay[d]) {
+              if (dailyTemplateTaskIds.has(ev.task_id)) byDay[d].daily += 1;
+              else byDay[d].other += 1;
+            }
           });
           setThirtyDayData(
             Object.keys(byDay)
               .sort()
-              .map((d) => byDay[d])
+              .map((d) => ({ ...byDay[d], count: byDay[d].daily + byDay[d].other }))
           );
         }
 
         const allInRange = [...(range7.data || []), ...(range30.data || [])];
         const byHour = Array.from({ length: 24 }, (_, h) => ({ hour: `${h}:00`, count: 0 }));
         allInRange.forEach((ev) => {
-          const h = new Date(ev.created_at).getUTCHours();
+          const h = new Date(ev.created_at).getHours();
           byHour[h].count += 1;
         });
         setHourHistogram(byHour);
@@ -404,6 +422,9 @@ export default function AnalyticsPage() {
           <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
             7-day momentum (tasks completed per day)
           </h2>
+          <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 8px" }}>
+            Bottom: daily template tasks. Top: other tasks.
+          </p>
           <MeasuredChart
             renderChart={({ width, height }) => (
               <BarChart width={width} height={height} data={sevenDayData}>
@@ -411,7 +432,9 @@ export default function AnalyticsPage() {
                 <XAxis dataKey="date" tick={{ fontSize: 10 }} />
                 <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
                 <Tooltip />
-                <Bar dataKey="count" fill="#111827" radius={[4, 4, 0, 0]} />
+                <Legend />
+                <Bar dataKey="daily" name="Daily tasks" stackId="a" fill="#0d9488" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="other" name="Other tasks" stackId="a" fill="#374151" radius={[4, 4, 0, 0]} />
               </BarChart>
             )}
           />
@@ -429,6 +452,9 @@ export default function AnalyticsPage() {
           <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
             30-day momentum
           </h2>
+          <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 8px" }}>
+            Bottom: daily template tasks. Top: other tasks.
+          </p>
           <MeasuredChart
             renderChart={({ width, height }) => (
               <BarChart width={width} height={height} data={thirtyDayData}>
@@ -436,7 +462,9 @@ export default function AnalyticsPage() {
                 <XAxis dataKey="date" tick={{ fontSize: 9 }} />
                 <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
                 <Tooltip />
-                <Bar dataKey="count" fill="#374151" radius={[4, 4, 0, 0]} />
+                <Legend />
+                <Bar dataKey="daily" name="Daily tasks" stackId="a" fill="#0d9488" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="other" name="Other tasks" stackId="a" fill="#374151" radius={[4, 4, 0, 0]} />
               </BarChart>
             )}
           />
@@ -452,7 +480,7 @@ export default function AnalyticsPage() {
           }}
         >
           <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
-            Completion time of day (UTC hour)
+            Completion time of day (local hour)
           </h2>
           <MeasuredChart
             renderChart={({ width, height }) => (
