@@ -39,6 +39,7 @@ export default function VisionPage() {
   const [leverageFocus, setLeverageFocus] = useState("");
   const [quarterFocus, setQuarterFocus] = useState("");
   const [immediateStep, setImmediateStep] = useState("");
+  const [goalsToThrive, setGoalsToThrive] = useState("");
 
   useEffect(() => {
     if (!user) return;
@@ -66,6 +67,7 @@ export default function VisionPage() {
         setLeverageFocus((p.leverage_focus || []).join("\n"));
         setQuarterFocus((p.quarter_focus || []).join(", "));
         setImmediateStep(p.immediate_step || "");
+        setGoalsToThrive((p.thrive_goals || []).join("\n"));
         setPhotoUrl(p.photo_url || "");
         setVisionBoardImageUrl(p.vision_board_image_url || "");
       }
@@ -119,6 +121,7 @@ export default function VisionPage() {
     leverageFocus,
     quarterFocus,
     immediateStep,
+    goalsToThrive,
     loadedOnce,
   ]);
 
@@ -158,11 +161,15 @@ export default function VisionPage() {
         .split("\n")
         .map((s) => s.trim())
         .filter(Boolean),
-      quarter_focus: quarterFocus
+      quarter_focus:     quarterFocus
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean),
       immediate_step: immediateStep || "",
+      thrive_goals: goalsToThrive
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean),
     };
   }
 
@@ -480,6 +487,27 @@ export default function VisionPage() {
           </div>
           <div>
           <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 6px" }}>
+            3 Goals to Thrive
+          </h2>
+          <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 6px" }}>
+            Up to three goals that help you thrive (one per line). Included in your Vision Board.
+          </p>
+          <textarea
+            value={goalsToThrive}
+            onChange={(e) => setGoalsToThrive(e.target.value)}
+            rows={3}
+            placeholder="e.g. Daily movement&#10;Meaningful connections&#10;Learn one new skill"
+            style={{
+              width: "100%",
+              fontSize: 13,
+              padding: 8,
+              borderRadius: 8,
+              border: "1px solid #e5e7eb",
+            }}
+          />
+          </div>
+          <div>
+          <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 6px" }}>
             Strategic focus
           </h2>
           <label
@@ -679,6 +707,7 @@ export default function VisionPage() {
                           (p.quarter_focus || []).join(", ")
                         );
                         setImmediateStep(p.immediate_step || "");
+                        setGoalsToThrive((p.thrive_goals || []).join("\n"));
                         setSavedMsg("Snapshot restored (will autosave).");
                         setTimeout(() => setSavedMsg(""), 2500);
                       }

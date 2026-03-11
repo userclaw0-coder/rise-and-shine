@@ -12,6 +12,8 @@ import {
   getAllTags,
   createCategory,
   ensureSubcategory,
+  updateCategory,
+  deleteCategory,
 } from "../lib/db";
 import { isMissingPrioritizationMetadata } from "../lib/task-enrichment";
 import { supabase } from "../lib/supabaseClient";
@@ -91,6 +93,7 @@ export default function BacklogPage() {
 
   const [tasks, setTasks] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [categoryOrder, setCategoryOrder] = useState([]);
   const [tags, setTags] = useState([]);
 
   const [search, setSearch] = useState("");
@@ -100,6 +103,10 @@ export default function BacklogPage() {
   const [tagFilter, setTagFilter] = useState("");
   const [newCategoryName, setNewCategoryName] = useState("");
   const [addingCategory, setAddingCategory] = useState(false);
+
+  const [categoryEditorOpen, setCategoryEditorOpen] = useState(false);
+  const [categoryEdits, setCategoryEdits] = useState({});
+  const [savingCategories, setSavingCategories] = useState(false);
 
   const [addTaskOpen, setAddTaskOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState("");
@@ -140,7 +147,28 @@ export default function BacklogPage() {
         }
 
         if (!catsRes.error) {
-          setCategories(catsRes.data || []);
+          const catData = catsRes.data || [];
+          setCategories(catData);
+          const storageKey = `rs_category_order_${user.id}`;
+          let stored = null;
+          try {
+            stored =
+              typeof window !== "undefined"
+                ? JSON.parse(window.localStorage.getItem(storageKey) || "null")
+                : null;
+          } catch {
+            stored = null;
+          }
+          const validStored =
+            Array.isArray(stored) && stored.every((id) => typeof id === "string")
+              ? stored
+              : null;
+          const ids = catData.map((c) => c.id);
+          const merged = [
+            ...(validStored || []),
+            ...ids.filter((id) => !(validStored || []).includes(id)),
+          ];
+          setCategoryOrder(merged);
         }
 
         if (!tagsRes.error) {
@@ -155,6 +183,114 @@ export default function BacklogPage() {
 
     load();
   }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    if (!categoryOrder || categoryOrder.length === 0) return;
+    const storageKey = `rs_category_order_${user.id}`;
+    try {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(storageKey, JSON.stringify(categoryOrder));
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }, [categoryOrder, user]);
+
+  const orderedCategories = useMemo(() => {
+    if (!categories || categories.length === 0) return [];
+    if (!categoryOrder || categoryOrder.length === 0) return categories;
+    const byId = new Map(categories.map((c) => [c.id, c]));
+    const inOrder = categoryOrder
+      .map((id) => byId.get(id))
+      .filter(Boolean);
+    const remaining = categories.filter((c) => !categoryOrder.includes(c.id));
+    return [...inOrder, ...remaining];
+  }, [categories, categoryOrder]);
+
+  function handleCategoryDrop(sourceId, targetId) {
+    if (!sourceId || !targetId || sourceId === targetId) return;
+    setCategoryOrder((prev) => {
+      const base =
+        prev && prev.length
+          ? prev.filter((id) => categories.some((c) => c.id === id))
+          : categories.map((c) => c.id);
+      const fromIndex = base.indexOf(sourceId);
+      const toIndex = base.indexOf(targetId);
+      if (fromIndex === -1 || toIndex === -1) return base;
+      const next = base.slice();
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
+  }
+
+  function handleOpenCategoryEditor() {
+    const edits = {};
+    for (const c of categories) {
+      edits[c.id] = c.name;
+    }
+    setCategoryEdits(edits);
+    setCategoryEditorOpen(true);
+  }
+
+  function handleCategoryEditChange(id, value) {
+    setCategoryEdits((prev) => ({ ...prev, [id]: value }));
+  }
+
+  async function handleSaveCategoryChanges() {
+    if (!user) return;
+    setSavingCategories(true);
+    setError("");
+    try {
+      for (const c of categories) {
+        const nextName = (categoryEdits[c.id] ?? c.name).trim();
+        if (!nextName || nextName === c.name) continue;
+        // eslint-disable-next-line no-await-in-loop
+        const res = await updateCategory(user.id, c.id, { name: nextName });
+        if (res.error) {
+          setError(res.error.message || "Failed to update category.");
+          break;
+        }
+      }
+      const catsRes = await getCategoriesWithSubcategories(user.id);
+      if (!catsRes.error && Array.isArray(catsRes.data)) {
+        setCategories(catsRes.data);
+      }
+      setCategoryEditorOpen(false);
+    } finally {
+      setSavingCategories(false);
+    }
+  }
+
+  async function handleDeleteCategoryClicked(id) {
+    if (!user || !id) return;
+    const confirmed = window.confirm(
+      "Delete this category? Tasks will keep their category id; you can reassign them later."
+    );
+    if (!confirmed) return;
+    setSavingCategories(true);
+    setError("");
+    try {
+      const res = await deleteCategory(user.id, id);
+      if (res.error) {
+        setError(res.error.message || "Failed to delete category.");
+      } else {
+        const catsRes = await getCategoriesWithSubcategories(user.id);
+        if (!catsRes.error && Array.isArray(catsRes.data)) {
+          setCategories(catsRes.data);
+        }
+        setCategoryOrder((prev) => prev.filter((cid) => cid !== id));
+        setCategoryEdits((prev) => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
+      }
+    } finally {
+      setSavingCategories(false);
+    }
+  }
 
   const childrenByParent = useMemo(() => {
     const m = new Map();
@@ -1289,7 +1425,7 @@ export default function BacklogPage() {
                 letterSpacing: "-0.02em",
               }}
             >
-              Backlog
+              Action Items
             </h1>
             <p
               style={{
@@ -1491,7 +1627,7 @@ export default function BacklogPage() {
           }}
         >
           <span style={{ fontSize: 12, color: "#6b7280", marginRight: 4 }}>
-            Category:
+            Category (drag to prioritize):
           </span>
           <button
             type="button"
@@ -1512,10 +1648,24 @@ export default function BacklogPage() {
           >
             All
           </button>
-          {categories.map((c) => (
+          {orderedCategories.map((c) => (
             <button
               key={c.id}
               type="button"
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setData("text/plain", c.id);
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                const sourceId = e.dataTransfer.getData("text/plain");
+                handleCategoryDrop(sourceId, c.id);
+              }}
               onClick={() => {
                 setCategoryFilter(c.id);
                 setSubcategoryFilter("");
@@ -1530,6 +1680,7 @@ export default function BacklogPage() {
                 color: categoryFilter === c.id ? "#ffffff" : "#111827",
                 cursor: "pointer",
               }}
+              title="Drag to change category priority (left = highest)"
             >
               {c.name}
             </button>
@@ -1669,6 +1820,21 @@ export default function BacklogPage() {
             }}
           >
             {addingCategory ? "Adding…" : "Add category"}
+          </button>
+          <button
+            type="button"
+            onClick={handleOpenCategoryEditor}
+            style={{
+              fontSize: 13,
+              padding: "6px 12px",
+              borderRadius: 999,
+              border: "1px solid #4b5563",
+              background: "#ffffff",
+              color: "#111827",
+              cursor: "pointer",
+            }}
+          >
+            Edit categories
           </button>
         </div>
 

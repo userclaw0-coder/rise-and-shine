@@ -9,7 +9,7 @@ export default function DashboardLayout({ children }) {
 
   const links = [
     { href: "/today", label: "Today" },
-    { href: "/backlog", label: "Backlog" },
+    { href: "/backlog", label: "Action Items" },
     { href: "/templates", label: "Templates" },
     { href: "/analytics", label: "Analytics" },
     { href: "/notes", label: "Notes" },
