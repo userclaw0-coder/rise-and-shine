@@ -33,7 +33,6 @@ import {
   buildQueueCandidates,
   buildQueueFromChosen,
   promoteSubtaskToQueue,
-  shouldRefillAfterCompletion,
 } from "../lib/today-queue";
 
 function getTodayDateStr() {
@@ -439,7 +438,8 @@ export default function TodayPage() {
     const optimisticMap = { ...completionMap, [taskId]: !isCompleted };
     setCompletionMap(optimisticMap);
 
-    // Re-check completion from DB to avoid race conditions from rapid checkbox clicks.
+    // Re-check completion from DB and refill only when all 3 are done (NEXT_ACTION_ALGO_V2).
+    // Single path: refill only after server-fresh completion state to avoid races/stale UI.
     const ids = (queueTaskIds || []).filter(Boolean);
     if (ids.length === 3) {
       const fresh = await getTaskEventsForTasksOnDate(user.id, ids, todayStr);
@@ -449,20 +449,8 @@ export default function TodayPage() {
         setCompletionMap(merged);
         if (!isCompleted && ids.every((id) => !!merged[id])) {
           await refillQueue();
-          return;
         }
       }
-    }
-
-    if (
-      shouldRefillAfterCompletion({
-        taskId,
-        wasCompleted: isCompleted,
-        queueTaskIds,
-        completionMap: optimisticMap,
-      })
-    ) {
-      await refillQueue();
     }
   }
 
@@ -472,6 +460,11 @@ export default function TodayPage() {
 
   async function handleRefineWithAi() {
     if (!user || aiLoading) return;
+    if (!Array.isArray(queueEntries) || queueEntries.length !== 3) {
+      setAiError("Refill your queue first (3 tasks needed).");
+      setAiStatus("error");
+      return;
+    }
     setAppliedSuccessVisible(false);
     setAppliedDetails(null);
     setAiLoading(true);
@@ -479,8 +472,13 @@ export default function TodayPage() {
     setAiStatus("loading");
     setAiSuggestions(null);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
+      let { data: sessionData } = await supabase.auth.getSession();
+      let token = sessionData?.session?.access_token;
+      if (!token) {
+        const { data: refreshed } = await supabase.auth.refreshSession();
+        token = refreshed?.session?.access_token;
+        sessionData = refreshed;
+      }
       if (!token) {
         setAiStatus("error");
         setAiError("Auth session missing. Please refresh and sign in again.");
@@ -503,7 +501,10 @@ export default function TodayPage() {
         data = { raw_text: responseText };
       }
       if (!res.ok) {
-        const msg = data.error || data.raw_text || (data.raw ? "AI returned non-JSON output. Try again." : `AI suggestions unavailable (${res.status}).`);
+        const isAuthError = res.status === 401;
+        const msg = isAuthError
+          ? "Session expired or invalid. Please refresh the page and sign in again."
+          : (data.error || data.raw_text || (data.raw ? "AI returned non-JSON output. Try again." : `AI suggestions unavailable (${res.status}).`));
         setAiStatus("error");
         setAiError(msg);
         setAiSuggestions(null);
