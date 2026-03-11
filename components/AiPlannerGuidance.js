@@ -53,19 +53,19 @@ const FULL_RERUN_CHURN_AVOID =
   "Don't rerun to verify: your plan is already updated and trustworthy. Run Refine again when you want a new pass, not to double-check.";
 
 // Packet 70: AI Planner autonomy bundle — keep-moving proof, safe pause confidence, revisit vs rerun thresholds; self-sufficient at a glance
-const AUTONOMY_HEADLINE =
+const _AUTONOMY_HEADLINE =
   "Autonomy mode: keep moving without reopening the planner.";
 const AUTONOMY_KEEP_MOVING_PROOF =
   "Keep-moving proof: only the approved item changed; everything else stayed as-is. Your Next 3 is still your working set, and any remaining suggestions are optional — they can wait.";
-const AUTONOMY_SAFE_PAUSE_RULE =
+const _AUTONOMY_SAFE_PAUSE_RULE =
   "Safe pause: a short break won’t invalidate anything. When you return, resume from your Next 3 — no planner recheck needed.";
-const AUTONOMY_WHEN_PLAN_STILL_GOOD =
+const _AUTONOMY_WHEN_PLAN_STILL_GOOD =
   "Plan still good enough when: next task is clear, you’re making progress, and nothing new made the plan feel wrong.";
-const AUTONOMY_WHEN_QUICK_REVISIT_HELPS =
+const _AUTONOMY_WHEN_QUICK_REVISIT_HELPS =
   "Quick revisit helps when: one remaining card clearly fits right now, or you’re on a short break and want one small upgrade. One card is enough — stop after one.";
-const AUTONOMY_WHEN_FULL_RERUN_WORTHWHILE =
+const _AUTONOMY_WHEN_FULL_RERUN_WORTHWHILE =
   "Full rerun becomes worthwhile when: you completed at least one task (or a real chunk), your Next 3 is different, or constraints changed (deadline, blocker, surprise meeting).";
-const AUTONOMY_WHEN_TO_AVOID_RERUN =
+const _AUTONOMY_WHEN_TO_AVOID_RERUN =
   "Avoid rerun when: you just applied one suggestion, you’re still on the same Next 3, or you’re only seeking reassurance.";
 
 // Packet 71: AI Planner self-trust bundle — decisive stop rule to prevent reassurance loops
@@ -173,8 +173,8 @@ const MORNING_RESTART_RERUN_ONLY_IF =
 
 // Packet 84: AI Planner first-block morning flow bundle — first-block execution contract:
 // keep-doing clarity, harmless wobble tolerance, and rerun-only-if-the-morning-breaks.
-const FIRST_BLOCK_TITLE = "First-block morning execution contract";
-const FIRST_BLOCK_HEADLINE =
+const _FIRST_BLOCK_TITLE = "First-block morning execution contract";
+const _FIRST_BLOCK_HEADLINE =
   "Treat your first work block as a focused lane, not another planning loop — this block is about starting and continuing from your updated Next 3.";
 const FIRST_BLOCK_KEEP_DOING =
   "Keep doing what you opened: stay with the first task in your updated Next 3 until you either finish it or hit a real blocker. Glancing at other tabs or feeling warm-up resistance is still compatible with the plan fitting.";
@@ -187,8 +187,8 @@ const FIRST_BLOCK_RERUN_ONLY_IF =
 
 // Packet 85: AI Planner morning momentum protection bundle — one coherent morning execution contract:
 // keep-going proof, harmless-wobble vs mismatch, stay-with-the-block guidance, and a mid-morning rerun threshold.
-const MORNING_MOMENTUM_TITLE = "Morning momentum protection contract";
-const MORNING_MOMENTUM_HEADLINE =
+const _MORNING_MOMENTUM_TITLE = "Morning momentum protection contract";
+const _MORNING_MOMENTUM_HEADLINE =
   "For the first half of the morning, treat this block as your lane and the planner as a stable contract — your job is to keep moving inside it, not to keep reopening the plan.";
 const MORNING_MOMENTUM_KEEP_GOING_PROOF =
   "Keep-going proof: your plan is already updated from your last apply, your Next 3 is anchored, and this first block is pointed at the top task. You’re not waiting on a better plan — you’re executing the one you chose.";

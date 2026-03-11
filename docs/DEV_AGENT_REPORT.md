@@ -7,6 +7,7 @@ Owner: Rise-and-Shine Dev Agent
 - Prefer repo-root-relative paths (e.g., `docs/SCHEMA_ALIGNMENT.md`, `README.md`, `PROJECT_NORTH_STAR.md`).
 - Treat older absolute/external references in historical entries as archival context, not current canonical navigation.
 - Canonical strategy narrative lives in `PROJECT_NORTH_STAR.md`; avoid parallel strategy blocks in other docs.
+- Historical V3 structure and gaps snapshot: `docs/archive/V3_STATUS.md`.
 
 ## Current status snapshot
 

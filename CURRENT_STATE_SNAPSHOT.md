@@ -3,9 +3,9 @@
 Last updated: 2026-03-08 17:54 ET
 
 ## Canonical Source of Truth
-- North Star: `/home/clawofhank/rise-and-shine/PROJECT_NORTH_STAR.md`
-- Product Spec: `/home/clawofhank/rise-and-shine/PROJECT_SPEC.md`
-- Execution Status: `/home/clawofhank/rise-and-shine/docs/DEV_AGENT_REPORT.md`
+- North Star: `PROJECT_NORTH_STAR.md`
+- Product Spec: `PROJECT_SPEC.md` (at repo root)
+- Execution Status: `docs/DEV_AGENT_REPORT.md`
 
 ## Current Repo State
 - Branch: `main`

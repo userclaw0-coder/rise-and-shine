@@ -103,7 +103,10 @@ Recommended post-deploy checks:
 
 ## Canonical docs
 
-- `docs/PROJECT_SPEC.md`
+- `PROJECT_SPEC.md` (vision, strategy, and feature spec — at repo root)
+- `PROJECT_NORTH_STAR.md` (vision, UX, interface, positioning, priorities)
+- `docs/NORTH_STAR_EVALUATION_AND_STRATEGY.md` (extended strategy rationale)
+- `docs/SCORING_MODEL.md` (task outcome scoring formula)
 - `docs/NEXT_ACTION_ALGO_V2.md`
 - `docs/SCHEMA_ALIGNMENT.md`
 - `docs/ONBOARDING_FLOW.md`
