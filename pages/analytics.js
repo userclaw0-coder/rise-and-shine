@@ -6,8 +6,23 @@ import {
   getLastCompletedEventsWithTasks,
   getWeeklyReviewWeeks,
   getPlannerRefinementEventsInRange,
+  getWeeklyReview,
 } from "../lib/db";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
 import { countRefinementActions } from "../lib/planner-refinement-events";
 
 function dateStr(d) {
@@ -18,6 +33,38 @@ function addDays(d, n) {
   const out = new Date(d);
   out.setDate(out.getDate() + n);
   return out;
+}
+
+/** Monday of the given date's week (YYYY-MM-DD). */
+function getWeekStart(d) {
+  const date = new Date(d);
+  const day = date.getUTCDay() || 7;
+  const monday = new Date(date);
+  monday.setUTCDate(date.getUTCDate() - (day - 1));
+  return monday.toISOString().slice(0, 10);
+}
+
+const HUMAN_NEEDS_KEYS = [
+  "certainty",
+  "variety",
+  "significance",
+  "connection",
+  "growth",
+  "contribution",
+];
+const HUMAN_NEEDS_LABELS = {
+  certainty: "Certainty",
+  variety: "Variety",
+  significance: "Significance",
+  connection: "Love & Connection",
+  growth: "Growth",
+  contribution: "Contribution",
+};
+
+function formatWeekLabel(weekStartStr) {
+  if (!weekStartStr) return "";
+  const d = new Date(weekStartStr + "T12:00:00Z");
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 function MeasuredChart({ height = 220, renderChart }) {
@@ -76,6 +123,11 @@ export default function AnalyticsPage() {
     accepted: 0,
     dismissed: 0,
     applied: 0,
+  });
+  const [humanNeedsRadarData, setHumanNeedsRadarData] = useState([]);
+  const [humanNeedsWeekLabels, setHumanNeedsWeekLabels] = useState({
+    older: "",
+    newer: "",
   });
 
   useEffect(() => {
@@ -169,6 +221,28 @@ export default function AnalyticsPage() {
           const events = plannerRefinements.data || [];
           setPlannerRefinementMetrics(countRefinementActions(events));
         }
+
+        const thisWeekMonday = getWeekStart(today);
+        const prevWeekStart = dateStr(addDays(new Date(thisWeekMonday + "T12:00:00Z"), -7));
+        const twoWeeksAgoStart = dateStr(addDays(new Date(thisWeekMonday + "T12:00:00Z"), -14));
+        const [reviewOlder, reviewNewer] = await Promise.all([
+          getWeeklyReview(user.id, twoWeeksAgoStart),
+          getWeeklyReview(user.id, prevWeekStart),
+        ]);
+        const scoresOlder = (reviewOlder.data && reviewOlder.data.scores) || {};
+        const scoresNewer = (reviewNewer.data && reviewNewer.data.scores) || {};
+        const radarData = HUMAN_NEEDS_KEYS.map((key) => ({
+          subject: HUMAN_NEEDS_LABELS[key],
+          key,
+          older: typeof scoresOlder[key] === "number" ? scoresOlder[key] : 0,
+          newer: typeof scoresNewer[key] === "number" ? scoresNewer[key] : 0,
+          fullMark: 10,
+        }));
+        setHumanNeedsRadarData(radarData);
+        setHumanNeedsWeekLabels({
+          older: twoWeeksAgoStart,
+          newer: prevWeekStart,
+        });
       } catch (e) {
         setError(e.message || "Failed to load analytics.");
       } finally {
@@ -224,6 +298,74 @@ export default function AnalyticsPage() {
         {error && (
           <p style={{ color: "#b91c1c", fontSize: 13, marginTop: 8 }}>{error}</p>
         )}
+
+        <section
+          style={{
+            marginTop: 20,
+            padding: 16,
+            background: "linear-gradient(180deg, #fafbfc 0%, #fff 100%)",
+            borderRadius: 16,
+            border: "1px solid #e5e7eb",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+          }}
+        >
+          <h2 style={{ fontSize: 16, fontWeight: 600, margin: "0 0 4px", color: "#111827" }}>
+            Six Human Needs — change over time
+          </h2>
+          <p style={{ fontSize: 13, color: "#6b7280", margin: "0 0 12px" }}>
+            Your needs scores from the two previous weeks (1–10). Overlap shows where scores stayed similar.
+          </p>
+          {humanNeedsRadarData.some((d) => d.older > 0 || d.newer > 0) ? (
+            <div style={{ width: "100%", height: 340 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <RadarChart
+                  cx="50%"
+                  cy="50%"
+                  outerRadius="70%"
+                  data={humanNeedsRadarData}
+                  margin={{ top: 24, right: 24, bottom: 24, left: 24 }}
+                >
+                  <PolarGrid stroke="#e5e7eb" strokeOpacity={0.8} />
+                  <PolarAngleAxis
+                    dataKey="subject"
+                    tick={{ fontSize: 12, fill: "#4b5563" }}
+                    tickLine={false}
+                  />
+                  <PolarRadiusAxis
+                    angle={90}
+                    domain={[0, 10]}
+                    tick={{ fontSize: 10, fill: "#9ca3af" }}
+                    tickCount={6}
+                  />
+                  <Radar
+                    name={humanNeedsWeekLabels.older ? `Week of ${formatWeekLabel(humanNeedsWeekLabels.older)}` : "2 weeks ago"}
+                    dataKey="older"
+                    stroke="#64748b"
+                    fill="#64748b"
+                    fillOpacity={0.35}
+                    strokeWidth={1.5}
+                  />
+                  <Radar
+                    name={humanNeedsWeekLabels.newer ? `Week of ${formatWeekLabel(humanNeedsWeekLabels.newer)}` : "Last week"}
+                    dataKey="newer"
+                    stroke="#0d9488"
+                    fill="#14b8a6"
+                    fillOpacity={0.55}
+                    strokeWidth={2}
+                  />
+                  <Legend
+                    wrapperStyle={{ fontSize: 12 }}
+                    formatter={(value) => <span style={{ color: "#374151" }}>{value}</span>}
+                  />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
+              Complete at least one weekly review (with needs scores) to see your chart here.
+            </p>
+          )}
+        </section>
 
         <section
           style={{
