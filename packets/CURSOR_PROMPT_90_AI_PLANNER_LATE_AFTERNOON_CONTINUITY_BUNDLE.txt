@@ -1,0 +1,54 @@
+Implement rise-and-shine packet 90: AI Planner late-afternoon continuity bundle.
+
+Goal
+- Build on the after-lunch inheritance bundle by turning afternoon inheritance into a clearer late-afternoon continuity contract: combine stronger proof that the carried-forward plan can usually hold into the last work block, clearer distinction between ordinary late-day slowdown and a real scope reset, better guidance for keeping only the still-valuable tasks before closeout, and a more decisive threshold for when a calm end-of-day carryforward or tomorrow handoff is better than forcing another same-day rerun.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat-ai-planner-late-afternoon-continuity-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-late-afternoon-continuity-bundle
+
+Scope
+- Bundle adjacent late-afternoon plan continuity, normal end-of-day slowdown thresholds, still-worth-doing carry-forward triage, and end-of-day versus tomorrow-rerun guidance into one coherent Today planner treatment.
+- Improve the planner experience so users can more clearly tell in the last work block:
+  - when the existing plan still deserves to carry the rest of today,
+  - what late-day friction is normal versus what means the day has meaningfully changed,
+  - how to keep only the still-valuable remaining tasks without guilt,
+  - and when to end with a calm carryforward/tomorrow handoff instead of chasing another same-day planner rerun.
+- Prefer one coherent late-afternoon contract over scattered reassurance copy or broad page changes.
+- Keep the change narrow and local to Today planner guidance / review / apply surfaces.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth, analytics, or backend prompt/model changes.
+- No broad redesign of the Today page.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a small hook or summary treatment is clearly warranted
+- related planner review/apply components only if clearly necessary
+
+Acceptance criteria
+- Late in the day, users can tell whether the existing plan still holds, what slowdown counts as normal, how to keep only the still-valuable tasks, and when a calm carryforward or tomorrow handoff is better than another same-day rerun.
+- The planner feels like a stable day-shaping tool through the late-afternoon transition rather than something that must be reopened every time energy drops.
+- The change stays narrow, local, and reviewable.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups

@@ -1,0 +1,55 @@
+Implement rise-and-shine packet 67: AI Planner progress-without-recheck bundle.
+
+Goal
+- Build on the AI Planner keep-moving-without-recheck bundle by turning post-apply confidence into a fuller progress loop: combine keep-going guidance, revisit triggers, and quick progress-check orientation so users can stay in motion today without repeatedly reopening the planner for reassurance.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat-ai-planner-progress-without-recheck-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-progress-without-recheck-bundle
+
+Scope
+- Bundle adjacent keep-going cues, concrete revisit triggers, and quick progress-check guidance into one coherent Today planner layer.
+- Improve the planner experience so users can more clearly understand after applying one suggestion:
+  - how to tell they are still on track without reopening the planner,
+  - what simple progress signals mean they should keep going,
+  - which concrete conditions make a planner revisit worthwhile,
+  - and when a full rerun is still unnecessary because today is still moving.
+- Prefer one coherent keep-working treatment over scattered reassurance copy or broad page changes.
+- Keep the change narrow and local to Today planner guidance / review / apply surfaces.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth, analytics, or backend prompt/model changes.
+- No broad redesign of the Today page.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a small hook or summary treatment is clearly warranted
+- related planner review/apply components only if clearly necessary
+
+Acceptance criteria
+- After applying one suggestion, users can tell whether they are still making useful progress without reopening the planner.
+- Users can tell the simple signals that mean keep going versus revisit later.
+- Users can tell which concrete conditions justify a planner revisit without feeling pressure to rerun.
+- Users can keep moving today with less reassurance-seeking and less planner churn.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups

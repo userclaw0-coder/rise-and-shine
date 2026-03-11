@@ -1,0 +1,54 @@
+Implement rise-and-shine packet 80: AI Planner safe stop and next resume bundle.
+
+Goal
+- Build on the checkpoint-and-resume bundle by turning the post-apply state into a clearer safe-stop surface: combine done-for-now confidence, one best restart point, leave-it-alone reassurance for the rest of today, and a cleaner boundary between normal pause versus true rerun need so users can stop without feeling like they are abandoning the plan.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat-ai-planner-safe-stop-and-next-resume-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-safe-stop-and-next-resume-bundle
+
+Scope
+- Bundle adjacent safe-stop, next-resume, done-for-now, and pause-without-guilt guidance into one coherent Today planner treatment.
+- Improve the planner experience so users can more clearly tell after applying one suggestion:
+  - when it is safe to stop for now,
+  - what the single best next restart point is,
+  - what does not need revisiting before tomorrow,
+  - and which situations still truly justify a rerun.
+- Prefer one coherent stop-and-resume treatment over scattered reassurance copy or broad page changes.
+- Keep the change narrow and local to Today planner guidance / review / apply surfaces.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth, analytics, or backend prompt/model changes.
+- No broad redesign of the Today page.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a small hook or summary treatment is clearly warranted
+- related planner review/apply components only if clearly necessary
+
+Acceptance criteria
+- After applying one suggestion, users can tell when they are safely done for now, where to restart later, what can stay untouched until tomorrow, and when a rerun is actually warranted.
+- Users can stop and resume with less planner thrash and less need for reassurance.
+- The change stays narrow, local, and reviewable.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups

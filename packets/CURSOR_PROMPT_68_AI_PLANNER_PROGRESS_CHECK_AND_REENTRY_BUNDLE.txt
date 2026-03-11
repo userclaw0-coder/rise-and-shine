@@ -1,0 +1,55 @@
+Implement rise-and-shine packet 68: AI Planner progress-check and re-entry bundle.
+
+Goal
+- Build on the AI Planner progress-without-recheck bundle by making the after-apply progress loop easier to navigate in one glance: combine compact progress-check cues, continue-vs-pause confidence, and clearer re-entry thresholds so users can stay in motion today without uncertainty about when to revisit the planner.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat-ai-planner-progress-check-and-reentry-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-progress-check-and-reentry-bundle
+
+Scope
+- Bundle adjacent progress-check cues, keep-going versus safe-pause confidence, and re-entry-threshold guidance into one coherent Today planner layer.
+- Improve the planner experience so users can more clearly understand after applying one suggestion:
+  - what simple signs mean today is still progressing,
+  - when they can keep working or pause without losing confidence,
+  - what compact signals mean a planner revisit is worth it,
+  - and when a full rerun is still unnecessary because the updated plan remains trustworthy.
+- Prefer one coherent progress-loop treatment over scattered reassurance copy or broad page changes.
+- Keep the change narrow and local to Today planner guidance / review / apply surfaces.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth, analytics, or backend prompt/model changes.
+- No broad redesign of the Today page.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a small hook or summary treatment is clearly warranted
+- related planner review/apply components only if clearly necessary
+
+Acceptance criteria
+- After applying one suggestion, users can tell the compact signs that mean they are still making useful progress today.
+- Users can tell when continuing or briefly pausing is still safe without planner churn.
+- Users can tell the concrete threshold for a worthwhile revisit versus unnecessary rerun.
+- Users can keep moving today with less reassurance-seeking and less planner reopening.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups

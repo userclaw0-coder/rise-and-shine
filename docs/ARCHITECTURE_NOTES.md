@@ -1,4 +1,8 @@
-# Architecture Notes
+# Architecture Notes (technical)
+
+**Technical decomposition plan** — incremental refactors for the data layer. (Product/UX vision lives in root `ARCHITECTURE_NOTES.md`.)
+
+---
 
 ## 2026-03-06 — Incremental `lib/db.js` decomposition plan
 

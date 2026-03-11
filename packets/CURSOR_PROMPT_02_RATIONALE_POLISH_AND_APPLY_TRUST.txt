@@ -1,0 +1,41 @@
+You are implementing a narrow Rise-and-Shine trust-hardening slice inside the assigned worktree only.
+
+Read and follow these files first:
+1. /home/clawofhank/.openclaw/workspace/CURSOR_OPERATING_MODEL.md
+2. /home/clawofhank/rise-and-shine/packets/CURSOR_PACKET_02_RATIONALE_POLISH_AND_APPLY_TRUST.md
+3. /home/clawofhank/rise-and-shine/README.md
+4. /home/clawofhank/rise-and-shine/CURRENT_STATE_SNAPSHOT.md
+5. /home/clawofhank/rise-and-shine/docs/PROJECT_SPEC.md
+
+Working rules:
+- Work only in this worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-rationale-polish-apply-trust
+- Do not modify other repos or other branches.
+- Start from develop and do not touch main.
+- Do not expand scope beyond this packet.
+- Preserve the stabilized planner/apply/auth behavior unless directly improving the scoped flow.
+- Keep validation local-first.
+
+Primary objective:
+Improve trust and clarity in the why-this-task-now + subtask orchestration flow, especially around user-facing apply-path clarity and edge cases.
+
+Before coding:
+- briefly state your implementation plan in 3-6 bullets
+- identify any ambiguity you are resolving conservatively
+
+Then implement the packet.
+
+Before finishing:
+- run exactly:
+  - npm run lint
+  - npm run build
+- if verification fails, fix what is reasonably fixable within scope or report the failure clearly
+
+Completion report required:
+- branch name
+- commit hash
+- summary of changes
+- verification commands run
+- verification results
+- known risks / follow-ups
+
+If blocked, return a blocked report instead of pretending the task is complete.

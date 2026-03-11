@@ -6,18 +6,74 @@ import {
   getLastCompletedEventsWithTasks,
   getWeeklyReviewWeeks,
   getPlannerRefinementEventsInRange,
+  getWeeklyReview,
+  getDailyTemplateTaskIds,
 } from "../lib/db";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
 import { countRefinementActions } from "../lib/planner-refinement-events";
 
 function dateStr(d) {
   return d.toISOString().slice(0, 10);
 }
 
+/** Local date YYYY-MM-DD for grouping and display. */
+function dateStrLocal(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function addDays(d, n) {
   const out = new Date(d);
   out.setDate(out.getDate() + n);
   return out;
+}
+
+/** Monday of the given date's week (YYYY-MM-DD). */
+function getWeekStart(d) {
+  const date = new Date(d);
+  const day = date.getUTCDay() || 7;
+  const monday = new Date(date);
+  monday.setUTCDate(date.getUTCDate() - (day - 1));
+  return monday.toISOString().slice(0, 10);
+}
+
+const HUMAN_NEEDS_KEYS = [
+  "certainty",
+  "variety",
+  "significance",
+  "connection",
+  "growth",
+  "contribution",
+];
+const HUMAN_NEEDS_LABELS = {
+  certainty: "Certainty",
+  variety: "Variety",
+  significance: "Significance",
+  connection: "Love & Connection",
+  growth: "Growth",
+  contribution: "Contribution",
+};
+
+function formatWeekLabel(weekStartStr) {
+  if (!weekStartStr) return "";
+  const d = new Date(weekStartStr + "T12:00:00Z");
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 function MeasuredChart({ height = 220, renderChart }) {
@@ -77,6 +133,11 @@ export default function AnalyticsPage() {
     dismissed: 0,
     applied: 0,
   });
+  const [humanNeedsRadarData, setHumanNeedsRadarData] = useState([]);
+  const [humanNeedsWeekLabels, setHumanNeedsWeekLabels] = useState({
+    older: "",
+    newer: "",
+  });
 
   useEffect(() => {
     if (!user) return;
@@ -89,29 +150,35 @@ export default function AnalyticsPage() {
       const start30 = addDays(today, -30);
 
       try {
-        const [range7, range30, last, weeks, plannerRefinements] = await Promise.all([
-          getCompletedEventsInRange(user.id, dateStr(start7), dateStr(today)),
-          getCompletedEventsInRange(user.id, dateStr(start30), dateStr(today)),
+        const [range7, range30, last, weeks, plannerRefinements, dailyTaskIdsRes] = await Promise.all([
+          getCompletedEventsInRange(user.id, dateStrLocal(start7), dateStrLocal(today)),
+          getCompletedEventsInRange(user.id, dateStrLocal(start30), dateStrLocal(today)),
           getLastCompletedEventsWithTasks(user.id, 50),
           getWeeklyReviewWeeks(user.id, 52),
           getPlannerRefinementEventsInRange(user.id, dateStr(start30), dateStr(today)),
+          getDailyTemplateTaskIds(user.id),
         ]);
+
+        const dailyTemplateTaskIds = dailyTaskIdsRes.data || new Set();
 
         if (range7.error) setError(range7.error.message);
         else {
           const byDay = {};
           for (let i = 0; i <= 7; i++) {
-            const d = dateStr(addDays(start7, i));
-            byDay[d] = { date: d, count: 0 };
+            const d = dateStrLocal(addDays(start7, i));
+            byDay[d] = { date: d, daily: 0, other: 0 };
           }
           (range7.data || []).forEach((ev) => {
-            const d = ev.created_at.slice(0, 10);
-            if (byDay[d]) byDay[d].count += 1;
+            const d = dateStrLocal(new Date(ev.created_at));
+            if (byDay[d]) {
+              if (dailyTemplateTaskIds.has(ev.task_id)) byDay[d].daily += 1;
+              else byDay[d].other += 1;
+            }
           });
           setSevenDayData(
             Object.keys(byDay)
               .sort()
-              .map((d) => byDay[d])
+              .map((d) => ({ ...byDay[d], count: byDay[d].daily + byDay[d].other }))
           );
         }
 
@@ -119,24 +186,27 @@ export default function AnalyticsPage() {
         else {
           const byDay = {};
           for (let i = 0; i <= 30; i++) {
-            const d = dateStr(addDays(start30, i));
-            byDay[d] = { date: d, count: 0 };
+            const d = dateStrLocal(addDays(start30, i));
+            byDay[d] = { date: d, daily: 0, other: 0 };
           }
           (range30.data || []).forEach((ev) => {
-            const d = ev.created_at.slice(0, 10);
-            if (byDay[d]) byDay[d].count += 1;
+            const d = dateStrLocal(new Date(ev.created_at));
+            if (byDay[d]) {
+              if (dailyTemplateTaskIds.has(ev.task_id)) byDay[d].daily += 1;
+              else byDay[d].other += 1;
+            }
           });
           setThirtyDayData(
             Object.keys(byDay)
               .sort()
-              .map((d) => byDay[d])
+              .map((d) => ({ ...byDay[d], count: byDay[d].daily + byDay[d].other }))
           );
         }
 
         const allInRange = [...(range7.data || []), ...(range30.data || [])];
         const byHour = Array.from({ length: 24 }, (_, h) => ({ hour: `${h}:00`, count: 0 }));
         allInRange.forEach((ev) => {
-          const h = new Date(ev.created_at).getUTCHours();
+          const h = new Date(ev.created_at).getHours();
           byHour[h].count += 1;
         });
         setHourHistogram(byHour);
@@ -169,6 +239,28 @@ export default function AnalyticsPage() {
           const events = plannerRefinements.data || [];
           setPlannerRefinementMetrics(countRefinementActions(events));
         }
+
+        const thisWeekMonday = getWeekStart(today);
+        const prevWeekStart = dateStr(addDays(new Date(thisWeekMonday + "T12:00:00Z"), -7));
+        const twoWeeksAgoStart = dateStr(addDays(new Date(thisWeekMonday + "T12:00:00Z"), -14));
+        const [reviewOlder, reviewNewer] = await Promise.all([
+          getWeeklyReview(user.id, twoWeeksAgoStart),
+          getWeeklyReview(user.id, prevWeekStart),
+        ]);
+        const scoresOlder = (reviewOlder.data && reviewOlder.data.scores) || {};
+        const scoresNewer = (reviewNewer.data && reviewNewer.data.scores) || {};
+        const radarData = HUMAN_NEEDS_KEYS.map((key) => ({
+          subject: HUMAN_NEEDS_LABELS[key],
+          key,
+          older: typeof scoresOlder[key] === "number" ? scoresOlder[key] : 0,
+          newer: typeof scoresNewer[key] === "number" ? scoresNewer[key] : 0,
+          fullMark: 10,
+        }));
+        setHumanNeedsRadarData(radarData);
+        setHumanNeedsWeekLabels({
+          older: twoWeeksAgoStart,
+          newer: prevWeekStart,
+        });
       } catch (e) {
         setError(e.message || "Failed to load analytics.");
       } finally {
@@ -229,6 +321,74 @@ export default function AnalyticsPage() {
           style={{
             marginTop: 20,
             padding: 16,
+            background: "linear-gradient(180deg, #fafbfc 0%, #fff 100%)",
+            borderRadius: 16,
+            border: "1px solid #e5e7eb",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+          }}
+        >
+          <h2 style={{ fontSize: 16, fontWeight: 600, margin: "0 0 4px", color: "#111827" }}>
+            Six Human Needs — change over time
+          </h2>
+          <p style={{ fontSize: 13, color: "#6b7280", margin: "0 0 12px" }}>
+            Your needs scores from the two previous weeks (1–10). Overlap shows where scores stayed similar.
+          </p>
+          {humanNeedsRadarData.some((d) => d.older > 0 || d.newer > 0) ? (
+            <div style={{ width: "100%", height: 340 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <RadarChart
+                  cx="50%"
+                  cy="50%"
+                  outerRadius="70%"
+                  data={humanNeedsRadarData}
+                  margin={{ top: 24, right: 24, bottom: 24, left: 24 }}
+                >
+                  <PolarGrid stroke="#e5e7eb" strokeOpacity={0.8} />
+                  <PolarAngleAxis
+                    dataKey="subject"
+                    tick={{ fontSize: 12, fill: "#4b5563" }}
+                    tickLine={false}
+                  />
+                  <PolarRadiusAxis
+                    angle={90}
+                    domain={[0, 10]}
+                    tick={{ fontSize: 10, fill: "#9ca3af" }}
+                    tickCount={6}
+                  />
+                  <Radar
+                    name={humanNeedsWeekLabels.older ? `Week of ${formatWeekLabel(humanNeedsWeekLabels.older)}` : "2 weeks ago"}
+                    dataKey="older"
+                    stroke="#64748b"
+                    fill="#64748b"
+                    fillOpacity={0.35}
+                    strokeWidth={1.5}
+                  />
+                  <Radar
+                    name={humanNeedsWeekLabels.newer ? `Week of ${formatWeekLabel(humanNeedsWeekLabels.newer)}` : "Last week"}
+                    dataKey="newer"
+                    stroke="#0d9488"
+                    fill="#14b8a6"
+                    fillOpacity={0.55}
+                    strokeWidth={2}
+                  />
+                  <Legend
+                    wrapperStyle={{ fontSize: 12 }}
+                    formatter={(value) => <span style={{ color: "#374151" }}>{value}</span>}
+                  />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
+              Complete at least one weekly review (with needs scores) to see your chart here.
+            </p>
+          )}
+        </section>
+
+        <section
+          style={{
+            marginTop: 20,
+            padding: 16,
             background: "#fff",
             borderRadius: 16,
             border: "1px solid #e5e7eb",
@@ -262,6 +422,9 @@ export default function AnalyticsPage() {
           <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
             7-day momentum (tasks completed per day)
           </h2>
+          <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 8px" }}>
+            Bottom: daily template tasks. Top: other tasks.
+          </p>
           <MeasuredChart
             renderChart={({ width, height }) => (
               <BarChart width={width} height={height} data={sevenDayData}>
@@ -269,7 +432,9 @@ export default function AnalyticsPage() {
                 <XAxis dataKey="date" tick={{ fontSize: 10 }} />
                 <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
                 <Tooltip />
-                <Bar dataKey="count" fill="#111827" radius={[4, 4, 0, 0]} />
+                <Legend />
+                <Bar dataKey="daily" name="Daily tasks" stackId="a" fill="#0d9488" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="other" name="Other tasks" stackId="a" fill="#374151" radius={[4, 4, 0, 0]} />
               </BarChart>
             )}
           />
@@ -287,6 +452,9 @@ export default function AnalyticsPage() {
           <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
             30-day momentum
           </h2>
+          <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 8px" }}>
+            Bottom: daily template tasks. Top: other tasks.
+          </p>
           <MeasuredChart
             renderChart={({ width, height }) => (
               <BarChart width={width} height={height} data={thirtyDayData}>
@@ -294,7 +462,9 @@ export default function AnalyticsPage() {
                 <XAxis dataKey="date" tick={{ fontSize: 9 }} />
                 <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
                 <Tooltip />
-                <Bar dataKey="count" fill="#374151" radius={[4, 4, 0, 0]} />
+                <Legend />
+                <Bar dataKey="daily" name="Daily tasks" stackId="a" fill="#0d9488" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="other" name="Other tasks" stackId="a" fill="#374151" radius={[4, 4, 0, 0]} />
               </BarChart>
             )}
           />
@@ -310,7 +480,7 @@ export default function AnalyticsPage() {
           }}
         >
           <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
-            Completion time of day (UTC hour)
+            Completion time of day (local hour)
           </h2>
           <MeasuredChart
             renderChart={({ width, height }) => (

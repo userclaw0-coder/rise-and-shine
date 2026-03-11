@@ -1,0 +1,54 @@
+Implement rise-and-shine packet 83: AI Planner morning restart confidence bundle.
+
+Goal
+- Build on the end-of-day carryforward bundle by turning the next-day restart into a clearer morning contract: combine strongest first-task restart guidance, leave-last-night-alone proof, early-friction tolerance, and rerun-only-if-the-day-really-shifted rules into one coherent Today planner treatment so users can restart tomorrow without planner thrash.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat-ai-planner-morning-restart-confidence-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-morning-restart-confidence-bundle
+
+Scope
+- Bundle adjacent next-morning restart guidance, first useful move proof, small-friction-is-normal clarity, and rerun-threshold confidence into one coherent Today planner treatment.
+- Improve the planner experience so users can more clearly tell after applying one suggestion and starting a new day:
+  - what they should open first tomorrow,
+  - what parts of last night’s updated plan should stay untouched,
+  - what early-morning friction is normal versus a true signal that the plan no longer fits,
+  - and when a real shift makes a rerun worthwhile.
+- Prefer one coherent morning restart treatment over scattered reassurance copy or broad page changes.
+- Keep the change narrow and local to Today planner guidance / review / apply surfaces.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth, analytics, or backend prompt/model changes.
+- No broad redesign of the Today page.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a small hook or summary treatment is clearly warranted
+- related planner review/apply components only if clearly necessary
+
+Acceptance criteria
+- On the next day, users can tell what to start first, what safely stays as-is from the prior evening, what level of early friction is normal, and what overnight change truly justifies reopening the planner.
+- The planner feels more like a stable morning restart contract and less like something that must be rerun out of habit.
+- The change stays narrow, local, and reviewable.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups

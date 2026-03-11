@@ -1,0 +1,55 @@
+Implement rise-and-shine packet 51: AI Planner fallback trust bundle.
+
+Goal
+- Turn the Today fallback state into a more trustworthy bundled guidance moment so users feel they can keep moving with low pressure, clear safety, and an obvious next step even when the full AI pass does not complete.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat/ai-planner-fallback-trust-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-fallback-trust-bundle
+
+Scope
+- Bundle adjacent fallback trust improvements in the existing Today AI Planner guidance area.
+- Improve the fallback state so it communicates, in a calm compact way:
+  - pausing is safe,
+  - no catch-up or penalty is building up,
+  - the fallback option is still useful right now,
+  - and the next step is easy to understand.
+- Keep the change narrow and local to Today.
+- Prefer one coherent fallback trust block over additional one-line micro-cues scattered across the surface.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth or analytics changes.
+- No backend prompt/model changes.
+- No broad redesign of the planner surface.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a tiny wording or layout hook is clearly warranted
+
+Acceptance criteria
+- Fallback guidance feels calmer, clearer, and more trustworthy as one bundled experience.
+- Users can understand that pausing is safe and resuming later is easy.
+- The fallback state still points toward a useful immediate action instead of sounding passive.
+- The change remains narrow, user-facing, and reviewable.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups

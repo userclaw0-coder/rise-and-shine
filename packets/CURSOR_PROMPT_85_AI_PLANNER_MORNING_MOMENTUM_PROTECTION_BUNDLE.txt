@@ -1,0 +1,54 @@
+Implement rise-and-shine packet 85: AI Planner morning momentum protection bundle.
+
+Goal
+- Build on the first-block morning flow bundle by turning early-day execution into a clearer momentum protection contract: combine stronger keep-going proof, better distinction between normal first-block friction and a real plan mismatch, clearer when-to-stay-with-the-current-block guidance, and a more confident mid-morning rerun threshold so users can keep moving through the morning without planner thrash.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat-ai-planner-morning-momentum-protection-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-morning-momentum-protection-bundle
+
+Scope
+- Bundle adjacent morning momentum cues, harmless-friction tolerance, stay-with-the-block proof, and rerun-threshold confidence into one coherent Today planner treatment.
+- Improve the planner experience so users can more clearly tell during the first half of the morning:
+  - what to keep doing after they start the first block,
+  - what counts as normal wobble versus a real mismatch,
+  - when they should keep the current updated plan intact,
+  - and what kind of morning shift actually justifies reopening the planner.
+- Prefer one coherent morning-momentum treatment over scattered reassurance copy or broad page changes.
+- Keep the change narrow and local to Today planner guidance / review / apply surfaces.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth, analytics, or backend prompt/model changes.
+- No broad redesign of the Today page.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a small hook or summary treatment is clearly warranted
+- related planner review/apply components only if clearly necessary
+
+Acceptance criteria
+- During the morning execution window, users can tell what to keep doing, what wobble is normal, what still fits from the current plan, and what real shift justifies reopening the planner.
+- The planner feels more like a stable morning execution contract and less like something that must be rerun out of habit.
+- The change stays narrow, local, and reviewable.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups

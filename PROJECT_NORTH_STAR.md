@@ -8,7 +8,22 @@ Help AI-curious people improve life execution by giving clear next actions and p
 - Secondary: AI-curious builders/operators who want stronger execution and output without defaulting the product voice to operator complexity.
 
 ## Core Value
-Fast onboarding into an AI-guided execution loop: identify the next 3 high-impact actions, break them into bite-size subtasks, surface high-leverage AI strategy suggestions for the tasks in front of the user, and teach where AI can help now and for repeatable future workflows.
+Fast onboarding into an AI-guided execution loop: identify the next 3 high-impact actions, break them into bite-size subtasks, surface high-leverage AI strategy suggestions for the tasks in front of the user, and teach where AI can help now and for repeatable future workflows. The product reduces decision fatigue and the “what should I do next?” loop so users feel in control of their day. Next 3 is ranked against the user’s stated outcomes and priorities so the list feels personally meaningful, not generic.
+
+## UX Principles
+- **One clear next step at a time.** Default view answers “What do I do next?” in one glance; avoid competing CTAs or multiple modes on the same screen.
+- **Progressive disclosure.** Onboarding and settings reveal complexity only when needed (e.g. “Refine these 3 with AI” after basics; deeper profile later). Quick-start path reaches “Next 3 in front of you” in under 3 minutes.
+- **Consistent patterns.** Same interaction patterns for complete, snooze, move to backlog, and “why this task” across Today, backlog, and planner so users build one mental model.
+- **Low friction for capture.** Adding a task or idea is never more than one tap or shortcut away; categorization can be suggested or deferred.
+- **Feedback on every action.** Every tap has visible feedback (checkmark, toast, state change) so users never wonder if the app registered the action.
+- **Recoverable errors.** When AI or data is missing, the app still shows a usable Next 3 and a clear next step (e.g. add tasks, try again), never a dead end. Errors show one suggested next step, not a generic code.
+
+## Interface Strategy
+- **Visual clarity over decoration.** Plenty of whitespace, clear hierarchy (one primary action per card/section), limited palette so Next 3 and CTAs stand out.
+- **Warm but focused.** Typography and color feel approachable, not cold or corporate; copy is concise and encouraging. One accent for primary actions.
+- **Consistent component language.** Buttons, cards, and list items follow the same rules (e.g. primary = solid, secondary = outline; completed = strikethrough + check). Same spacing scale and radius across the app.
+- **Motion with purpose.** Micro-interactions reinforce feedback; avoid decorative motion that doesn’t inform the user.
+- **Mobile-first for key flows.** Today and capture work great on small screens; desktop enhances with larger views and keyboard shortcuts.
 
 ## MVP Done When
 User can:
@@ -21,7 +36,7 @@ User can:
 - capture/add tasks quickly and review category/project pages
 - execute the daily queue and complete weekly review flow
 - review meaningful analytics including visible progress-to-outcome signals tied to completed tasks/subtasks
-- view an inspirational AI-generated vision board integrating their photo
+- (Post–30-day win) view an inspirational AI-generated vision board integrating their photo
 
 ## Activation North-Star Event
 User completes onboarding and receives:
@@ -34,6 +49,11 @@ User completes onboarding and receives:
 - Free + trial entry includes full onboarding, first Next 3 tasks, subtask breakdown, and AI leverage suggestions.
 - Trial window: 7 days.
 - Post-trial: upsell to full subscription for ongoing planning, execution support, and deeper AI leverage.
+- **Conversion hook:** User has completed at least one full Next-3 cycle and seen one AI suggestion applied; trial-end messaging reminds them of that win and offers continuity.
+
+## Positioning
+- **One-liner (for landing/marketing):** “Your next 3 actions, chosen for today — with AI that explains why and how.”
+- **Differentiator:** We’re not a generic to-do app or a generic AI chat. We combine prioritized daily focus (exactly 3), AI that suggests and explains, and lightweight structure (outcomes, modes, weekly review) so you stay in motion without over-planning.
 
 ## Product Strategy Priorities (Approved 2026-03-08)
 1. Add high-quality “why this task now” explanation to each Next-3 item.
@@ -63,9 +83,14 @@ Stable onboarding-to-Next-3 execution loop for general self-improvement users, w
 ## Change Note (2026-03-08)
 Marketing and design strategy decisions were integrated directly into canonical sections (Vision/Primary User/Core Value/MVP/Activation/Offer + approved product/virality/design priorities) to avoid parallel narratives and source-of-truth drift.
 
+## Change Note (2026-03-10)
+UX principles, interface strategy, positioning (one-liner + differentiator), emotional payoff and outcome alignment in Core Value, vision board phased to post–30-day win, conversion hook, and graceful-degradation / quick-start in UX. Extended strategy: `docs/NORTH_STAR_EVALUATION_AND_STRATEGY.md`.
+
 ---
 
 ## Architecture Review Addendum (2026-03-06)
+
+Technical decomposition and implementation details also live in `docs/ARCHITECTURE_NOTES.md`.
 
 ### Current architecture strengths
 - Clear product loop coverage (onboarding → daily execution → analytics).

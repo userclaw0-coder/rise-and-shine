@@ -1,0 +1,32 @@
+Implement rise-and-shine packet 41: AI Planner fallback pick-and-tweak cue.
+
+Read first:
+- packets/CURSOR_PACKET_41_AI_PLANNER_FALLBACK_PICK_AND_TWEAK_CUE.md
+- PROJECT_NORTH_STAR.md
+- CURRENT_STATE_SNAPSHOT.md
+
+Constraints:
+- Repo: rise-and-shine only
+- Base branch: develop
+- Work on: feat/ai-planner-fallback-pick-and-tweak-cue
+- Keep scope narrow and local to the Today AI Planner fallback guidance
+- No auth changes, no backend prompt/model changes, no broad redesign, no cross-repo edits
+
+Goal:
+Add a compact cue that tells the user they can pick a workable option now and tweak it after, so the fallback path feels easier to act on without feeling locked into a perfect first choice.
+
+Expected files:
+- components/AiPlannerGuidance.js
+- pages/today.js only if clearly warranted
+
+Verification:
+- npm run lint
+- npm run build
+
+Completion report must include:
+- branch name
+- commit hash
+- concise change summary
+- verification commands run
+- results
+- risks / follow-ups

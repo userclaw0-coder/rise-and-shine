@@ -1,0 +1,54 @@
+Implement rise-and-shine packet 59: AI Planner applied-state light-review bundle.
+
+Goal
+- Build on the applied-state continuation bundle by making the post-apply planner experience easier to lightly review without falling back into a full planner session: clarify what remaining suggestions are worth a quick look, what can be skipped for now, and how to keep moving while preserving confidence in the updated plan.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat/ai-planner-applied-state-light-review-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-applied-state-light-review-bundle
+
+Scope
+- Bundle adjacent post-apply light-review and keep-moving improvements into one coherent Today planner layer.
+- Improve the planner experience so users can more clearly understand after applying one suggestion:
+  - whether any remaining suggestions need attention right now,
+  - what can be safely skipped until later,
+  - what the fastest useful next move is from the updated plan,
+  - and how to stay in motion without reopening the whole planner flow.
+- Prefer one coherent review-and-continue treatment over extra scattered reassurance copy.
+- Keep the change narrow and local to Today planner guidance / review / apply surfaces.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth, analytics, or backend prompt/model changes.
+- No broad redesign of the Today page.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a small hook or summary treatment is clearly warranted
+- related planner review/apply components only if clearly necessary
+
+Acceptance criteria
+- After applying one suggestion, users can tell whether the remaining suggestions need action now or can wait.
+- Users can keep moving from the updated plan with less temptation to restart the planner loop.
+- The change remains narrow, user-facing, and reviewable.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups

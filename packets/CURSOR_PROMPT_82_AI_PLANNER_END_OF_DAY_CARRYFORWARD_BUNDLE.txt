@@ -1,0 +1,54 @@
+Implement rise-and-shine packet 82: AI Planner end-of-day carryforward bundle.
+
+Goal
+- Build on the done-for-today and tomorrow re-entry bundle by turning the overnight handoff into a clearer carryforward contract: combine what is safe to leave exactly as-is, what tomorrow’s first useful move should be, which signals mean the current plan still holds, and when a real overnight shift should push the user back into planner mode.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat-ai-planner-end-of-day-carryforward-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-end-of-day-carryforward-bundle
+
+Scope
+- Bundle adjacent overnight carryforward guidance, first-move-tomorrow confidence, leave-it-alone proof, and rerun-trigger clarity into one coherent Today planner treatment.
+- Improve the planner experience so users can more clearly tell after applying one suggestion and ending the day:
+  - what parts of the updated plan can safely stay untouched overnight,
+  - what tomorrow’s first useful move should be,
+  - what signs mean the current plan still fits,
+  - and what overnight changes genuinely justify reopening the planner.
+- Prefer one coherent carryforward treatment over scattered reassurance copy or broad page changes.
+- Keep the change narrow and local to Today planner guidance / review / apply surfaces.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth, analytics, or backend prompt/model changes.
+- No broad redesign of the Today page.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a small hook or summary treatment is clearly warranted
+- related planner review/apply components only if clearly necessary
+
+Acceptance criteria
+- After applying one suggestion and stopping for the day, users can tell what safely carries forward overnight, what tomorrow’s first useful move is, what signals mean the current plan still fits, and when a real overnight change makes a rerun worthwhile.
+- Users can end the day with more confidence that tomorrow starts from a stable plan instead of planner thrash.
+- The change stays narrow, local, and reviewable.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups

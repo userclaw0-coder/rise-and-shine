@@ -1,0 +1,32 @@
+Implement rise-and-shine packet 31: AI Planner fallback low-risk cue.
+
+Read first:
+- packets/CURSOR_PACKET_31_AI_PLANNER_FALLBACK_LOW_RISK_CUE.md
+- PROJECT_NORTH_STAR.md
+- CURRENT_STATE_SNAPSHOT.md
+
+Constraints:
+- Repo: rise-and-shine only
+- Base branch: develop
+- Work on: feat/ai-planner-fallback-low-risk-cue
+- Keep scope narrow and local to the Today AI Planner fallback guidance
+- No auth changes, no backend prompt/model changes, no broad redesign, no cross-repo edits
+
+Goal:
+Add a compact cue that reassures the user the fallback suggestion is a low-risk place to start before refining further.
+
+Expected files:
+- components/AiPlannerGuidance.js
+- pages/today.js only if clearly warranted
+
+Verification:
+- npm run lint
+- npm run build
+
+Completion report must include:
+- branch name
+- commit hash
+- concise change summary
+- verification commands run
+- results
+- risks / follow-ups

@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
+import AiPlannerGuidance from "../components/AiPlannerGuidance";
 import DashboardLayout from "../components/DashboardLayout";
+import ProgressToOutcome from "../components/ProgressToOutcome";
+import QueueBehaviorHelper from "../components/QueueBehaviorHelper";
 import SectionCard from "../components/SectionCard";
+import SubtaskOrchestrator from "../components/SubtaskOrchestrator";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabaseClient";
 import {
@@ -20,6 +24,7 @@ import {
 } from "../lib/db";
 import {
   MODES,
+  buildRationale,
   chooseKeyOutcomes,
   computeTaskScore,
   getWorkoutPlanForDate,
@@ -27,7 +32,7 @@ import {
 import {
   buildQueueCandidates,
   buildQueueFromChosen,
-  shouldRefillAfterCompletion,
+  promoteSubtaskToQueue,
 } from "../lib/today-queue";
 
 function getTodayDateStr() {
@@ -65,6 +70,30 @@ function buildLastCompletedMap(events) {
   return map;
 }
 
+function getNextActionHint(taskId, queueEntries, completionMap) {
+  const isDone = !!completionMap[taskId];
+  if (isDone) {
+    const allDone = queueEntries.every((e) => !!completionMap[e.task?.id]);
+    if (allDone) return { text: "All done \u2014 queue will refill", style: "success" };
+    const remaining = queueEntries.filter((e) => !completionMap[e.task?.id]).length;
+    return {
+      text: `Done \u2014 ${remaining} left to unlock a fresh set`,
+      style: "done",
+    };
+  }
+  const firstUncompleted = queueEntries.find((e) => !completionMap[e.task?.id]);
+  if (firstUncompleted?.task?.id === taskId) {
+    return { text: "Up next \u2014 start here", style: "action" };
+  }
+  return null;
+}
+
+const HINT_STYLES = {
+  action: { color: "#1d4ed8", background: "#eff6ff", border: "#bfdbfe" },
+  done: { color: "#6b7280", background: "#f9fafb", border: "#e5e7eb" },
+  success: { color: "#059669", background: "#ecfdf5", border: "#86efac" },
+};
+
 export default function TodayPage() {
   const { user, isCheckingAuth } = useAuth();
   const [mode, setMode] = useState("Strategic Push");
@@ -90,10 +119,25 @@ export default function TodayPage() {
   const [aiSuggestions, setAiSuggestions] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
+  const [aiStatus, setAiStatus] = useState("idle");
   const [aiCached, setAiCached] = useState(false);
   const [appliedMessage, setAppliedMessage] = useState("");
+  const [appliedSuccessVisible, setAppliedSuccessVisible] = useState(false);
+  const [appliedDetails, setAppliedDetails] = useState(null);
+  const [subtaskApplying, setSubtaskApplying] = useState(false);
+  const [subtaskApplyError, setSubtaskApplyError] = useState("");
 
   const [profilePrefs, setProfilePrefs] = useState(null);
+  const [showOnboardingCompleteBanner, setShowOnboardingCompleteBanner] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const flag = window.localStorage.getItem("rs-onboarding-just-completed");
+    if (flag === "task" || flag === "done") {
+      window.localStorage.removeItem("rs-onboarding-just-completed");
+      setShowOnboardingCompleteBanner(flag);
+    }
+  }, []);
 
   const todayStr = useMemo(() => getTodayDateStr(), []);
 
@@ -278,6 +322,64 @@ export default function TodayPage() {
     [queueEntries]
   );
   const queueTaskIdsKey = useMemo(() => queueTaskIds.join(","), [queueTaskIds]);
+
+  const nextActionLabel = useMemo(() => {
+    if (!Array.isArray(queueEntries) || queueEntries.length === 0) return "";
+    const next = queueEntries.find((e) => e?.task?.id && !completionMap[e.task.id]);
+    if (!next?.task?.title) return "";
+    return `Up next: "${next.task.title}"`;
+  }, [queueEntries, completionMap]);
+
+  const isMorningFirstBlock = useMemo(() => {
+    if (!Array.isArray(queueEntries) || queueEntries.length === 0) return false;
+    const now = new Date();
+    const hour = now.getHours();
+    const isMorning = hour < 12;
+    if (!isMorning) return false;
+    const anyQueueCompleted = queueEntries.some((e) => !!completionMap[e.task?.id]);
+    if (anyQueueCompleted) return false;
+    const refilledCount = dailyPlan?.refilled_count ?? 0;
+    return refilledCount === 0;
+  }, [queueEntries, completionMap, dailyPlan]);
+
+  const isLateMorningExecution = useMemo(() => {
+    if (!Array.isArray(queueEntries) || queueEntries.length === 0) return false;
+    const now = new Date();
+    const hourFraction = now.getHours() + now.getMinutes() / 60;
+    const isLateMorning = hourFraction >= 10.5 && hourFraction < 12;
+    if (!isLateMorning) return false;
+    const anyQueueCompleted = queueEntries.some((e) => !!completionMap[e.task?.id]);
+    const refilledCount = dailyPlan?.refilled_count ?? 0;
+    const hasEvidenceOfProgressOrRefill = anyQueueCompleted || refilledCount > 0;
+    if (!hasEvidenceOfProgressOrRefill) return false;
+    return true;
+  }, [queueEntries, completionMap, dailyPlan]);
+
+  const isAfterLunchExecution = useMemo(() => {
+    if (!Array.isArray(queueEntries) || queueEntries.length === 0) return false;
+    const now = new Date();
+    const hourFraction = now.getHours() + now.getMinutes() / 60;
+    const isAfternoonBlock = hourFraction >= 12 && hourFraction < 17.5;
+    if (!isAfternoonBlock) return false;
+    const anyQueueCompleted = queueEntries.some((e) => !!completionMap[e.task?.id]);
+    const refilledCount = dailyPlan?.refilled_count ?? 0;
+    const hasEvidenceOfProgressOrRefill = anyQueueCompleted || refilledCount > 0;
+    if (!hasEvidenceOfProgressOrRefill) return false;
+    return true;
+  }, [queueEntries, completionMap, dailyPlan]);
+
+  const isLateAfternoonExecution = useMemo(() => {
+    if (!Array.isArray(queueEntries) || queueEntries.length === 0) return false;
+    const now = new Date();
+    const hourFraction = now.getHours() + now.getMinutes() / 60;
+    const isLateAfternoonBlock = hourFraction >= 15.5 && hourFraction < 21;
+    if (!isLateAfternoonBlock) return false;
+    const anyQueueCompleted = queueEntries.some((e) => !!completionMap[e.task?.id]);
+    const refilledCount = dailyPlan?.refilled_count ?? 0;
+    const hasEvidenceOfProgressOrRefill = anyQueueCompleted || refilledCount > 0;
+    if (!hasEvidenceOfProgressOrRefill) return false;
+    return true;
+  }, [queueEntries, completionMap, dailyPlan]);
   useEffect(() => {
     if (!user || !queueTaskIdsKey || !todayStr) return;
     const ids = queueTaskIdsKey.split(",").filter(Boolean);
@@ -346,7 +448,8 @@ export default function TodayPage() {
     const optimisticMap = { ...completionMap, [taskId]: !isCompleted };
     setCompletionMap(optimisticMap);
 
-    // Re-check completion from DB to avoid race conditions from rapid checkbox clicks.
+    // Re-check completion from DB and refill only when all 3 are done (NEXT_ACTION_ALGO_V2).
+    // Single path: refill only after server-fresh completion state to avoid races/stale UI.
     const ids = (queueTaskIds || []).filter(Boolean);
     if (ids.length === 3) {
       const fresh = await getTaskEventsForTasksOnDate(user.id, ids, todayStr);
@@ -356,20 +459,8 @@ export default function TodayPage() {
         setCompletionMap(merged);
         if (!isCompleted && ids.every((id) => !!merged[id])) {
           await refillQueue();
-          return;
         }
       }
-    }
-
-    if (
-      shouldRefillAfterCompletion({
-        taskId,
-        wasCompleted: isCompleted,
-        queueTaskIds,
-        completionMap: optimisticMap,
-      })
-    ) {
-      await refillQueue();
     }
   }
 
@@ -379,13 +470,27 @@ export default function TodayPage() {
 
   async function handleRefineWithAi() {
     if (!user || aiLoading) return;
+    if (!Array.isArray(queueEntries) || queueEntries.length !== 3) {
+      setAiError("Refill your queue first (3 tasks needed).");
+      setAiStatus("error");
+      return;
+    }
+    setAppliedSuccessVisible(false);
+    setAppliedDetails(null);
     setAiLoading(true);
     setAiError("");
+    setAiStatus("loading");
     setAiSuggestions(null);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
+      let { data: sessionData } = await supabase.auth.getSession();
+      let token = sessionData?.session?.access_token;
       if (!token) {
+        const { data: refreshed } = await supabase.auth.refreshSession();
+        token = refreshed?.session?.access_token;
+        sessionData = refreshed;
+      }
+      if (!token) {
+        setAiStatus("error");
         setAiError("Auth session missing. Please refresh and sign in again.");
         return;
       }
@@ -406,20 +511,28 @@ export default function TodayPage() {
         data = { raw_text: responseText };
       }
       if (!res.ok) {
-        const msg = data.error || data.raw_text || (data.raw ? "AI returned non-JSON output. Try again." : `AI suggestions unavailable (${res.status}).`);
+        const isAuthError = res.status === 401;
+        const msg = isAuthError
+          ? "Session expired or invalid. Please refresh the page and sign in again."
+          : (data.error || data.raw_text || (data.raw ? "AI returned non-JSON output. Try again." : `AI suggestions unavailable (${res.status}).`));
+        setAiStatus("error");
         setAiError(msg);
         setAiSuggestions(null);
         return;
       }
       const ai = data.ai;
       if (!ai || typeof ai !== "object") {
+        setAiStatus("error");
         setAiError("AI suggestions unavailable. Please try again.");
         setAiSuggestions(null);
         return;
       }
       setAiCached(!!data.cached);
       if (data.ai_status && data.ai_status !== 'ok') {
+        setAiStatus(data.ai_status);
         setAiError(`Planner fallback used: ${data.ai_status.replace('fallback:', '')}.`);
+      } else {
+        setAiStatus(data.cached ? "cached" : "ok");
       }
       setAiSuggestions({
         task_refinements: Array.isArray(ai.task_refinements) ? ai.task_refinements : [],
@@ -427,6 +540,7 @@ export default function TodayPage() {
         automation_opportunities: Array.isArray(ai.automation_opportunities) ? ai.automation_opportunities : [],
       });
     } catch (e) {
+      setAiStatus("error");
       setAiError(e?.message || "AI suggestions unavailable. Please try again.");
       setAiSuggestions(null);
     } finally {
@@ -459,6 +573,19 @@ export default function TodayPage() {
 
   async function handleApproveRefinement(item, index) {
     if (!user) return;
+    const existingTask =
+      queueEntries.find((e) => e?.task?.id === item.task_id)?.task ||
+      backlogTasks.find((t) => t?.id === item.task_id) ||
+      null;
+    const before = existingTask
+      ? {
+          title: existingTask.title ?? null,
+          effort_hours: existingTask.effort_hours ?? null,
+          tags: Array.isArray(existingTask.tags)
+            ? existingTask.tags.map((t) => t?.tag?.name).filter(Boolean)
+            : [],
+        }
+      : null;
     const payload = {
       task_id: item.task_id,
       suggested_title: item.suggested_title,
@@ -472,6 +599,7 @@ export default function TodayPage() {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
       if (!token) {
+        setAppliedMessage("");
         setError("Auth session missing. Please refresh and sign in again.");
         return;
       }
@@ -486,12 +614,49 @@ export default function TodayPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.ok) {
-        setError(data?.error || "Failed to apply refinement.");
+        const msg = data?.error || "Failed to apply refinement. Please try again.";
+        setAppliedMessage(msg);
+        setTimeout(() => setAppliedMessage(""), 5000);
         return;
       }
 
       const taskUpdate = data.task || {};
       const tagNames = Array.isArray(data.tags) ? data.tags : null;
+      const after = {
+        title: taskUpdate.title ?? before?.title ?? null,
+        effort_hours:
+          taskUpdate.effort_hours ?? before?.effort_hours ?? null,
+        tags:
+          tagNames != null
+            ? tagNames
+            : before?.tags || [],
+      };
+      const changes = [];
+      if (before?.title != null && after.title != null && before.title !== after.title) {
+        changes.push({ field: "title", from: before.title, to: after.title });
+      }
+      if (
+        before?.effort_hours != null &&
+        after.effort_hours != null &&
+        before.effort_hours !== after.effort_hours
+      ) {
+        changes.push({
+          field: "effort",
+          from: `${before.effort_hours}h`,
+          to: `${after.effort_hours}h`,
+        });
+      }
+      if (tagNames != null) {
+        const beforeTags = new Set(before?.tags || []);
+        const afterTags = new Set(after.tags || []);
+        const added = [...afterTags].filter((t) => !beforeTags.has(t));
+        if (added.length > 0) {
+          changes.push({
+            field: "tags_added",
+            to: added.join(", "),
+          });
+        }
+      }
 
       setQueueEntries((prev) =>
         prev.map((e) => {
@@ -523,44 +688,22 @@ export default function TodayPage() {
         })
       );
 
-      setAppliedMessage("Applied.");
-      setTimeout(() => setAppliedMessage(""), 2000);
+      const label = taskUpdate.title || item.suggested_title || "task";
+      setAppliedMessage(`Refinement applied to "${label}".`);
+      setAppliedSuccessVisible(true);
+      setAppliedDetails({
+        kind: "task_refinement",
+        task_id: item.task_id,
+        before,
+        after,
+        changes,
+      });
+      setTimeout(() => setAppliedMessage(""), 3000);
       dismissRefinement(index, null);
     } catch {
-      setError("Failed to apply refinement.");
+      setAppliedMessage("Failed to apply refinement. Please try again.");
+      setTimeout(() => setAppliedMessage(""), 5000);
     }
-  }
-
-  function dismissSubtask(index) {
-    setAiSuggestions((prev) => ({
-      ...prev,
-      suggested_subtasks_to_create: (prev?.suggested_subtasks_to_create || []).filter((_, i) => i !== index),
-    }));
-  }
-
-  async function handleCreateSubtask(item, index) {
-    if (!user) return;
-    const title = item.title || "New subtask";
-    const effortHours = item.estimated_minutes != null ? item.estimated_minutes / 60 : null;
-    const res = await createTask(user.id, {
-      title,
-      parent_task_id: item.parent_task_id,
-      status: "todo",
-      effort_hours: effortHours ?? undefined,
-    });
-    if (res.error) {
-      setError(res.error.message || "Failed to create subtask");
-      return;
-    }
-    const tagNames = Array.isArray(item.tags) ? item.tags : [];
-    if (tagNames.length > 0 && res.data?.id) {
-      const tagRes = await setTaskTags(user.id, res.data.id, tagNames);
-      if (tagRes?.error) {
-        setError(tagRes.error.message || "Subtask created but tags could not be applied.");
-        return;
-      }
-    }
-    dismissSubtask(index);
   }
 
   function dismissAutomation(index) {
@@ -574,6 +717,120 @@ export default function TodayPage() {
     const item = (aiSuggestions?.automation_opportunities || [])[index];
     if (item) console.log("Explore automation (placeholder):", item);
     dismissAutomation(index);
+  }
+
+  async function handleApplyOrchestrated(approvedSubtasks) {
+    if (!user || !Array.isArray(approvedSubtasks) || approvedSubtasks.length === 0) return;
+    setSubtaskApplying(true);
+    setSubtaskApplyError("");
+    setAppliedMessage("");
+    setAppliedSuccessVisible(false);
+    setAppliedDetails(null);
+
+    const total = approvedSubtasks.length;
+    try {
+      const created = [];
+      const failures = [];
+      for (const sub of approvedSubtasks) {
+        const effortHours = sub.estimated_minutes != null ? sub.estimated_minutes / 60 : null;
+        const res = await createTask(user.id, {
+          title: sub.title,
+          parent_task_id: sub.parent_task_id,
+          status: "todo",
+          effort_hours: effortHours ?? undefined,
+        });
+        if (res.error) {
+          failures.push(sub.title || "Untitled");
+          continue;
+        }
+        const tagNames = Array.isArray(sub.tags) ? sub.tags : [];
+        if (tagNames.length > 0 && res.data?.id) {
+          await setTaskTags(user.id, res.data.id, tagNames);
+        }
+        created.push({ ...res.data, _source: sub });
+      }
+
+      if (created.length === 0) {
+        setSubtaskApplyError(
+          `Failed to create ${total === 1 ? "the subtask" : `all ${total} subtasks`}. Check your connection and try again.`
+        );
+        setSubtaskApplying(false);
+        return;
+      }
+
+      const bestSubtask = created[0];
+      const parentTaskId = bestSubtask._source?.parent_task_id;
+      const currentQueue = dailyPlan?.queue;
+      let promoted = false;
+
+      if (bestSubtask.id && parentTaskId && Array.isArray(currentQueue)) {
+        const newQueue = promoteSubtaskToQueue(currentQueue, parentTaskId, bestSubtask.id);
+        if (newQueue && dailyPlan?.id) {
+          const up = await updateDailyPlan(dailyPlan.id, { queue: newQueue });
+          if (!up.error && up.data) {
+            setDailyPlan(up.data);
+            promoted = true;
+            setQueueEntries((prev) =>
+              prev.map((e) => {
+                if (e.task_id !== parentTaskId && e.task?.id !== parentTaskId) return e;
+                return {
+                  ...e,
+                  task: bestSubtask,
+                  task_id: bestSubtask.id,
+                };
+              })
+            );
+          }
+        }
+      }
+
+      const backlogAdditions = created.slice(1);
+      if (backlogAdditions.length > 0) {
+        setBacklogTasks((prev) => [...(prev || []), ...backlogAdditions]);
+      }
+
+      setAiSuggestions((prev) => ({
+        ...prev,
+        suggested_subtasks_to_create: [],
+      }));
+
+      const bestLabel = bestSubtask.title || "subtask";
+      const parts = [];
+      parts.push(`Created ${created.length} of ${total} subtask${total !== 1 ? "s" : ""}.`);
+      if (promoted) {
+        parts.push(`"${bestLabel}" now in your Next-3.`);
+      } else {
+        parts.push(`"${bestLabel}" added to backlog (parent not in current queue).`);
+      }
+      if (backlogAdditions.length > 0) {
+        parts.push(`${backlogAdditions.length} more sent to backlog.`);
+      }
+      if (failures.length > 0) {
+        parts.push(`${failures.length} failed to create.`);
+      }
+      setAppliedMessage(parts.join(" "));
+      setAppliedSuccessVisible(true);
+      setAppliedDetails({
+        kind: "subtasks_created",
+        created: created.length,
+        attempted: total,
+        promoted,
+        promoted_title: promoted ? bestLabel : null,
+        failures: failures.length,
+      });
+      setTimeout(() => setAppliedMessage(""), 6000);
+    } catch (e) {
+      setSubtaskApplyError(e?.message || "Failed to apply subtask orchestration. Please try again.");
+    } finally {
+      setSubtaskApplying(false);
+    }
+  }
+
+  function handleDismissAllSubtasks() {
+    setAiSuggestions((prev) => ({
+      ...prev,
+      suggested_subtasks_to_create: [],
+    }));
   }
 
   const taskTitleById = useMemo(() => {
@@ -594,13 +851,7 @@ export default function TodayPage() {
         baseCategoryWeights: profilePrefs?.base_category_weights,
         quickWinMinutes: profilePrefs?.quick_win_definition_minutes,
       });
-      const c = scoring.components || {};
-      const bits = [];
-      if (c.isQuickWin) bits.push("quick win");
-      if (c.isHighLeverage) bits.push("high leverage");
-      if ((c.priorityScore || 0) >= 40) bits.push(`priority ${task.priority || "high"}`);
-      if ((c.categoryComponent || 0) > 16) bits.push("strong category fit");
-      reasons.set(task.id, bits.length > 0 ? bits.join(" • ") : "best available fit");
+      reasons.set(task.id, buildRationale(task, scoring, mode));
     }
     return reasons;
   }, [
@@ -707,23 +958,78 @@ export default function TodayPage() {
         </div>
       </div>
 
+      {showOnboardingCompleteBanner && (
+        <div
+          style={{
+            marginBottom: 12,
+            padding: "10px 14px",
+            background: "#f0fdf4",
+            border: "1px solid #86efac",
+            borderRadius: 12,
+            fontSize: 13,
+            color: "#166534",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <span>
+            {showOnboardingCompleteBanner === "task"
+              ? "Onboarding complete. Your first step was added as a task. Tap \"Refresh queue\" below to see it in your Next 3."
+              : "Onboarding complete. Tap \"Refresh queue\" below to get your Next 3 actions."}
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowOnboardingCompleteBanner(false)}
+            style={{
+              flexShrink: 0,
+              padding: "4px 8px",
+              fontSize: 12,
+              border: "1px solid #86efac",
+              borderRadius: 6,
+              background: "#ffffff",
+              color: "#166534",
+              cursor: "pointer",
+            }}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       {error && (
         <p style={{ color: "#b91c1c", fontSize: 13, marginBottom: 12 }}>
           {error}
         </p>
       )}
 
+      <ProgressToOutcome
+        queueEntries={queueEntries}
+        completionMap={completionMap}
+      />
+
+      <QueueBehaviorHelper />
+
       <SectionCard
         title="Next 3 Actions"
         subtitle={
-          dailyPlan != null
-            ? `Queue does not refill until all 3 are completed. Refilled ${dailyPlan.refilled_count ?? 0} time(s) today.`
-            : "Load or create your daily plan to see the queue."
+          dailyPlan != null ? (
+            <>
+              Finish all 3 to unlock your next set · Refilled{" "}
+              {dailyPlan.refilled_count ?? 0} time(s) today.
+              <span style={{ display: "block", marginTop: 4, fontWeight: 500 }}>
+                Queue stays the same until all 3 are done or you tap Refresh.
+              </span>
+            </>
+          ) : (
+            "Load or create your daily plan to see the queue."
+          )
         }
       >
         {queueEntries.length === 0 && (
           <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
-            No candidates found. Add some non-daily backlog tasks first, or refresh the queue.
+            No tasks available for the queue. Add tasks on the Backlog page, then
+            refresh the queue here.
           </p>
         )}
         <ol style={{ paddingLeft: 18, margin: 0, fontSize: 14 }}>
@@ -765,13 +1071,43 @@ export default function TodayPage() {
                       </div>
                       <div
                         style={{
-                          fontSize: 11,
-                          color: "#9ca3af",
-                          marginTop: 2,
+                          fontSize: 12,
+                          color: "#4b5563",
+                          marginTop: 4,
+                          padding: "3px 8px",
+                          background: "#f0fdf4",
+                          borderRadius: 6,
+                          borderLeft: "3px solid #86efac",
+                          lineHeight: 1.4,
                         }}
                       >
-                        Why chosen: {queueReasonByTaskId.get(entry.task.id) || "best available fit"}
+                        <span style={{ fontWeight: 600, color: "#059669" }}>
+                          Why now:
+                        </span>{" "}
+                        {queueReasonByTaskId.get(entry.task.id) || "Top-scored task for your current focus"}
                       </div>
+                      {(() => {
+                        const hint = getNextActionHint(entry.task.id, queueEntries, completionMap);
+                        if (!hint) return null;
+                        const s = HINT_STYLES[hint.style] || HINT_STYLES.done;
+                        return (
+                          <div
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 600,
+                              marginTop: 4,
+                              padding: "2px 8px",
+                              borderRadius: 6,
+                              background: s.background,
+                              color: s.color,
+                              border: `1px solid ${s.border}`,
+                              display: "inline-block",
+                            }}
+                          >
+                            {hint.text}
+                          </div>
+                        );
+                      })()}
                     </div>
                     <div
                       style={{
@@ -791,8 +1127,23 @@ export default function TodayPage() {
 
       <SectionCard
         title="AI Planner"
-        subtitle="Suggestions require your approval. Nothing is applied automatically."
+        subtitle="Suggestions stay optional and approval-based. Nothing is applied automatically."
       >
+        <AiPlannerGuidance
+          aiLoading={aiLoading}
+          aiError={aiError}
+          aiStatus={aiStatus}
+          aiSuggestions={aiSuggestions}
+          queueReady={queueEntries.length === 3}
+          appliedMessage={appliedMessage}
+          appliedSuccessVisible={appliedSuccessVisible}
+          appliedDetails={appliedDetails}
+          nextActionLabel={nextActionLabel}
+          isMorningFirstBlock={isMorningFirstBlock}
+          isLateMorningExecution={isLateMorningExecution}
+          isAfterLunchExecution={isAfterLunchExecution}
+          isLateAfternoonExecution={isLateAfternoonExecution}
+        />
         <div style={{ marginBottom: 12 }}>
           <button
             type="button"
@@ -817,8 +1168,8 @@ export default function TodayPage() {
             </span>
           )}
         </div>
-        {appliedMessage && (
-          <p style={{ fontSize: 13, color: "#059669", margin: "0 0 10px", fontWeight: 500 }}>
+        {appliedMessage && appliedMessage.toLowerCase().includes("failed") && (
+          <p style={{ fontSize: 13, color: "#b91c1c", margin: "0 0 10px", fontWeight: 500 }}>
             {appliedMessage}
           </p>
         )}
@@ -827,7 +1178,7 @@ export default function TodayPage() {
             AI suggestions loaded from cache
           </p>
         )}
-        {aiError && (
+        {aiError && !String(aiStatus || "").startsWith("fallback:") && (
           <p style={{ fontSize: 13, color: "#b91c1c", margin: "0 0 10px" }}>
             {aiError}
           </p>
@@ -836,9 +1187,12 @@ export default function TodayPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {aiSuggestions.task_refinements && aiSuggestions.task_refinements.length > 0 && (
               <div>
-                <h3 style={{ fontSize: 14, fontWeight: 600, margin: "0 0 8px", color: "#374151" }}>
+                <h3 style={{ fontSize: 14, fontWeight: 600, margin: "0 0 4px", color: "#374151" }}>
                   Task refinements
                 </h3>
+                <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 8px" }}>
+                  Approve updates the task title, tags, or effort in place for that one task only. Dismiss or ignore leaves both the task and the rest of your plan unchanged.
+                </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {(aiSuggestions.task_refinements || []).map((item, idx) => (
                     <div
@@ -901,73 +1255,14 @@ export default function TodayPage() {
               </div>
             )}
             {aiSuggestions.suggested_subtasks_to_create && aiSuggestions.suggested_subtasks_to_create.length > 0 && (
-              <div>
-                <h3 style={{ fontSize: 14, fontWeight: 600, margin: "0 0 8px", color: "#374151" }}>
-                  Suggested subtasks
-                </h3>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {(aiSuggestions.suggested_subtasks_to_create || []).map((item, idx) => (
-                    <div
-                      key={`sub-${item.parent_task_id}-${idx}`}
-                      style={{
-                        padding: 12,
-                        borderRadius: 12,
-                        border: "1px solid #e5e7eb",
-                        background: "#f9fafb",
-                      }}
-                    >
-                      <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>
-                        Parent: {taskTitleById.get(item.parent_task_id) ?? item.parent_task_id}
-                      </div>
-                      <div style={{ fontSize: 13, marginBottom: 4 }}>
-                        <strong>{item.title ?? "Untitled subtask"}</strong>
-                      </div>
-                      {item.estimated_minutes != null && (
-                        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>
-                          Estimated: {item.estimated_minutes} min
-                        </div>
-                      )}
-                      {(item.tags?.length > 0) && (
-                        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>
-                          Tags: {item.tags.join(", ")}
-                        </div>
-                      )}
-                      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                        <button
-                          type="button"
-                          onClick={() => handleCreateSubtask(item, idx)}
-                          style={{
-                            fontSize: 12,
-                            padding: "4px 10px",
-                            borderRadius: 999,
-                            border: "1px solid #059669",
-                            background: "#ecfdf5",
-                            color: "#059669",
-                            cursor: "pointer",
-                          }}
-                        >
-                          Create subtask
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => dismissSubtask(idx)}
-                          style={{
-                            fontSize: 12,
-                            padding: "4px 10px",
-                            borderRadius: 999,
-                            border: "1px solid #e5e7eb",
-                            background: "#fff",
-                            color: "#6b7280",
-                            cursor: "pointer",
-                          }}
-                        >
-                          Dismiss
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <SubtaskOrchestrator
+                subtasks={aiSuggestions.suggested_subtasks_to_create}
+                parentTitleById={taskTitleById}
+                onApply={handleApplyOrchestrated}
+                onDismissAll={handleDismissAllSubtasks}
+                applying={subtaskApplying}
+                applyError={subtaskApplyError}
+              />
             )}
             {aiSuggestions.automation_opportunities && aiSuggestions.automation_opportunities.length > 0 && (
               <div>
@@ -1050,9 +1345,13 @@ export default function TodayPage() {
                 (aiSuggestions.suggested_subtasks_to_create?.length || 0) +
                 (aiSuggestions.automation_opportunities?.length || 0)) === 0 ? (
                 <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
-                  No suggestions this time. Try refining again later.
+                  Nothing new to review this time. That means the planner completed, found no worthwhile changes, and kept your tasks exactly as they were.
                 </p>
-              ) : null}
+              ) : (
+                <p style={{ fontSize: 11, color: "#9ca3af", margin: "8px 0 0" }}>
+                  You can dismiss everything safely — that only hides suggestions. Your tasks and queue only change when you approve.
+                </p>
+              )}
           </div>
         )}
       </SectionCard>

@@ -1,7 +1,21 @@
 import { useEffect, useState } from "react";
 import DashboardLayout from "../components/DashboardLayout";
 import { useAuth } from "../hooks/useAuth";
-import { getUserProfile, upsertUserProfile } from "../lib/db";
+import {
+  getUserProfile,
+  upsertUserProfile,
+  upsertWeeklyReview,
+  createTask,
+} from "../lib/db";
+
+/** Monday of current week, YYYY-MM-DD (for human_needs_weekly baseline). */
+function getCurrentWeekStart() {
+  const d = new Date();
+  const day = d.getUTCDay() || 7;
+  const monday = new Date(d);
+  monday.setUTCDate(d.getUTCDate() - (day - 1));
+  return monday.toISOString().slice(0, 10);
+}
 
 const NEED_KEYS = [
   "certainty",
@@ -388,9 +402,32 @@ export default function OnboardingPage() {
         setError(res.error.message || "Failed to save profile.");
         return;
       }
+
+      // Seed human_needs_weekly with this week's baseline so weekly review has onboarding scores.
+      const weekStart = getCurrentWeekStart();
+      const scoresForWeekly = { ...(profile.human_needs_scores || {}) };
+      if (scoresForWeekly.love_connection != null) {
+        scoresForWeekly.connection = scoresForWeekly.love_connection;
+        delete scoresForWeekly.love_connection;
+      }
+      await upsertWeeklyReview(user.id, weekStart, { scores: scoresForWeekly });
+
+      // Seed first task from immediate step (per ONBOARDING_FLOW: "This seeds the first task").
+      const createdFirstTask = Boolean(String(profile.immediate_step || "").trim());
+      if (createdFirstTask) {
+        await createTask(user.id, {
+          title: profile.immediate_step.trim(),
+          status: "todo",
+        });
+      }
+
       if (typeof window !== "undefined") {
         window.localStorage.removeItem("rs-onboarding-later");
-        window.location.href = "/vision";
+        window.localStorage.setItem(
+          "rs-onboarding-just-completed",
+          createdFirstTask ? "task" : "done"
+        );
+        window.location.href = "/today";
       }
     } finally {
       setSaving(false);

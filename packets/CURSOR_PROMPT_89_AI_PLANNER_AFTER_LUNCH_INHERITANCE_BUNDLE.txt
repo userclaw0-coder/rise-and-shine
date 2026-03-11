@@ -1,0 +1,54 @@
+Implement rise-and-shine packet 89: AI Planner after-lunch inheritance bundle.
+
+Goal
+- Build on the pre-lunch execution contract bundle by turning half-day stability into a clearer after-lunch inheritance contract: combine stronger proof that the morning plan can often continue after lunch, clearer markers for when lunch actually breaks the flow, better guidance for carrying forward only the still-relevant tasks without guilt, and a more decisive threshold for when a calm post-lunch rerun is worth it.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat-ai-planner-after-lunch-inheritance-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-after-lunch-inheritance-bundle
+
+Scope
+- Bundle adjacent after-lunch plan inheritance, lunch-break disruption thresholds, carry-forward triage, and calm post-lunch rerun guidance into one coherent Today planner treatment.
+- Improve the planner experience so users can more clearly tell after lunch:
+  - when the existing plan still deserves to keep carrying the day,
+  - what kinds of lunch-time disruption are harmless versus plan-breaking,
+  - how to keep only the still-relevant tasks without feeling behind,
+  - and when a deliberate post-lunch rerun is actually the right move.
+- Prefer one coherent after-lunch contract over scattered reassurance copy or broad page changes.
+- Keep the change narrow and local to Today planner guidance / review / apply surfaces.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth, analytics, or backend prompt/model changes.
+- No broad redesign of the Today page.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a small hook or summary treatment is clearly warranted
+- related planner review/apply components only if clearly necessary
+
+Acceptance criteria
+- After lunch, users can tell whether the existing plan still holds, what disruption counts as normal, how to carry forward only what still matters, and when a calm rerun is justified.
+- The planner feels like a stable day-shaping tool rather than something that must be reopened at every midday transition.
+- The change stays narrow, local, and reviewable.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups

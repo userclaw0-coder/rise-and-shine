@@ -1,0 +1,54 @@
+Implement rise-and-shine packet 79: AI Planner checkpoint and resume bundle.
+
+Goal
+- Build on the AI Planner continue-until-blocked bundle by turning the post-apply state into a clearer checkpoint-and-resume surface: combine short checkpoint timing, resume-without-rerun confidence, what-can-stay-untouched guidance, and blocker-versus-rerun boundaries into one denser Today planner layer so users can keep executing, pause briefly, and resume later without falling back into planner thrash.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat-ai-planner-checkpoint-and-resume-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-checkpoint-and-resume-bundle
+
+Scope
+- Bundle adjacent checkpoint timing, resume-without-rerun guidance, what-can-stay-untouched boundaries, and blocker-versus-rerun rules into one coherent Today planner treatment.
+- Improve the planner experience so users can more clearly tell after applying one suggestion:
+  - when a short checkpoint is enough,
+  - how to resume later today without reopening the planner,
+  - what parts of the updated plan can stay untouched,
+  - and when a real blocker or drift finally justifies a rerun.
+- Prefer one coherent checkpoint-and-resume treatment over scattered reassurance copy or broad page changes.
+- Keep the change narrow and local to Today planner guidance / review / apply surfaces.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth, analytics, or backend prompt/model changes.
+- No broad redesign of the Today page.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a small hook or summary treatment is clearly warranted
+- related planner review/apply components only if clearly necessary
+
+Acceptance criteria
+- After applying one suggestion, users can tell when a brief checkpoint is enough, how to resume later without rerunning the planner, what can stay untouched, and when a real blocker makes rerunning worthwhile.
+- Users can stay in execution mode today with less planner thrash and less reassurance-seeking.
+- The change stays narrow, local, and reviewable.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups

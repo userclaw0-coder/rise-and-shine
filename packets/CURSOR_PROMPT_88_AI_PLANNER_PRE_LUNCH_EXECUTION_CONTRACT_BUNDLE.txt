@@ -1,0 +1,54 @@
+Implement rise-and-shine packet 88: AI Planner pre-lunch execution contract bundle.
+
+Goal
+- Build on the late morning continuity bundle by turning continuity into a clearer pre-lunch execution contract: combine stronger proof that the current plan should usually hold through lunch, clearer distinction between manageable drift and a true half-day reset, better guidance for trimming or resequencing manually when lunch is approaching, and a more confident threshold for deciding whether the afternoon should inherit the current plan or wait for a later rerun.
+
+Repo boundary
+- Work only in rise-and-shine.
+- Do not touch Clawboard, feedbackstrategies-ai, or CodexWellWishes.
+- Keep routine work off `main`.
+
+Branch / worktree
+- Base from: develop
+- Work on: feat-ai-planner-pre-lunch-execution-contract-bundle
+- Worktree: /home/clawofhank/rise-and-shine/.worktrees/feat-ai-planner-pre-lunch-execution-contract-bundle
+
+Scope
+- Bundle adjacent pre-lunch plan stability, manageable drift handling, lunch-approaching manual trim guidance, and afternoon-rerun threshold confidence into one coherent Today planner treatment.
+- Improve the planner experience so users can more clearly tell before lunch:
+  - why the current plan should usually keep carrying them,
+  - what kind of drift is harmless versus what breaks the half-day plan,
+  - when a quick manual trim or reorder is enough as lunch approaches,
+  - and whether the afternoon should inherit the current plan or wait for a later planner rerun.
+- Prefer one coherent pre-lunch contract over scattered reassurance copy or broad page changes.
+- Keep the change narrow and local to Today planner guidance / review / apply surfaces.
+
+Non-goals
+- No planner architecture rewrite.
+- No onboarding redesign.
+- No auth, analytics, or backend prompt/model changes.
+- No broad redesign of the Today page.
+
+Likely files
+- components/AiPlannerGuidance.js
+- pages/today.js only if a small hook or summary treatment is clearly warranted
+- related planner review/apply components only if clearly necessary
+
+Acceptance criteria
+- As lunch approaches, users can tell why the current plan usually still holds, what drift is normal, when a manual trim/resequence is enough, and when the afternoon should wait for a later rerun instead of forcing one now.
+- The planner feels like a stable half-day execution contract rather than something that must be reopened every time the morning shifts.
+- The change stays narrow, local, and reviewable.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+Verification
+- Run: npm run lint
+- Run: npm run build
+
+Completion report
+Return:
+- branch name
+- commit hash
+- concise summary
+- verification commands + results
+- risks or follow-ups

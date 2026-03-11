@@ -75,7 +75,15 @@ export default async function handler(req, res) {
   try {
     if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
 
-    const authenticatedUserId = await getAuthenticatedUserId(req);
+    let authenticatedUserId;
+    try {
+      authenticatedUserId = await getAuthenticatedUserId(req);
+    } catch (authErr) {
+      const status = authErr.status ?? 401;
+      return res.status(status).json({
+        error: status === 401 ? "Authentication required" : authErr.message,
+      });
+    }
     const { date } = req.body || {};
 
     const userId = authenticatedUserId;
@@ -225,20 +233,34 @@ Keep responses concise.
       },
     };
 
-    const response = await withTimeout(
-      openai.responses.create({
-        model: MODEL,
-        instructions,
-        input: JSON.stringify(input),
-      }),
-      AI_TIMEOUT_MS
-    );
+    const apiKey = process.env.OPENAI_API_KEY;
+    let text = "";
+    if (apiKey && apiKey.trim()) {
+      try {
+        const response = await withTimeout(
+          openai.responses.create({
+            model: MODEL,
+            instructions,
+            input: JSON.stringify(input),
+          }),
+          AI_TIMEOUT_MS
+        );
+        text = response.output_text || "";
+      } catch (openaiErr) {
+        const msg = openaiErr?.message || String(openaiErr);
+        if (openaiErr?.status === 401 || /invalid.*api.*key|authentication|unauthorized/i.test(msg)) {
+          return res.status(502).json({
+            error: "OpenAI authentication failed. Check OPENAI_API_KEY in server environment.",
+          });
+        }
+        throw openaiErr;
+      }
+    }
 
-    const text = response.output_text || "";
     const parsed = safeJsonParse(text);
-
     const finalOutput = parsed || buildFallbackPlannerResponse(queueTasks);
-    const aiStatus = parsed ? "ok" : "fallback:non_json";
+    const fallbackReason = !(apiKey && apiKey.trim()) ? "no_api_key" : null;
+    const aiStatus = parsed ? "ok" : (fallbackReason ? `fallback:${fallbackReason}` : "fallback:non_json");
 
     const { error: cacheWriteErr } = await supabase.from("planner_cache").upsert({
       user_id: userId,
