@@ -417,6 +417,9 @@ export default function BacklogPage() {
     tagFilter,
   ]);
 
+  const [comfortableSortKey, setComfortableSortKey] = useState("score");
+  const [comfortableSortDir, setComfortableSortDir] = useState("desc");
+
   const PRIORITY_ORDER = { Critical: 4, High: 3, Medium: 2, Low: 1 };
   const STATUS_ORDER = { todo: 0, doing: 1, done: 2, archived: 3 };
   const sortedRootTasks = useMemo(() => {
@@ -447,8 +450,6 @@ export default function BacklogPage() {
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [compactListMode, setCompactListMode] = useState(false);
 
-  const [comfortableSortKey, setComfortableSortKey] = useState("score");
-  const [comfortableSortDir, setComfortableSortDir] = useState("desc");
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
     try {
