@@ -109,7 +109,8 @@ export default function TodayPage() {
 
   const [backlogTasks, setBacklogTasks] = useState([]);
   const [lastCompletedMap, setLastCompletedMap] = useState({});
-  const [dailyCompletedToday, setDailyCompletedToday] = useState(0);
+  const [dailyHitsCompleted, setDailyHitsCompleted] = useState(0);
+  const [otherCompletedToday, setOtherCompletedToday] = useState(0);
 
   const [dailyPlan, setDailyPlan] = useState(null);
   const [queueEntries, setQueueEntries] = useState([]);
@@ -309,10 +310,16 @@ export default function TodayPage() {
           todayStr
         );
         if (!todayEventsRes.error && todayEventsRes.data) {
-          const distinctTasks = new Set(
-            (todayEventsRes.data || []).map((e) => e.task_id)
-          );
-          setDailyCompletedToday(distinctTasks.size);
+          const events = todayEventsRes.data || [];
+          const dailyHitsSet = new Set(itemTaskIds);
+          const dailyHitsDone = new Set(
+            events.filter((e) => dailyHitsSet.has(e.task_id)).map((e) => e.task_id)
+          ).size;
+          const otherDone = new Set(
+            events.filter((e) => !dailyHitsSet.has(e.task_id)).map((e) => e.task_id)
+          ).size;
+          setDailyHitsCompleted(dailyHitsDone);
+          setOtherCompletedToday(otherDone);
         }
       } catch (e) {
         setError(e.message || "Failed to load today view.");
@@ -479,8 +486,16 @@ export default function TodayPage() {
 
     const todayRes = await getCompletedEventsInRange(user.id, todayStr, todayStr);
     if (!todayRes.error && todayRes.data) {
-      const distinctTasks = new Set((todayRes.data || []).map((e) => e.task_id));
-      setDailyCompletedToday(distinctTasks.size);
+      const events = todayRes.data || [];
+      const dailyHitsSet = new Set(dailyTemplateTaskIds);
+      const dailyHitsDone = new Set(
+        events.filter((e) => dailyHitsSet.has(e.task_id)).map((e) => e.task_id)
+      ).size;
+      const otherDone = new Set(
+        events.filter((e) => !dailyHitsSet.has(e.task_id)).map((e) => e.task_id)
+      ).size;
+      setDailyHitsCompleted(dailyHitsDone);
+      setOtherCompletedToday(otherDone);
     }
   }
 
@@ -1026,7 +1041,9 @@ export default function TodayPage() {
       <ProgressToOutcome
         queueEntries={queueEntries}
         completionMap={completionMap}
-        dailyCompletedToday={dailyCompletedToday}
+        dailyHitsTotal={items?.length ?? 0}
+        dailyHitsCompleted={dailyHitsCompleted}
+        otherCompletedToday={otherCompletedToday}
       />
 
       <QueueBehaviorHelper />

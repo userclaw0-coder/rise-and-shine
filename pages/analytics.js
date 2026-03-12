@@ -8,6 +8,7 @@ import {
   getPlannerRefinementEventsInRange,
   getWeeklyReview,
   getDailyTemplateTaskIds,
+  getBacklogTasks,
 } from "../lib/db";
 import {
   BarChart,
@@ -25,6 +26,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { countRefinementActions } from "../lib/planner-refinement-events";
+import { getOutcomeLabel } from "../lib/scoring";
 
 function dateStr(d) {
   return d.toISOString().slice(0, 10);
@@ -138,6 +140,16 @@ export default function AnalyticsPage() {
     older: "",
     newer: "",
   });
+  const [summaryMetrics, setSummaryMetrics] = useState({
+    daysActive7: 0,
+    daysActive30: 0,
+    thisWeekTotal: 0,
+    lastWeekTotal: 0,
+    dailyHitsRate7: null,
+  });
+  const [puttingOff, setPuttingOff] = useState({ overdue: 0, highPriorityOpen: 0 });
+  const [completionsByCategory, setCompletionsByCategory] = useState([]);
+  const [outcomeProgress, setOutcomeProgress] = useState([]);
 
   useEffect(() => {
     if (!user) return;
@@ -150,16 +162,22 @@ export default function AnalyticsPage() {
       const start30 = addDays(today, -30);
 
       try {
-        const [range7, range30, last, weeks, plannerRefinements, dailyTaskIdsRes] = await Promise.all([
+        const [range7, range30, last, weeks, plannerRefinements, dailyTaskIdsRes, backlogOpen, backlogAll] = await Promise.all([
           getCompletedEventsInRange(user.id, dateStrLocal(start7), dateStrLocal(today)),
           getCompletedEventsInRange(user.id, dateStrLocal(start30), dateStrLocal(today)),
           getLastCompletedEventsWithTasks(user.id, 50),
           getWeeklyReviewWeeks(user.id, 52),
           getPlannerRefinementEventsInRange(user.id, dateStr(start30), dateStr(today)),
           getDailyTemplateTaskIds(user.id),
+          getBacklogTasks(user.id, { includeArchived: false }),
+          getBacklogTasks(user.id, { includeArchived: true }),
         ]);
 
         const dailyTemplateTaskIds = dailyTaskIdsRes.data || new Set();
+        const todayStr = dateStrLocal(today);
+        const openTasks = backlogOpen.data || [];
+        const allTasks = backlogAll.data || [];
+        const tasksById = new Map((allTasks || []).map((t) => [t.id, t]));
 
         if (range7.error) setError(range7.error.message);
         else {
@@ -261,6 +279,54 @@ export default function AnalyticsPage() {
           older: twoWeeksAgoStart,
           newer: prevWeekStart,
         });
+
+        const datesWithCompletions7 = new Set((range7.data || []).map((ev) => dateStrLocal(new Date(ev.created_at))));
+        const datesWithCompletions30 = new Set((range30.data || []).map((ev) => dateStrLocal(new Date(ev.created_at))));
+        const totalThisWeek = (range7.data || []).length;
+        const start14 = addDays(today, -14);
+        const range14Res = await getCompletedEventsInRange(user.id, dateStrLocal(start14), dateStrLocal(today));
+        const range14 = range14Res.data || [];
+        const lastWeekTotal = range14.filter((ev) => {
+          const d = dateStrLocal(new Date(ev.created_at));
+          return d >= dateStrLocal(start14) && d < dateStrLocal(start7);
+        }).length;
+        const dailySize = dailyTemplateTaskIds.size || 1;
+        const totalDailyIn7 = sevenDayData.reduce((s, row) => s + (row.daily || 0), 0);
+        const maxDailyPossible = dailySize * 7;
+        setSummaryMetrics({
+          daysActive7: datesWithCompletions7.size,
+          daysActive30: datesWithCompletions30.size,
+          thisWeekTotal: totalThisWeek,
+          lastWeekTotal,
+          dailyHitsRate7: maxDailyPossible > 0 ? Math.round((totalDailyIn7 / maxDailyPossible) * 100) : null,
+        });
+
+        const overdue = openTasks.filter((t) => t.due_date && dateStrLocal(new Date(t.due_date)) < todayStr).length;
+        const highPriorityOpen = openTasks.filter((t) => (t.priority === "Critical" || t.priority === "High")).length;
+        setPuttingOff({ overdue, highPriorityOpen });
+
+        const categoryCounts = {};
+        (range30.data || []).forEach((ev) => {
+          const task = tasksById.get(ev.task_id);
+          const name = (task?.category?.name ?? "Uncategorized").trim() || "Uncategorized";
+          categoryCounts[name] = (categoryCounts[name] || 0) + 1;
+        });
+        const byCategory = Object.entries(categoryCounts)
+          .map(([name, count]) => ({ name, count }))
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 10);
+        setCompletionsByCategory(byCategory);
+
+        const byOutcome = new Map();
+        Object.entries(categoryCounts).forEach(([catName, count]) => {
+          const label = getOutcomeLabel(catName) || catName;
+          byOutcome.set(label, (byOutcome.get(label) || 0) + count);
+        });
+        setOutcomeProgress(
+          Array.from(byOutcome.entries())
+            .map(([name, count]) => ({ name, count }))
+            .sort((a, b) => b.count - a.count)
+        );
       } catch (e) {
         setError(e.message || "Failed to load analytics.");
       } finally {
@@ -317,9 +383,70 @@ export default function AnalyticsPage() {
           <p style={{ color: "#b91c1c", fontSize: 13, marginTop: 8 }}>{error}</p>
         )}
 
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
+            gap: 10,
+            marginTop: 16,
+          }}
+        >
+          <div style={{ padding: "10px 12px", borderRadius: 12, background: "#f0fdf4", border: "1px solid #bbf7d0", fontSize: 13 }}>
+            <div style={{ color: "#166534", fontWeight: 600 }}>{summaryMetrics.daysActive7}</div>
+            <div style={{ color: "#15803d", fontSize: 11 }}>Days active (7d)</div>
+          </div>
+          <div style={{ padding: "10px 12px", borderRadius: 12, background: "#f0fdf4", border: "1px solid #bbf7d0", fontSize: 13 }}>
+            <div style={{ color: "#166534", fontWeight: 600 }}>{summaryMetrics.daysActive30}</div>
+            <div style={{ color: "#15803d", fontSize: 11 }}>Days active (30d)</div>
+          </div>
+          <div style={{ padding: "10px 12px", borderRadius: 12, background: "#eff6ff", border: "1px solid #bfdbfe", fontSize: 13 }}>
+            <div style={{ color: "#1d4ed8", fontWeight: 600 }}>{summaryMetrics.thisWeekTotal} vs {summaryMetrics.lastWeekTotal}</div>
+            <div style={{ color: "#2563eb", fontSize: 11 }}>This week vs last week</div>
+          </div>
+          {summaryMetrics.dailyHitsRate7 != null && (
+            <div style={{ padding: "10px 12px", borderRadius: 12, background: "#fefce8", border: "1px solid #fef08a", fontSize: 13 }}>
+              <div style={{ color: "#854d0e", fontWeight: 600 }}>{summaryMetrics.dailyHitsRate7}%</div>
+              <div style={{ color: "#a16207", fontSize: 11 }}>Daily hits (7d)</div>
+            </div>
+          )}
+        </div>
+
+        {(puttingOff.overdue > 0 || puttingOff.highPriorityOpen > 0) && (
+          <div
+            style={{
+              marginTop: 12,
+              padding: 14,
+              borderRadius: 12,
+              background: "#fef2f2",
+              border: "1px solid #fecaca",
+            }}
+          >
+            <h3 style={{ fontSize: 14, fontWeight: 600, margin: "0 0 8px", color: "#991b1b" }}>
+              What you might be putting off
+            </h3>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", fontSize: 13 }}>
+              {puttingOff.overdue > 0 && (
+                <span style={{ color: "#b91c1c" }}>
+                  <strong>{puttingOff.overdue}</strong> overdue task{puttingOff.overdue === 1 ? "" : "s"}
+                </span>
+              )}
+              {puttingOff.highPriorityOpen > 0 && (
+                <span style={{ color: "#b91c1c" }}>
+                  <strong>{puttingOff.highPriorityOpen}</strong> open Critical/High priority
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        <style>{`
+          .analytics-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-top: 20px; }
+          @media (max-width: 768px) { .analytics-grid { grid-template-columns: 1fr; } }
+        `}</style>
+        <div className="analytics-grid">
         <section
           style={{
-            marginTop: 20,
+            marginTop: 0,
             padding: 16,
             background: "linear-gradient(180deg, #fafbfc 0%, #fff 100%)",
             borderRadius: 16,
@@ -387,7 +514,7 @@ export default function AnalyticsPage() {
 
         <section
           style={{
-            marginTop: 20,
+            marginTop: 0,
             padding: 16,
             background: "#fff",
             borderRadius: 16,
@@ -412,7 +539,7 @@ export default function AnalyticsPage() {
 
         <section
           style={{
-            marginTop: 20,
+            marginTop: 0,
             padding: 16,
             background: "#fff",
             borderRadius: 16,
@@ -442,7 +569,7 @@ export default function AnalyticsPage() {
 
         <section
           style={{
-            marginTop: 24,
+            marginTop: 0,
             padding: 16,
             background: "#fff",
             borderRadius: 16,
@@ -472,7 +599,7 @@ export default function AnalyticsPage() {
 
         <section
           style={{
-            marginTop: 24,
+            marginTop: 0,
             padding: 16,
             background: "#fff",
             borderRadius: 16,
@@ -497,11 +624,80 @@ export default function AnalyticsPage() {
 
         <section
           style={{
-            marginTop: 24,
+            marginTop: 0,
             padding: 16,
             background: "#fff",
             borderRadius: 16,
             border: "1px solid #e5e7eb",
+          }}
+        >
+          <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
+            Progress by category (30 days)
+          </h2>
+          <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 8px" }}>
+            Where your completions landed — helps see balance toward goals.
+          </p>
+          {completionsByCategory.length > 0 ? (
+            <MeasuredChart
+              height={260}
+              renderChart={({ width, height }) => (
+                <BarChart width={width} height={height} data={completionsByCategory} layout="vertical" margin={{ left: 60 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} />
+                  <YAxis type="category" dataKey="name" width={56} tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Bar dataKey="count" fill="#0d9488" radius={[0, 4, 4, 0]} name="Completions" />
+                </BarChart>
+              )}
+            />
+          ) : (
+            <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>Complete tasks to see breakdown by category.</p>
+          )}
+        </section>
+
+        <section
+          style={{
+            marginTop: 0,
+            padding: 16,
+            background: "linear-gradient(180deg, #f0fdf4 0%, #fff 100%)",
+            borderRadius: 16,
+            border: "1px solid #bbf7d0",
+          }}
+        >
+          <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px", color: "#14532d" }}>
+            Progress toward outcomes (30 days)
+          </h2>
+          <p style={{ fontSize: 12, color: "#166534", margin: "0 0 8px" }}>
+            Completions that advance each outcome area — your goals in motion.
+          </p>
+          {outcomeProgress.length > 0 ? (
+            <MeasuredChart
+              height={260}
+              renderChart={({ width, height }) => (
+                <BarChart width={width} height={height} data={outcomeProgress} layout="vertical" margin={{ left: 80 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#d1fae5" />
+                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} />
+                  <YAxis type="category" dataKey="name" width={76} tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Bar dataKey="count" fill="#059669" radius={[0, 4, 4, 0]} name="Completions" />
+                </BarChart>
+              )}
+            />
+          ) : (
+            <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
+              Complete tasks in categorized areas to see progress toward your outcomes.
+            </p>
+          )}
+        </section>
+
+        <section
+          style={{
+            marginTop: 0,
+            padding: 16,
+            background: "#fff",
+            borderRadius: 16,
+            border: "1px solid #e5e7eb",
+            gridColumn: "1 / -1",
           }}
         >
           <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
@@ -536,6 +732,7 @@ export default function AnalyticsPage() {
             </div>
           )}
         </section>
+        </div>
       </div>
     </DashboardLayout>
   );

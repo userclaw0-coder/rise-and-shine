@@ -1,34 +1,37 @@
 import { getOutcomeLabel, getCategoryForTask } from "../lib/scoring";
 
-const EXPECTED_DAILY = 3;
+const EXPECTED_ACTIONS = 3;
 const MAX_SCALE = 10;
 
 /**
- * Two bars, same pixel width. Left: daily outcomes (expected = 3, actual fills; overflow in gold).
- * Right: Next 3 Actions (3 total, fill = completed in current queue).
- * Scales so the daily bar doesn't grow off the page (cap at MAX_SCALE).
+ * Bar 1: Daily Hits (template tasks) — grey background, fill = completed.
+ * Bar 2: Today's 3 Actions (all other completions today) — expected 3, blue fill then gold overflow.
  */
 function DualProgressBars({
-  dailyCompletedToday,
+  dailyHitsTotal,
+  dailyHitsCompleted,
+  otherCompletedToday,
   queueEntries,
   completionMap,
 }) {
+  const dailyHitsPct =
+    dailyHitsTotal > 0 ? (dailyHitsCompleted / dailyHitsTotal) * 100 : 0;
+
+  const actionsScale = Math.min(
+    MAX_SCALE,
+    Math.max(EXPECTED_ACTIONS, otherCompletedToday)
+  );
+  const actionsFillPct =
+    actionsScale > 0 ? (otherCompletedToday / actionsScale) * 100 : 0;
+  const actionsBluePct =
+    actionsScale > 0
+      ? (Math.min(EXPECTED_ACTIONS, otherCompletedToday) / actionsScale) * 100
+      : 0;
+  const actionsGoldPct = actionsFillPct - actionsBluePct;
+
   const queueTotal = queueEntries?.length ?? 0;
   const queueCompleted =
     queueEntries?.filter((e) => !!completionMap[e.task?.id]).length ?? 0;
-
-  const dailyScale = Math.min(
-    MAX_SCALE,
-    Math.max(EXPECTED_DAILY, dailyCompletedToday)
-  );
-  const dailyFillPct = dailyScale > 0 ? (dailyCompletedToday / dailyScale) * 100 : 0;
-  const dailyBluePct =
-    dailyScale > 0
-      ? (Math.min(EXPECTED_DAILY, dailyCompletedToday) / dailyScale) * 100
-      : 0;
-  const dailyGoldPct = dailyFillPct - dailyBluePct;
-
-  const next3FillPct = queueTotal > 0 ? (queueCompleted / queueTotal) * 100 : 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -42,11 +45,50 @@ function DualProgressBars({
           }}
         >
           <span style={{ fontSize: 12, fontWeight: 500, color: "#374151" }}>
-            Daily outcomes
+            Daily Hits
           </span>
           <span style={{ fontSize: 12, color: "#6b7280" }}>
-            {dailyCompletedToday} of {EXPECTED_DAILY}+
-            {dailyCompletedToday > EXPECTED_DAILY && (
+            {dailyHitsCompleted} of {dailyHitsTotal} completed
+          </span>
+        </div>
+        <div
+          style={{
+            height: 10,
+            borderRadius: 999,
+            background: "#e5e7eb",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              height: "100%",
+              width: `${dailyHitsPct}%`,
+              borderRadius: 999,
+              background:
+                dailyHitsCompleted === dailyHitsTotal && dailyHitsTotal > 0
+                  ? "#059669"
+                  : "#3b82f6",
+              transition: "width 0.3s ease",
+            }}
+          />
+        </div>
+      </div>
+
+      <div>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "baseline",
+            marginBottom: 4,
+          }}
+        >
+          <span style={{ fontSize: 12, fontWeight: 500, color: "#374151" }}>
+            Today&apos;s 3 Actions
+          </span>
+          <span style={{ fontSize: 12, color: "#6b7280" }}>
+            {otherCompletedToday} of {EXPECTED_ACTIONS}+
+            {otherCompletedToday > EXPECTED_ACTIONS && (
               <span style={{ color: "#b45309", marginLeft: 4 }}>
                 · exceeding goal
               </span>
@@ -68,7 +110,7 @@ function DualProgressBars({
               left: 0,
               top: 0,
               bottom: 0,
-              width: `${dailyBluePct}%`,
+              width: `${actionsBluePct}%`,
               borderRadius: "999px 0 0 999px",
               background: "#3b82f6",
               transition: "width 0.3s ease",
@@ -77,10 +119,10 @@ function DualProgressBars({
           <div
             style={{
               position: "absolute",
-              left: `${dailyBluePct}%`,
+              left: `${actionsBluePct}%`,
               top: 0,
               bottom: 0,
-              width: `${dailyGoldPct}%`,
+              width: `${actionsGoldPct}%`,
               background: "#b45309",
               transition: "width 0.3s ease",
             }}
@@ -89,43 +131,8 @@ function DualProgressBars({
       </div>
 
       {queueTotal > 0 && (
-        <div>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "baseline",
-              marginBottom: 4,
-            }}
-          >
-            <span style={{ fontSize: 12, fontWeight: 500, color: "#374151" }}>
-              Next {queueTotal} actions
-            </span>
-            <span style={{ fontSize: 12, color: "#6b7280" }}>
-              {queueCompleted} of {queueTotal} completed
-            </span>
-          </div>
-          <div
-            style={{
-              height: 10,
-              borderRadius: 999,
-              background: "#e5e7eb",
-              overflow: "hidden",
-            }}
-          >
-            <div
-              style={{
-                height: "100%",
-                width: `${next3FillPct}%`,
-                borderRadius: 999,
-                background:
-                  queueCompleted === queueTotal && queueTotal > 0
-                    ? "#059669"
-                    : "#3b82f6",
-                transition: "width 0.3s ease",
-              }}
-            />
-          </div>
+        <div style={{ fontSize: 12, color: "#9ca3af", marginTop: -4 }}>
+          Current queue: {queueCompleted} of {queueTotal} completed
         </div>
       )}
     </div>
@@ -170,59 +177,16 @@ function OutcomePill({ category, outcomeLabel, done, total }) {
 export default function ProgressToOutcome({
   queueEntries,
   completionMap,
-  dailyCompletedToday = 0,
+  dailyHitsTotal = 0,
+  dailyHitsCompleted = 0,
+  otherCompletedToday = 0,
 }) {
-  if (!queueEntries || queueEntries.length === 0) {
-    return (
-      <section
-        style={{
-          marginBottom: 20,
-          padding: 16,
-          background: "#ffffff",
-          borderRadius: 16,
-          border: "1px solid #e5e7eb",
-        }}
-      >
-        <h2
-          style={{
-            fontSize: 16,
-            fontWeight: 600,
-            letterSpacing: "-0.01em",
-            margin: "0 0 4px",
-          }}
-        >
-          Today&apos;s Progress
-        </h2>
-        <p style={{ margin: "0 0 12px", fontSize: 13, color: "#6b7280" }}>
-          Complete tasks from your Next 3 or Action Items to fill the bars.
-        </p>
-        <DualProgressBars
-          dailyCompletedToday={dailyCompletedToday}
-          queueEntries={[]}
-          completionMap={completionMap}
-        />
-      </section>
-    );
-  }
-
-  const queueCompleted = queueEntries.filter(
-    (e) => !!completionMap[e.task?.id]
-  ).length;
-  const queueTotal = queueEntries.length;
-  const allQueueDone = queueCompleted === queueTotal;
-
-  const categories = new Map();
-  for (const entry of queueEntries) {
-    const cat = getCategoryForTask(entry.task);
-    if (!cat) continue;
-    const isDone = !!completionMap[entry.task?.id];
-    if (!categories.has(cat)) {
-      categories.set(cat, { total: 0, done: 0 });
-    }
-    const c = categories.get(cat);
-    c.total += 1;
-    if (isDone) c.done += 1;
-  }
+  const hasQueue = queueEntries && queueEntries.length > 0;
+  const queueCompleted = hasQueue
+    ? queueEntries.filter((e) => !!completionMap[e.task?.id]).length
+    : 0;
+  const queueTotal = hasQueue ? queueEntries.length : 0;
+  const allQueueDone = hasQueue && queueCompleted === queueTotal;
 
   return (
     <section
@@ -253,34 +217,51 @@ export default function ProgressToOutcome({
       >
         {allQueueDone
           ? 'Great work! Hit "Refresh queue" below to get your next 3 actions.'
-          : "Daily outcomes (any task) and your current Next 3. Beyond 3 turns gold."}
+          : "Daily Hits (template) and today's actions from your queue or Action Items. Beyond 3 actions turns gold."}
       </p>
 
       <DualProgressBars
-        dailyCompletedToday={dailyCompletedToday}
-        queueEntries={queueEntries}
+        dailyHitsTotal={dailyHitsTotal}
+        dailyHitsCompleted={dailyHitsCompleted}
+        otherCompletedToday={otherCompletedToday}
+        queueEntries={queueEntries || []}
         completionMap={completionMap}
       />
 
-      {categories.size > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
-          {Array.from(categories.entries()).map(([cat, counts]) => (
-            <OutcomePill
-              key={cat}
-              category={cat}
-              outcomeLabel={getOutcomeLabel(cat)}
-              done={counts.done}
-              total={counts.total}
-            />
-          ))}
-        </div>
-      )}
-
-      {categories.size === 0 && (
-        <p style={{ fontSize: 12, color: "#9ca3af", margin: "12px 0 0" }}>
-          Assign categories to your tasks to see which outcomes they advance.
-        </p>
-      )}
+      {hasQueue && (() => {
+        const categories = new Map();
+        for (const entry of queueEntries) {
+          const cat = getCategoryForTask(entry.task);
+          if (!cat) continue;
+          const isDone = !!completionMap[entry.task?.id];
+          if (!categories.has(cat)) {
+            categories.set(cat, { total: 0, done: 0 });
+          }
+          const c = categories.get(cat);
+          c.total += 1;
+          if (isDone) c.done += 1;
+        }
+        if (categories.size > 0) {
+          return (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+              {Array.from(categories.entries()).map(([cat, counts]) => (
+                <OutcomePill
+                  key={cat}
+                  category={cat}
+                  outcomeLabel={getOutcomeLabel(cat)}
+                  done={counts.done}
+                  total={counts.total}
+                />
+              ))}
+            </div>
+          );
+        }
+        return (
+          <p style={{ fontSize: 12, color: "#9ca3af", margin: "12px 0 0" }}>
+            Assign categories to your tasks to see which outcomes they advance.
+          </p>
+        );
+      })()}
     </section>
   );
 }
