@@ -29,6 +29,7 @@ import {
   chooseKeyOutcomes,
   computeTaskScore,
   getWorkoutPlanForDate,
+  getEffectiveCategoryWeights,
 } from "../lib/scoring";
 import {
   buildQueueCandidates,
@@ -274,11 +275,19 @@ export default function TodayPage() {
         const hasPersistedQueue = Array.isArray(plan?.queue) && plan.queue.length > 0;
         const shouldSeedInitialQueue = plan && !hasPersistedQueue && candidates.length > 0;
         if (shouldSeedInitialQueue) {
+          const catIdToName = {};
+          (tasksRes.data || []).forEach((t) => {
+            if (t.category_id) {
+              const name = typeof t.category === "string" ? t.category : t.category?.name;
+              if (name) catIdToName[t.category_id] = name;
+            }
+          });
+          const seedWeights = getEffectiveCategoryWeights(profilePrefs, catIdToName);
           const chosen = chooseKeyOutcomes(candidates, {
             mode,
             todayStr,
             lastCompletedMap: buildLastCompletedMap(lastRes.data || []),
-            baseCategoryWeights: profilePrefs?.base_category_weights,
+            baseCategoryWeights: seedWeights,
             quickWinMinutes: profilePrefs?.quick_win_definition_minutes,
           });
           const newQueue = buildQueueFromChosen(chosen);
@@ -338,6 +347,22 @@ export default function TodayPage() {
   ]);
 
   // Fetch completion state for queue task IDs so checkboxes reflect DB
+  const categoryIdToName = useMemo(() => {
+    const m = {};
+    (backlogTasks || []).forEach((t) => {
+      if (t.category_id) {
+        const name = typeof t.category === "string" ? t.category : t.category?.name;
+        if (name) m[t.category_id] = name;
+      }
+    });
+    return m;
+  }, [backlogTasks]);
+
+  const effectiveCategoryWeights = useMemo(
+    () => getEffectiveCategoryWeights(profilePrefs, categoryIdToName),
+    [profilePrefs, categoryIdToName]
+  );
+
   const queueTaskIds = useMemo(
     () => queueEntries.map((e) => e.task_id || e.task?.id).filter(Boolean),
     [queueEntries]
@@ -424,7 +449,7 @@ export default function TodayPage() {
       mode,
       todayStr,
       lastCompletedMap,
-      baseCategoryWeights: profilePrefs?.base_category_weights,
+      baseCategoryWeights: effectiveCategoryWeights,
       quickWinMinutes: profilePrefs?.quick_win_definition_minutes,
     });
     const newQueue = buildQueueFromChosen(chosen);

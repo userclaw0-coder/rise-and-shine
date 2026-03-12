@@ -14,6 +14,8 @@ import {
   ensureSubcategory,
   updateCategory,
   deleteCategory,
+  getUserProfile,
+  upsertUserProfile,
 } from "../lib/db";
 import { isMissingPrioritizationMetadata } from "../lib/task-enrichment";
 import { supabase } from "../lib/supabaseClient";
@@ -35,6 +37,9 @@ const STANDARD_TAGS = [
   "blocked",
   "waiting",
 ];
+
+const COMFORTABLE_GRID_COLUMNS =
+  "minmax(200px, 3fr) minmax(140px, 1.5fr) 86px minmax(120px, 1.1fr) 90px 130px minmax(100px, 1fr)";
 
 function normalize(str) {
   return (str || "").toLowerCase();
@@ -128,10 +133,11 @@ export default function BacklogPage() {
         setLoading(true);
         setError("");
 
-        const [tasksRes, catsRes, tagsRes] = await Promise.all([
+        const [tasksRes, catsRes, tagsRes, profileRes] = await Promise.all([
           getBacklogTasks(user.id, { includeArchived: true }),
           getCategoriesWithSubcategories(user.id),
           getAllTags(user.id),
+          getUserProfile(user.id),
         ]);
 
         if (tasksRes.error) {
@@ -149,24 +155,29 @@ export default function BacklogPage() {
         if (!catsRes.error) {
           const catData = catsRes.data || [];
           setCategories(catData);
-          const storageKey = `rs_category_order_${user.id}`;
+          const ids = catData.map((c) => c.id);
+          const validId = (id) => typeof id === "string" && ids.includes(id);
+          const serverOrder = profileRes?.data?.profile?.preferences?.category_order_ids;
+          const validServer =
+            Array.isArray(serverOrder) && serverOrder.every(validId)
+              ? serverOrder.filter(validId)
+              : null;
           let stored = null;
-          try {
-            stored =
-              typeof window !== "undefined"
-                ? JSON.parse(window.localStorage.getItem(storageKey) || "null")
-                : null;
-          } catch {
-            stored = null;
+          if (!validServer && typeof window !== "undefined") {
+            try {
+              stored = JSON.parse(window.localStorage.getItem(`rs_category_order_${user.id}`) || "null");
+            } catch {
+              stored = null;
+            }
           }
           const validStored =
             Array.isArray(stored) && stored.every((id) => typeof id === "string")
               ? stored
               : null;
-          const ids = catData.map((c) => c.id);
+          const orderSource = validServer || validStored;
           const merged = [
-            ...(validStored || []),
-            ...ids.filter((id) => !(validStored || []).includes(id)),
+            ...(orderSource || []).filter((id) => ids.includes(id)),
+            ...ids.filter((id) => !(orderSource || []).includes(id)),
           ];
           setCategoryOrder(merged);
         }
@@ -208,21 +219,32 @@ export default function BacklogPage() {
     return [...inOrder, ...remaining];
   }, [categories, categoryOrder]);
 
+  async function persistCategoryOrderToServer(order) {
+    if (!user || !order?.length) return;
+    try {
+      const res = await getUserProfile(user.id);
+      const existing = res?.data?.profile || {};
+      const prefs = { ...(existing.preferences || {}), category_order_ids: order };
+      await upsertUserProfile(user.id, { ...existing, preferences: prefs });
+    } catch (_) {
+      // localStorage already updated; server persist is best-effort
+    }
+  }
+
   function handleCategoryDrop(sourceId, targetId) {
     if (!sourceId || !targetId || sourceId === targetId) return;
-    setCategoryOrder((prev) => {
-      const base =
-        prev && prev.length
-          ? prev.filter((id) => categories.some((c) => c.id === id))
-          : categories.map((c) => c.id);
-      const fromIndex = base.indexOf(sourceId);
-      const toIndex = base.indexOf(targetId);
-      if (fromIndex === -1 || toIndex === -1) return base;
-      const next = base.slice();
-      const [moved] = next.splice(fromIndex, 1);
-      next.splice(toIndex, 0, moved);
-      return next;
-    });
+    const base =
+      categoryOrder && categoryOrder.length
+        ? categoryOrder.filter((id) => categories.some((c) => c.id === id))
+        : categories.map((c) => c.id);
+    const fromIndex = base.indexOf(sourceId);
+    const toIndex = base.indexOf(targetId);
+    if (fromIndex === -1 || toIndex === -1) return;
+    const next = base.slice();
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    setCategoryOrder(next);
+    persistCategoryOrderToServer(next);
   }
 
   function handleOpenCategoryEditor() {
@@ -385,12 +407,6 @@ export default function BacklogPage() {
           ...t,
           _aiPriorityScore: scoring.score,
         };
-      })
-      .sort((a, b) => {
-        if ((b._aiPriorityScore ?? 0) !== (a._aiPriorityScore ?? 0)) {
-          return (b._aiPriorityScore ?? 0) - (a._aiPriorityScore ?? 0);
-        }
-        return String(a.title || "").localeCompare(String(b.title || ""));
       });
   }, [
     rootTasks,
@@ -401,10 +417,61 @@ export default function BacklogPage() {
     tagFilter,
   ]);
 
+  const PRIORITY_ORDER = { Critical: 4, High: 3, Medium: 2, Low: 1 };
+  const STATUS_ORDER = { todo: 0, doing: 1, done: 2, archived: 3 };
+  const sortedRootTasks = useMemo(() => {
+    const list = [...filteredRootTasks];
+    const key = comfortableSortKey;
+    const dir = comfortableSortDir === "asc" ? 1 : -1;
+    const catName = (t) => (t.category?.name ?? categories.find((c) => c.id === t.category_id)?.name ?? "");
+    list.sort((a, b) => {
+      let cmp = 0;
+      if (key === "score") cmp = (a._aiPriorityScore ?? 0) - (b._aiPriorityScore ?? 0);
+      else if (key === "title") cmp = String(a.title || "").localeCompare(String(b.title || ""), undefined, { sensitivity: "base" });
+      else if (key === "category") cmp = catName(a).localeCompare(catName(b), undefined, { sensitivity: "base" });
+      else if (key === "priority") cmp = (PRIORITY_ORDER[a.priority] ?? 0) - (PRIORITY_ORDER[b.priority] ?? 0);
+      else if (key === "due") {
+        const da = a.due_date ? new Date(a.due_date).getTime() : 0;
+        const db = b.due_date ? new Date(b.due_date).getTime() : 0;
+        cmp = da - db;
+      } else if (key === "status") cmp = (STATUS_ORDER[a.status] ?? 0) - (STATUS_ORDER[b.status] ?? 0);
+      else if (key === "tags") cmp = (a._tagsText || "").localeCompare(b._tagsText || "", undefined, { sensitivity: "base" });
+      if (cmp !== 0) return dir * cmp;
+      return String(a.title || "").localeCompare(String(b.title || ""), undefined, { sensitivity: "base" });
+    });
+    return list;
+  }, [filteredRootTasks, comfortableSortKey, comfortableSortDir, categories]);
+
   const [collapsedParents, setCollapsedParents] = useState({});
   const [isCompact, setIsCompact] = useState(false);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [compactListMode, setCompactListMode] = useState(false);
+
+  const [comfortableSortKey, setComfortableSortKey] = useState("score");
+  const [comfortableSortDir, setComfortableSortDir] = useState("desc");
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    try {
+      const key = window.localStorage.getItem("backlog-comfortable-sort-key");
+      const dir = window.localStorage.getItem("backlog-comfortable-sort-dir");
+      if (key && ["score", "title", "category", "priority", "due", "status", "tags"].includes(key)) setComfortableSortKey(key);
+      if (dir === "asc" || dir === "desc") setComfortableSortDir(dir);
+    } catch (_) {}
+    return undefined;
+  }, []);
+  function handleComfortableSort(key) {
+    const same = comfortableSortKey === key;
+    const nextDir = same ? (comfortableSortDir === "asc" ? "desc" : "asc") : (["title", "category", "tags"].includes(key) ? "asc" : "desc");
+    setComfortableSortKey(key);
+    setComfortableSortDir(nextDir);
+  }
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem("backlog-comfortable-sort-key", comfortableSortKey);
+      window.localStorage.setItem("backlog-comfortable-sort-dir", comfortableSortDir);
+    } catch (_) {}
+  }, [comfortableSortKey, comfortableSortDir]);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -1080,22 +1147,19 @@ export default function BacklogPage() {
       );
     }
 
-    const desktopGridColumns =
-      "minmax(280px, 4fr) minmax(200px, 1.8fr) 100px minmax(140px, 1.2fr) 88px 120px minmax(130px, 1.2fr)";
-
     return (
       <div key={task.id}>
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: desktopGridColumns,
-            gap: 8,
+            gridTemplateColumns: COMFORTABLE_GRID_COLUMNS,
+            gap: 6,
             alignItems: "center",
-            padding: "10px 0",
+            padding: "8px 0",
             borderBottom: "1px solid #f3f4f6",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
             <div style={{ width: depth * 12 }} />
             <div
               style={{
@@ -1140,11 +1204,15 @@ export default function BacklogPage() {
                 style={{
                   width: "100%",
                   minWidth: 0,
+                  minHeight: 52,
+                  maxHeight: 88,
                   resize: "none",
-                  fontSize: 14,
-                  lineHeight: 1.4,
-                  padding: "8px 10px",
-                  borderRadius: 8,
+                  overflowY: "auto",
+                  overflowX: "hidden",
+                  fontSize: 13,
+                  lineHeight: 1.35,
+                  padding: "6px 8px",
+                  borderRadius: 6,
                   border: "1px solid #e5e7eb",
                   background: "#ffffff",
                   textDecoration: isDone ? "line-through" : "none",
@@ -1364,7 +1432,7 @@ export default function BacklogPage() {
             </div>
           </div>
 
-          <div style={{ minWidth: 0 }}>
+          <div style={{ minWidth: 0 }} title="e.g. quick-win, high-leverage, urgent">
             <input
               type="text"
               value={tagText}
@@ -1375,22 +1443,13 @@ export default function BacklogPage() {
               placeholder="Tags"
               style={{
                 width: "100%",
-                fontSize: 13,
-                padding: "6px 8px",
-                borderRadius: 8,
+                fontSize: 12,
+                padding: "5px 6px",
+                borderRadius: 6,
                 border: "1px solid #e5e7eb",
                 background: "#ffffff",
               }}
             />
-            <div
-              style={{
-                marginTop: 4,
-                fontSize: 11,
-                color: "#9ca3af",
-              }}
-            >
-              quick-win, high-leverage, urgent, blocked, waiting
-            </div>
           </div>
         </div>
 
@@ -2306,28 +2365,53 @@ export default function BacklogPage() {
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns:
-                    "minmax(280px, 4fr) minmax(200px, 1.8fr) 100px minmax(140px, 1.2fr) 88px 120px minmax(130px, 1.2fr)",
+                  gridTemplateColumns: COMFORTABLE_GRID_COLUMNS,
                   gap: 8,
                   fontSize: 12,
                   fontWeight: 600,
                   color: "#4b5563",
                   paddingBottom: 8,
                   borderBottom: "1px solid #e5e7eb",
+                  alignItems: "center",
                 }}
               >
-                <div>Title</div>
-                <div>Category</div>
-                <div>Score</div>
-                <div>Priority / Effort</div>
-                <div>Due</div>
-                <div>Status / Actions</div>
-                <div>Tags</div>
+                {[
+                  { key: "title", label: "Title" },
+                  { key: "category", label: "Category" },
+                  { key: "score", label: "Score" },
+                  { key: "priority", label: "Priority" },
+                  { key: "due", label: "Due" },
+                  { key: "status", label: "Status" },
+                  { key: "tags", label: "Tags" },
+                ].map(({ key, label }) => {
+                  const active = comfortableSortKey === key;
+                  const arrow = active ? (comfortableSortDir === "asc" ? " ↑" : " ↓") : "";
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => handleComfortableSort(key)}
+                      style={{
+                        padding: "6px 8px",
+                        textAlign: "left",
+                        border: "none",
+                        background: "transparent",
+                        cursor: "pointer",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: active ? "#111827" : "#4b5563",
+                      }}
+                      title={`Sort by ${label} (${active && comfortableSortDir === "asc" ? "desc" : "asc"})`}
+                    >
+                      {label}{arrow}
+                    </button>
+                  );
+                })}
               </div>
             )}
 
             <div>
-              {filteredRootTasks.length === 0 ? (
+              {sortedRootTasks.length === 0 ? (
                 <p
                   style={{
                     fontSize: 14,
@@ -2339,7 +2423,7 @@ export default function BacklogPage() {
                   No tasks match your filters.
                 </p>
               ) : (
-                filteredRootTasks.map((t) => renderTaskRow(t, 0))
+                sortedRootTasks.map((t) => renderTaskRow(t, 0))
               )}
             </div>
           </div>
