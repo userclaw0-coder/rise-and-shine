@@ -60,6 +60,19 @@ function AutoHeightText({ value, readOnly, onChange, placeholder, style }) {
   );
 }
 
+function isNotesTableMissing(message) {
+  if (!message || typeof message !== "string") return false;
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("could not find the table") ||
+    lower.includes("public.notes") ||
+    lower.includes("schema cache")
+  );
+}
+
+const NOTES_TABLE_MESSAGE =
+  "The notes table doesn't exist in your database yet. In Supabase Dashboard → SQL Editor, run the script in docs/NOTES_TABLE.sql to create it (and RLS policies).";
+
 export default function NotesPage() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -78,8 +91,11 @@ export default function NotesPage() {
     setError("");
     getNotes(user.id)
       .then((res) => {
-        if (res.error) setError(res.error.message);
-        else setNotes(res.data || []);
+        if (res.error) {
+          setError(
+            isNotesTableMissing(res.error.message) ? NOTES_TABLE_MESSAGE : res.error.message
+          );
+        } else setNotes(res.data || []);
       })
       .finally(() => setLoading(false));
   }, [user]);
@@ -89,8 +105,11 @@ export default function NotesPage() {
     setSaving(true);
     setError("");
     const res = await createNote(user.id, { title: title.trim() || null, body: body.trim() });
-    if (res.error) setError(res.error.message);
-    else {
+    if (res.error) {
+      setError(
+        isNotesTableMissing(res.error.message) ? NOTES_TABLE_MESSAGE : res.error.message
+      );
+    } else {
       setNotes((prev) => [res.data, ...prev]);
       setTitle("");
       setBody("");
@@ -115,8 +134,11 @@ export default function NotesPage() {
     setSaving(true);
     setError("");
     const res = await updateNote(user.id, editingId, { title: editTitle.trim() || null, body: editBody });
-    if (res.error) setError(res.error.message);
-    else {
+    if (res.error) {
+      setError(
+        isNotesTableMissing(res.error.message) ? NOTES_TABLE_MESSAGE : res.error.message
+      );
+    } else {
       setNotes((prev) => prev.map((n) => (n.id === editingId ? { ...n, ...res.data } : n)));
       cancelEdit();
     }

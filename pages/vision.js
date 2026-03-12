@@ -10,6 +10,33 @@ import {
 } from "../lib/db";
 import { supabase } from "../lib/supabaseClient";
 
+function AutoHeightTextarea({ value, onChange, rows = 2, placeholder, style, ...props }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.max(el.scrollHeight, 24 * rows)}px`;
+  }, [value, rows]);
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      rows={rows}
+      style={{
+        width: "100%",
+        resize: "none",
+        overflow: "hidden",
+        boxSizing: "border-box",
+        ...style,
+      }}
+      {...props}
+    />
+  );
+}
+
 export default function VisionPage() {
   const { user, isCheckingAuth } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -396,8 +423,8 @@ export default function VisionPage() {
           borderRadius: 16,
           border: "1px solid #e5e7eb",
           background: "#ffffff",
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 3fr) minmax(0, 1.4fr)",
+          display: "flex",
+          flexDirection: "column",
           gap: 16,
         }}
       >
@@ -412,12 +439,11 @@ export default function VisionPage() {
           <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 6px" }}>
             Short identity phrases that describe who you are becoming.
           </p>
-          <textarea
+          <AutoHeightTextarea
             value={identityAttributes}
-            onChange={(e) => setIdentityAttributes(e.target.value)}
+            onChange={setIdentityAttributes}
             rows={3}
             style={{
-              width: "100%",
               fontSize: 13,
               padding: 8,
               borderRadius: 8,
@@ -448,12 +474,12 @@ export default function VisionPage() {
                 }}
               >
                 <span style={{ textTransform: "capitalize" }}>{key}</span>
-                <textarea
+                <AutoHeightTextarea
                   value={value}
-                  onChange={(e) =>
+                  onChange={(v) =>
                     setLifeDomains((prev) => ({
                       ...prev,
-                      [key]: e.target.value,
+                      [key]: v,
                     }))
                   }
                   rows={2}
@@ -472,12 +498,11 @@ export default function VisionPage() {
           <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 6px" }}>
             Desired outcomes (12 months)
           </h2>
-          <textarea
+          <AutoHeightTextarea
             value={desiredOutcomes}
-            onChange={(e) => setDesiredOutcomes(e.target.value)}
+            onChange={setDesiredOutcomes}
             rows={4}
             style={{
-              width: "100%",
               fontSize: 13,
               padding: 8,
               borderRadius: 8,
@@ -492,13 +517,12 @@ export default function VisionPage() {
           <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 6px" }}>
             Up to three goals that help you thrive (one per line). Included in your Vision Board.
           </p>
-          <textarea
+          <AutoHeightTextarea
             value={goalsToThrive}
-            onChange={(e) => setGoalsToThrive(e.target.value)}
+            onChange={setGoalsToThrive}
             rows={3}
             placeholder="e.g. Daily movement&#10;Meaningful connections&#10;Learn one new skill"
             style={{
-              width: "100%",
               fontSize: 13,
               padding: 8,
               borderRadius: 8,
@@ -521,9 +545,9 @@ export default function VisionPage() {
             }}
           >
             Leverage areas (one per line)
-            <textarea
+            <AutoHeightTextarea
               value={leverageFocus}
-              onChange={(e) => setLeverageFocus(e.target.value)}
+              onChange={setLeverageFocus}
               rows={3}
               style={{
                 fontSize: 13,
@@ -566,9 +590,9 @@ export default function VisionPage() {
             }}
           >
             Immediate step
-            <textarea
+            <AutoHeightTextarea
               value={immediateStep}
-              onChange={(e) => setImmediateStep(e.target.value)}
+              onChange={setImmediateStep}
               rows={2}
               style={{
                 fontSize: 13,
@@ -598,10 +622,12 @@ export default function VisionPage() {
             </button>
           </div>
         </div>
+
         <div
           style={{
-            borderLeft: "1px solid #f3f4f6",
-            paddingLeft: 12,
+            borderTop: "1px solid #f3f4f6",
+            paddingTop: 16,
+            marginTop: 8,
             fontSize: 13,
           }}
         >

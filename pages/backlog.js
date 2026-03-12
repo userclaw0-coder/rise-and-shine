@@ -242,6 +242,7 @@ export default function BacklogPage() {
     if (!user) return;
     setSavingCategories(true);
     setError("");
+    let hadError = false;
     try {
       for (const c of categories) {
         const nextName = (categoryEdits[c.id] ?? c.name).trim();
@@ -250,14 +251,17 @@ export default function BacklogPage() {
         const res = await updateCategory(user.id, c.id, { name: nextName });
         if (res.error) {
           setError(res.error.message || "Failed to update category.");
+          hadError = true;
           break;
         }
       }
-      const catsRes = await getCategoriesWithSubcategories(user.id);
-      if (!catsRes.error && Array.isArray(catsRes.data)) {
-        setCategories(catsRes.data);
+      if (!hadError) {
+        const catsRes = await getCategoriesWithSubcategories(user.id);
+        if (!catsRes.error && Array.isArray(catsRes.data)) {
+          setCategories(catsRes.data);
+        }
+        setCategoryEditorOpen(false);
       }
-      setCategoryEditorOpen(false);
     } finally {
       setSavingCategories(false);
     }
@@ -2160,6 +2164,106 @@ export default function BacklogPage() {
                 }}
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </Modal>
+
+        <Modal
+          title="Edit categories"
+          open={categoryEditorOpen}
+          onClose={() => !savingCategories && setCategoryEditorOpen(false)}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <p style={{ fontSize: 12, color: "#6b7280", margin: 0 }}>
+              Reorder, rename, or delete categories. Order here controls priority from left (highest) to right (lowest) on the Action Items page.
+            </p>
+            <div
+              style={{
+                maxHeight: 260,
+                overflowY: "auto",
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+              }}
+            >
+              {orderedCategories.map((c) => (
+                <div
+                  key={c.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <span style={{ cursor: "grab", fontSize: 14, userSelect: "none" }} title="Drag on the main page to change order">☰</span>
+                  <input
+                    type="text"
+                    value={categoryEdits[c.id] ?? c.name}
+                    onChange={(e) => handleCategoryEditChange(c.id, e.target.value)}
+                    style={{
+                      flex: 1,
+                      fontSize: 13,
+                      padding: "6px 8px",
+                      borderRadius: 6,
+                      border: "1px solid #e5e7eb",
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteCategoryClicked(c.id)}
+                    style={{
+                      fontSize: 12,
+                      padding: "4px 8px",
+                      borderRadius: 999,
+                      border: "1px solid #dc2626",
+                      background: "#fef2f2",
+                      color: "#b91c1c",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              ))}
+              {orderedCategories.length === 0 && (
+                <p style={{ fontSize: 12, color: "#9ca3af", marginTop: 4 }}>
+                  No categories yet. Add one from the main Action Items page first.
+                </p>
+              )}
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8 }}>
+              <button
+                type="button"
+                onClick={() => setCategoryEditorOpen(false)}
+                disabled={savingCategories}
+                style={{
+                  fontSize: 13,
+                  padding: "6px 12px",
+                  borderRadius: 999,
+                  border: "1px solid #e5e7eb",
+                  background: "#ffffff",
+                  color: "#111827",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveCategoryChanges}
+                disabled={savingCategories}
+                style={{
+                  fontSize: 13,
+                  padding: "6px 14px",
+                  borderRadius: 999,
+                  border: "1px solid #111827",
+                  background: "#111827",
+                  color: "#ffffff",
+                  cursor: savingCategories ? "wait" : "pointer",
+                }}
+              >
+                {savingCategories ? "Saving…" : "Save changes"}
               </button>
             </div>
           </div>
