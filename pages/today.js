@@ -13,6 +13,7 @@ import {
   getBacklogTasks,
   getTaskEventsForTasksOnDate,
   getLastCompletedEventsForUser,
+  getCompletedEventsInRange,
   logTaskEvent,
   getOrCreateWorkoutTaskId,
   getOrCreateDailyPlan,
@@ -108,6 +109,7 @@ export default function TodayPage() {
 
   const [backlogTasks, setBacklogTasks] = useState([]);
   const [lastCompletedMap, setLastCompletedMap] = useState({});
+  const [dailyCompletedToday, setDailyCompletedToday] = useState(0);
 
   const [dailyPlan, setDailyPlan] = useState(null);
   const [queueEntries, setQueueEntries] = useState([]);
@@ -300,6 +302,18 @@ export default function TodayPage() {
         } else {
           setQueueEntries(resolved);
         }
+
+        const todayEventsRes = await getCompletedEventsInRange(
+          user.id,
+          todayStr,
+          todayStr
+        );
+        if (!todayEventsRes.error && todayEventsRes.data) {
+          const distinctTasks = new Set(
+            (todayEventsRes.data || []).map((e) => e.task_id)
+          );
+          setDailyCompletedToday(distinctTasks.size);
+        }
       } catch (e) {
         setError(e.message || "Failed to load today view.");
       } finally {
@@ -461,6 +475,12 @@ export default function TodayPage() {
           await refillQueue();
         }
       }
+    }
+
+    const todayRes = await getCompletedEventsInRange(user.id, todayStr, todayStr);
+    if (!todayRes.error && todayRes.data) {
+      const distinctTasks = new Set((todayRes.data || []).map((e) => e.task_id));
+      setDailyCompletedToday(distinctTasks.size);
     }
   }
 
@@ -1006,6 +1026,7 @@ export default function TodayPage() {
       <ProgressToOutcome
         queueEntries={queueEntries}
         completionMap={completionMap}
+        dailyCompletedToday={dailyCompletedToday}
       />
 
       <QueueBehaviorHelper />
