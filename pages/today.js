@@ -13,6 +13,7 @@ import {
   getBacklogTasks,
   getTaskEventsForTasksOnDate,
   getLastCompletedEventsForUser,
+  getCompletedEventsInRange,
   logTaskEvent,
   getOrCreateWorkoutTaskId,
   getOrCreateDailyPlan,
@@ -28,6 +29,7 @@ import {
   chooseKeyOutcomes,
   computeTaskScore,
   getWorkoutPlanForDate,
+  getEffectiveCategoryWeights,
 } from "../lib/scoring";
 import {
   buildQueueCandidates,
@@ -108,6 +110,8 @@ export default function TodayPage() {
 
   const [backlogTasks, setBacklogTasks] = useState([]);
   const [lastCompletedMap, setLastCompletedMap] = useState({});
+  const [dailyHitsCompleted, setDailyHitsCompleted] = useState(0);
+  const [otherCompletedToday, setOtherCompletedToday] = useState(0);
 
   const [dailyPlan, setDailyPlan] = useState(null);
   const [queueEntries, setQueueEntries] = useState([]);
@@ -271,11 +275,19 @@ export default function TodayPage() {
         const hasPersistedQueue = Array.isArray(plan?.queue) && plan.queue.length > 0;
         const shouldSeedInitialQueue = plan && !hasPersistedQueue && candidates.length > 0;
         if (shouldSeedInitialQueue) {
+          const catIdToName = {};
+          (tasksRes.data || []).forEach((t) => {
+            if (t.category_id) {
+              const name = typeof t.category === "string" ? t.category : t.category?.name;
+              if (name) catIdToName[t.category_id] = name;
+            }
+          });
+          const seedWeights = getEffectiveCategoryWeights(profilePrefs, catIdToName);
           const chosen = chooseKeyOutcomes(candidates, {
             mode,
             todayStr,
             lastCompletedMap: buildLastCompletedMap(lastRes.data || []),
-            baseCategoryWeights: profilePrefs?.base_category_weights,
+            baseCategoryWeights: seedWeights,
             quickWinMinutes: profilePrefs?.quick_win_definition_minutes,
           });
           const newQueue = buildQueueFromChosen(chosen);
@@ -300,6 +312,24 @@ export default function TodayPage() {
         } else {
           setQueueEntries(resolved);
         }
+
+        const todayEventsRes = await getCompletedEventsInRange(
+          user.id,
+          todayStr,
+          todayStr
+        );
+        if (!todayEventsRes.error && todayEventsRes.data) {
+          const events = todayEventsRes.data || [];
+          const dailyHitsSet = new Set(itemTaskIds);
+          const dailyHitsDone = new Set(
+            events.filter((e) => dailyHitsSet.has(e.task_id)).map((e) => e.task_id)
+          ).size;
+          const otherDone = new Set(
+            events.filter((e) => !dailyHitsSet.has(e.task_id)).map((e) => e.task_id)
+          ).size;
+          setDailyHitsCompleted(dailyHitsDone);
+          setOtherCompletedToday(otherDone);
+        }
       } catch (e) {
         setError(e.message || "Failed to load today view.");
       } finally {
@@ -317,6 +347,22 @@ export default function TodayPage() {
   ]);
 
   // Fetch completion state for queue task IDs so checkboxes reflect DB
+  const categoryIdToName = useMemo(() => {
+    const m = {};
+    (backlogTasks || []).forEach((t) => {
+      if (t.category_id) {
+        const name = typeof t.category === "string" ? t.category : t.category?.name;
+        if (name) m[t.category_id] = name;
+      }
+    });
+    return m;
+  }, [backlogTasks]);
+
+  const effectiveCategoryWeights = useMemo(
+    () => getEffectiveCategoryWeights(profilePrefs, categoryIdToName),
+    [profilePrefs, categoryIdToName]
+  );
+
   const queueTaskIds = useMemo(
     () => queueEntries.map((e) => e.task_id || e.task?.id).filter(Boolean),
     [queueEntries]
@@ -403,7 +449,7 @@ export default function TodayPage() {
       mode,
       todayStr,
       lastCompletedMap,
-      baseCategoryWeights: profilePrefs?.base_category_weights,
+      baseCategoryWeights: effectiveCategoryWeights,
       quickWinMinutes: profilePrefs?.quick_win_definition_minutes,
     });
     const newQueue = buildQueueFromChosen(chosen);
@@ -461,6 +507,20 @@ export default function TodayPage() {
           await refillQueue();
         }
       }
+    }
+
+    const todayRes = await getCompletedEventsInRange(user.id, todayStr, todayStr);
+    if (!todayRes.error && todayRes.data) {
+      const events = todayRes.data || [];
+      const dailyHitsSet = new Set(dailyTemplateTaskIds);
+      const dailyHitsDone = new Set(
+        events.filter((e) => dailyHitsSet.has(e.task_id)).map((e) => e.task_id)
+      ).size;
+      const otherDone = new Set(
+        events.filter((e) => !dailyHitsSet.has(e.task_id)).map((e) => e.task_id)
+      ).size;
+      setDailyHitsCompleted(dailyHitsDone);
+      setOtherCompletedToday(otherDone);
     }
   }
 
@@ -1006,10 +1066,96 @@ export default function TodayPage() {
       <ProgressToOutcome
         queueEntries={queueEntries}
         completionMap={completionMap}
+        dailyHitsTotal={items?.length ?? 0}
+        dailyHitsCompleted={dailyHitsCompleted}
+        otherCompletedToday={otherCompletedToday}
       />
 
       <QueueBehaviorHelper />
 
+      <div className="today-two-col">
+        <div>
+          <SectionCard
+            title="Daily Hits"
+            subtitle={
+              activeTemplate
+                ? activeTemplate.name
+                : "No default daily template found."
+            }
+          >
+            {(!items || items.length === 0) && (
+              <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
+                No daily items yet. Configure them on the Daily Hits page.
+              </p>
+            )}
+            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+              {items.map((it) => (
+                <li
+                  key={it.id}
+                  style={{
+                    padding: "6px 0",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    borderBottom: "1px solid #f3f4f6",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={!!completionMap[it.task?.id]}
+                    onChange={() => toggleTaskCompletion(it.task?.id)}
+                  />
+                  <div>
+                    <div style={{ fontSize: 14 }}>
+                      {it.task?.title || "Untitled task"}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#9ca3af" }}>
+                      {it.task?.priority || "Priority n/a"}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </SectionCard>
+
+          {workoutPlan && (
+            <SectionCard
+              title="Workout"
+              subtitle={
+                workoutTaskId
+                  ? `Cycle: ${workoutPlan.phase}`
+                  : "Workout tracking unavailable. Add a Daily Repeat category (e.g. in Backlog) to enable."
+              }
+            >
+              {workoutTaskId ? (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={!!completionMap[workoutPlan.id]}
+                    onChange={() => toggleTaskCompletion(workoutPlan.id)}
+                  />
+                  <div>
+                    <div style={{ fontSize: 14 }}>{workoutPlan.title}</div>
+                    <div style={{ fontSize: 12, color: "#9ca3af" }}>
+                      Tap when you complete today&apos;s workout.
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
+                  {workoutPlan.title}
+                </p>
+              )}
+            </SectionCard>
+          )}
+        </div>
+        <div>
       <SectionCard
         title="Next 3 Actions"
         subtitle={
@@ -1028,7 +1174,7 @@ export default function TodayPage() {
       >
         {queueEntries.length === 0 && (
           <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
-            No tasks available for the queue. Add tasks on the Backlog page, then
+            No tasks available for the queue. Add tasks on the Action Items page, then
             refresh the queue here.
           </p>
         )}
@@ -1355,86 +1501,8 @@ export default function TodayPage() {
           </div>
         )}
       </SectionCard>
-
-      <SectionCard
-        title="Daily template"
-        subtitle={
-          activeTemplate
-            ? activeTemplate.name
-            : "No default daily template found."
-        }
-      >
-        {(!items || items.length === 0) && (
-          <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
-            No daily items yet. Configure them on the Templates page.
-          </p>
-        )}
-        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-          {items.map((it) => (
-            <li
-              key={it.id}
-              style={{
-                padding: "6px 0",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                borderBottom: "1px solid #f3f4f6",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={!!completionMap[it.task?.id]}
-                onChange={() => toggleTaskCompletion(it.task?.id)}
-              />
-              <div>
-                <div style={{ fontSize: 14 }}>
-                  {it.task?.title || "Untitled task"}
-                </div>
-                <div style={{ fontSize: 12, color: "#9ca3af" }}>
-                  {it.task?.priority || "Priority n/a"}
-                </div>
-              </div>
-            </li>
-          ))}
-        </ul>
-      </SectionCard>
-
-      {workoutPlan && (
-        <SectionCard
-          title="Workout"
-          subtitle={
-            workoutTaskId
-              ? `Cycle: ${workoutPlan.phase}`
-              : "Workout tracking unavailable. Add a Daily Repeat category (e.g. in Backlog) to enable."
-          }
-        >
-          {workoutTaskId ? (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={!!completionMap[workoutPlan.id]}
-                onChange={() => toggleTaskCompletion(workoutPlan.id)}
-              />
-              <div>
-                <div style={{ fontSize: 14 }}>{workoutPlan.title}</div>
-                <div style={{ fontSize: 12, color: "#9ca3af" }}>
-                  Tap when you complete today&apos;s workout.
-                </div>
-              </div>
-            </div>
-          ) : (
-            <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
-              {workoutPlan.title}
-            </p>
-          )}
-        </SectionCard>
-      )}
+        </div>
+      </div>
     </DashboardLayout>
   );
 }

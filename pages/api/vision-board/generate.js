@@ -35,6 +35,9 @@ function buildVisionPrompt(profile) {
   if (profile.immediate_step) {
     parts.push("Immediate step: " + profile.immediate_step);
   }
+  if (profile.thrive_goals?.length) {
+    parts.push("Goals to thrive: " + profile.thrive_goals.join(". "));
+  }
   const text = parts.join("\n");
   return (
     "Inspirational vision board image, aspirational and motivating, incorporating this person's likeness. " +

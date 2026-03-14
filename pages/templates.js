@@ -5,8 +5,10 @@ import {
   getTemplateItems,
   updateTemplateOrder,
   getDailyRepeatTasksNotInTemplate,
+  getOrCreateDailyRepeatCategory,
   addTemplateItem,
   removeTemplateItem,
+  createTask,
 } from "../lib/db";
 import DashboardLayout from "../components/DashboardLayout";
 import { useAuth } from "../hooks/useAuth";
@@ -79,7 +81,7 @@ export default function TemplatesPage() {
   const [activeTemplateId, setActiveTemplateId] = useState(null);
   const [items, setItems] = useState([]);
   const [addableTasks, setAddableTasks] = useState([]);
-  const [addTaskId, setAddTaskId] = useState("");
+  const [newEntryTitle, setNewEntryTitle] = useState("");
   const [msg, setMsg] = useState("");
 
   async function load() {
@@ -119,14 +121,34 @@ export default function TemplatesPage() {
   }, [user, activeTemplateId, items]);
 
   async function handleAddTask() {
-    if (!addTaskId || !activeTemplateId) return;
+    const title = (newEntryTitle || "").trim();
+    if (!title || !activeTemplateId || !user) return;
     setMsg("Adding…");
-    const res = await addTemplateItem(user.id, activeTemplateId, addTaskId);
+    const catRes = await getOrCreateDailyRepeatCategory(user.id);
+    if (catRes.error) {
+      setMsg(catRes.error.message || "Could not get Daily Repeat category.");
+      return;
+    }
+    const taskRes = await createTask(user.id, {
+      title,
+      category_id: catRes.data,
+      status: "todo",
+      priority: "Medium",
+    });
+    if (taskRes.error) {
+      setMsg(taskRes.error.message || "Could not create task.");
+      return;
+    }
+    const res = await addTemplateItem(user.id, activeTemplateId, taskRes.data.id);
     if (res.error) setMsg(res.error.message);
     else {
-      setAddTaskId("");
+      setNewEntryTitle("");
       const iRes = await getTemplateItems(activeTemplateId);
       if (!iRes.error) setItems(iRes.data || []);
+      if (user) {
+        const aRes = await getDailyRepeatTasksNotInTemplate(user.id, activeTemplateId);
+        setAddableTasks(aRes.data || []);
+      }
       setMsg("");
     }
   }
@@ -153,15 +175,20 @@ export default function TemplatesPage() {
     if (user) {
       const aRes = await getDailyRepeatTasksNotInTemplate(user.id, id);
       setAddableTasks(aRes.data || []);
-      setAddTaskId("");
+      setNewEntryTitle("");
     }
   }
 
   async function makeDefault(id) {
     setMsg("Setting default...");
     const res = await setDefaultTemplate(id);
-    if (res.error) return setMsg(res.error.message);
-    await load();
+    if (res.error) {
+      setMsg(res.error.message);
+      return;
+    }
+    const tRes = await getTemplates();
+    if (!tRes.error) setTemplates(tRes.data || []);
+    setMsg("");
   }
 
   const ids = useMemo(() => items.map((x) => x.id), [items]);
@@ -197,7 +224,7 @@ export default function TemplatesPage() {
             letterSpacing: "-0.02em",
           }}
         >
-          Daily Templates
+          Daily Hits
         </h1>
         {msg && (
           <p style={{ color: "#6b7280", fontSize: 13, marginTop: 6 }}>{msg}</p>
@@ -251,22 +278,27 @@ export default function TemplatesPage() {
 
         <div style={{ marginTop: 16, marginBottom: 8, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <label style={{ fontSize: 13 }}>
-            Add daily repeat task:
-            <select
-              value={addTaskId}
-              onChange={(e) => setAddTaskId(e.target.value)}
-              style={{ marginLeft: 6, padding: "4px 8px", borderRadius: 6, border: "1px solid #e5e7eb" }}
-            >
-              <option value="">— Select task —</option>
-              {addableTasks.map((t) => (
-                <option key={t.id} value={t.id}>{t.title}</option>
-              ))}
-            </select>
+            Add Daily Hit:
+            <input
+              type="text"
+              value={newEntryTitle}
+              onChange={(e) => setNewEntryTitle(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleAddTask()}
+              placeholder="Enter new entry name"
+              style={{
+                marginLeft: 6,
+                padding: "6px 10px",
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+                fontSize: 13,
+                minWidth: 180,
+              }}
+            />
           </label>
           <button
             type="button"
             onClick={handleAddTask}
-            disabled={!addTaskId}
+            disabled={!newEntryTitle.trim()}
             style={{
               padding: "6px 12px",
               borderRadius: 999,
@@ -274,7 +306,7 @@ export default function TemplatesPage() {
               background: "#111827",
               color: "#fff",
               fontSize: 13,
-              cursor: addTaskId ? "pointer" : "not-allowed",
+              cursor: newEntryTitle.trim() ? "pointer" : "not-allowed",
             }}
           >
             Add

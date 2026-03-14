@@ -53,6 +53,7 @@ export default async function handler(req, res) {
       { data: tagLinks, error: linksErr },
       { data: tagRows, error: tagsErr },
       { data: completedEvents, error: compErr },
+      { data: profileRow, error: profileErr },
     ] = await Promise.all([
       supabase
         .from("tasks")
@@ -68,6 +69,7 @@ export default async function handler(req, res) {
         .eq("user_id", userId)
         .eq("event_type", "completed")
         .order("created_at", { ascending: false }),
+      supabase.from("user_profile").select("profile").eq("user_id", userId).maybeSingle(),
     ]);
 
     if (tasksErr) throw tasksErr;
@@ -75,6 +77,22 @@ export default async function handler(req, res) {
     if (linksErr) throw linksErr;
     if (tagsErr) throw tagsErr;
     if (compErr) throw compErr;
+
+    const profile = profileRow?.profile || {};
+    const prefs = profile.preferences || {};
+    const orderIds = prefs.category_order_ids;
+    const hasOrder = Array.isArray(orderIds) && orderIds.length > 0;
+    const derivedWeights = {};
+    if (hasOrder && categories?.length) {
+      for (let i = 0; i < orderIds.length; i++) {
+        const cat = (categories || []).find((c) => c.id === orderIds[i]);
+        if (cat) derivedWeights[cat.name] = Math.max(1, orderIds.length - i);
+      }
+    }
+    const effectiveWeights =
+      Object.keys(derivedWeights).length > 0
+        ? { ...(base_category_weights || prefs.base_category_weights || {}), ...derivedWeights }
+        : base_category_weights || prefs.base_category_weights;
 
     const catMap = Object.fromEntries((categories || []).map((c) => [c.id, c.name]));
     const tagMap = Object.fromEntries((tagRows || []).map((t) => [t.id, t.name]));
@@ -107,8 +125,8 @@ export default async function handler(req, res) {
       mode: chosenMode,
       todayStr: today,
       lastCompletedMap,
-      baseCategoryWeights: base_category_weights,
-      quickWinMinutes: quick_win_minutes,
+      baseCategoryWeights: effectiveWeights,
+      quickWinMinutes: quick_win_minutes ?? prefs.quick_win_definition_minutes,
     });
 
     const newQueue = buildQueueFromChosen(chosen);

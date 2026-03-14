@@ -1,16 +1,40 @@
+import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../hooks/useAuth";
+
+function useLocalDateTime() {
+  const [dateTime, setDateTime] = useState("");
+  useEffect(() => {
+    function update() {
+      const now = new Date();
+      setDateTime(
+        now.toLocaleString(undefined, {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        })
+      );
+    }
+    update();
+    const id = setInterval(update, 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+  return dateTime;
+}
 
 export default function DashboardLayout({ children }) {
   const router = useRouter();
   const path = router.pathname;
   const { user } = useAuth();
+  const localDateTime = useLocalDateTime();
 
   const links = [
     { href: "/today", label: "Today" },
-    { href: "/backlog", label: "Backlog" },
-    { href: "/templates", label: "Templates" },
+    { href: "/backlog", label: "Action Items" },
+    { href: "/templates", label: "Daily Hits" },
     { href: "/analytics", label: "Analytics" },
     { href: "/notes", label: "Notes" },
     { href: "/ideas", label: "Ideas" },
@@ -85,9 +109,16 @@ export default function DashboardLayout({ children }) {
                 Intentional daily planning
               </div>
               {user && (
-                <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>
-                  Signed in as {user.email}
-                </div>
+                <>
+                  <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>
+                    Signed in as {user.email}
+                  </div>
+                  {localDateTime && (
+                    <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 1 }}>
+                      {localDateTime}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>

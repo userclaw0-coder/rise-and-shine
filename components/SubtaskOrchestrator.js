@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 /**
  * Review/edit/approve flow for AI-generated subtasks.
@@ -11,6 +11,15 @@ import { useState } from "react";
  *  - applying: boolean
  *  - applyError: string | null — error message from last apply attempt
  */
+function mapSubtasksToItems(subtasks) {
+  return (subtasks || []).map((s, i) => ({
+    ...s,
+    _key: `orch-${s.parent_task_id}-${i}`,
+    _approved: true,
+    _editTitle: s.title || "Untitled subtask",
+  }));
+}
+
 export default function SubtaskOrchestrator({
   subtasks,
   parentTitleById,
@@ -19,14 +28,11 @@ export default function SubtaskOrchestrator({
   applying,
   applyError,
 }) {
-  const [items, setItems] = useState(() =>
-    (subtasks || []).map((s, i) => ({
-      ...s,
-      _key: `orch-${s.parent_task_id}-${i}`,
-      _approved: true,
-      _editTitle: s.title || "Untitled subtask",
-    }))
-  );
+  const [items, setItems] = useState(() => mapSubtasksToItems(subtasks));
+
+  useEffect(() => {
+    setItems(mapSubtasksToItems(subtasks));
+  }, [subtasks]);
 
   function toggleApproval(index) {
     setItems((prev) =>
