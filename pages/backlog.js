@@ -584,7 +584,7 @@ export default function BacklogPage() {
 
   function openAddTaskModal() {
     setModalTitle("");
-    setModalCategoryId(categories[0]?.id ?? "");
+    setModalCategoryId(categoryFilter || categories[0]?.id ?? "");
     setModalSubcategoryText("");
     setModalTagsText("");
     setError("");

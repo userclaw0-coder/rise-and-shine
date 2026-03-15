@@ -70,6 +70,9 @@ export default function VisionPage() {
   const [fieldImages, setFieldImages] = useState({});
   const [uploadingFieldKey, setUploadingFieldKey] = useState(null);
   const fieldFileInputRef = useRef(null);
+  const [imageViewerUrl, setImageViewerUrl] = useState(null);
+  const [imageViewerZoom, setImageViewerZoom] = useState(1);
+  const imageViewerRef = useRef(null);
 
   useEffect(() => {
     if (!user) return;
@@ -263,6 +266,33 @@ export default function VisionPage() {
     fieldFileInputRef.current?.click();
   }
 
+  function openImageViewer(url) {
+    if (!url) return;
+    setImageViewerUrl(url);
+    setImageViewerZoom(1);
+  }
+
+  useEffect(() => {
+    if (!imageViewerUrl) return;
+    function onKeyDown(e) {
+      if (e.key === "Escape") setImageViewerUrl(null);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [imageViewerUrl]);
+
+  useEffect(() => {
+    const el = imageViewerRef.current;
+    if (!el || !imageViewerUrl) return;
+    function onWheel(e) {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.15 : 0.15;
+      setImageViewerZoom((z) => Math.min(4, Math.max(0.5, z + delta)));
+    }
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [imageViewerUrl]);
+
   async function handleFieldImageChange(e) {
     const file = e.target?.files?.[0];
     const fieldKey = uploadingFieldKey;
@@ -331,6 +361,103 @@ export default function VisionPage() {
 
   return (
     <DashboardLayout>
+      {imageViewerUrl && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Image viewer"
+          ref={imageViewerRef}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9999,
+            background: "rgba(0,0,0,0.85)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+          onClick={(e) => e.target === e.currentTarget && setImageViewerUrl(null)}
+        >
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 12,
+              maxWidth: "100%",
+              maxHeight: "100%",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={imageViewerUrl}
+              alt="Full size"
+              style={{
+                maxWidth: "90vw",
+                maxHeight: "80vh",
+                objectFit: "contain",
+                borderRadius: 8,
+                transform: `scale(${imageViewerZoom})`,
+                transformOrigin: "center center",
+              }}
+              draggable={false}
+            />
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <button
+                type="button"
+                onClick={() => setImageViewerZoom((z) => Math.max(0.5, z - 0.25))}
+                style={{
+                  fontSize: 13,
+                  padding: "6px 12px",
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                  background: "#fff",
+                  color: "#111827",
+                  cursor: "pointer",
+                }}
+              >
+                Zoom out
+              </button>
+              <span style={{ fontSize: 12, color: "#9ca3af", minWidth: 48, textAlign: "center" }}>
+                {Math.round(imageViewerZoom * 100)}%
+              </span>
+              <button
+                type="button"
+                onClick={() => setImageViewerZoom((z) => Math.min(4, z + 0.25))}
+                style={{
+                  fontSize: 13,
+                  padding: "6px 12px",
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                  background: "#fff",
+                  color: "#111827",
+                  cursor: "pointer",
+                }}
+              >
+                Zoom in
+              </button>
+              <button
+                type="button"
+                onClick={() => setImageViewerUrl(null)}
+                style={{
+                  fontSize: 13,
+                  padding: "6px 14px",
+                  borderRadius: 8,
+                  border: "1px solid #111827",
+                  background: "#111827",
+                  color: "#fff",
+                  cursor: "pointer",
+                  marginLeft: 8,
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div
         style={{
           display: "flex",
@@ -412,17 +539,29 @@ export default function VisionPage() {
             </button>
             {photoUrl && (
               <div style={{ marginTop: 10 }}>
-                <img
-                  src={photoUrl}
-                  alt="You"
+                <button
+                  type="button"
+                  onClick={() => openImageViewer(photoUrl)}
                   style={{
-                    width: 120,
-                    height: 120,
-                    objectFit: "cover",
-                    borderRadius: 12,
-                    border: "1px solid #e5e7eb",
+                    padding: 0,
+                    border: "none",
+                    background: "none",
+                    cursor: "pointer",
+                    display: "block",
                   }}
-                />
+                >
+                  <img
+                    src={photoUrl}
+                    alt="You"
+                    style={{
+                      width: 120,
+                      height: 120,
+                      objectFit: "cover",
+                      borderRadius: 12,
+                      border: "1px solid #e5e7eb",
+                    }}
+                  />
+                </button>
               </div>
             )}
           </div>
@@ -445,17 +584,29 @@ export default function VisionPage() {
             </button>
             {visionBoardImageUrl && (
               <div style={{ marginTop: 10 }}>
-                <img
-                  src={visionBoardImageUrl}
-                  alt="Vision Board"
+                <button
+                  type="button"
+                  onClick={() => openImageViewer(visionBoardImageUrl)}
                   style={{
-                    maxWidth: 280,
-                    maxHeight: 200,
-                    objectFit: "contain",
-                    borderRadius: 12,
-                    border: "1px solid #e5e7eb",
+                    padding: 0,
+                    border: "none",
+                    background: "none",
+                    cursor: "pointer",
+                    display: "block",
                   }}
-                />
+                >
+                  <img
+                    src={visionBoardImageUrl}
+                    alt="Vision Board"
+                    style={{
+                      maxWidth: 280,
+                      maxHeight: 200,
+                      objectFit: "contain",
+                      borderRadius: 12,
+                      border: "1px solid #e5e7eb",
+                    }}
+                  />
+                </button>
               </div>
             )}
           </div>
@@ -506,9 +657,11 @@ export default function VisionPage() {
             </div>
             <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
               {fieldImages.identity ? (
-                <img src={fieldImages.identity} alt="" style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                <button type="button" onClick={() => openImageViewer(fieldImages.identity)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block" }}>
+                  <img src={fieldImages.identity} alt="" style={{ width: 144, height: 144, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                </button>
               ) : (
-                <div style={{ width: 72, height: 72, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" }}>Image</div>
+                <div style={{ width: 144, height: 144, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" }}>Image</div>
               )}
               <button type="button" onClick={() => handleFieldImageClick("identity")} disabled={uploadingFieldKey !== null} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: uploadingFieldKey ? "wait" : "pointer" }}>{uploadingFieldKey === "identity" ? "…" : "Upload"}</button>
             </div>
@@ -539,9 +692,11 @@ export default function VisionPage() {
                   </label>
                   <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
                     {fieldImages[fieldKey] ? (
-                      <img src={fieldImages[fieldKey]} alt="" style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                      <button type="button" onClick={() => openImageViewer(fieldImages[fieldKey])} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block" }}>
+                        <img src={fieldImages[fieldKey]} alt="" style={{ width: 112, height: 112, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                      </button>
                     ) : (
-                      <div style={{ width: 56, height: 56, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "#9ca3af" }}>Img</div>
+                      <div style={{ width: 112, height: 112, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "#9ca3af" }}>Img</div>
                     )}
                     <button type="button" onClick={() => handleFieldImageClick(fieldKey)} disabled={uploadingFieldKey !== null} style={{ fontSize: 10, padding: "2px 6px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: uploadingFieldKey ? "wait" : "pointer" }}>{uploadingFieldKey === fieldKey ? "…" : "Upload"}</button>
                   </div>
@@ -564,9 +719,11 @@ export default function VisionPage() {
             </div>
             <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
               {fieldImages.desired_outcomes ? (
-                <img src={fieldImages.desired_outcomes} alt="" style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                <button type="button" onClick={() => openImageViewer(fieldImages.desired_outcomes)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block" }}>
+                  <img src={fieldImages.desired_outcomes} alt="" style={{ width: 144, height: 144, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                </button>
               ) : (
-                <div style={{ width: 72, height: 72, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" }}>Image</div>
+                <div style={{ width: 144, height: 144, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" }}>Image</div>
               )}
               <button type="button" onClick={() => handleFieldImageClick("desired_outcomes")} disabled={uploadingFieldKey !== null} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: uploadingFieldKey ? "wait" : "pointer" }}>{uploadingFieldKey === "desired_outcomes" ? "…" : "Upload"}</button>
             </div>
@@ -589,9 +746,11 @@ export default function VisionPage() {
             </div>
             <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
               {fieldImages.goals_to_thrive ? (
-                <img src={fieldImages.goals_to_thrive} alt="" style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                <button type="button" onClick={() => openImageViewer(fieldImages.goals_to_thrive)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block" }}>
+                  <img src={fieldImages.goals_to_thrive} alt="" style={{ width: 144, height: 144, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                </button>
               ) : (
-                <div style={{ width: 72, height: 72, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" }}>Image</div>
+                <div style={{ width: 144, height: 144, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" }}>Image</div>
               )}
               <button type="button" onClick={() => handleFieldImageClick("goals_to_thrive")} disabled={uploadingFieldKey !== null} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: uploadingFieldKey ? "wait" : "pointer" }}>{uploadingFieldKey === "goals_to_thrive" ? "…" : "Upload"}</button>
             </div>
@@ -612,9 +771,11 @@ export default function VisionPage() {
             </label>
             <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
               {fieldImages.leverage_focus ? (
-                <img src={fieldImages.leverage_focus} alt="" style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                <button type="button" onClick={() => openImageViewer(fieldImages.leverage_focus)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block" }}>
+                  <img src={fieldImages.leverage_focus} alt="" style={{ width: 144, height: 144, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                </button>
               ) : (
-                <div style={{ width: 72, height: 72, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" }}>Image</div>
+                <div style={{ width: 144, height: 144, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" }}>Image</div>
               )}
               <button type="button" onClick={() => handleFieldImageClick("leverage_focus")} disabled={uploadingFieldKey !== null} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: uploadingFieldKey ? "wait" : "pointer" }}>{uploadingFieldKey === "leverage_focus" ? "…" : "Upload"}</button>
             </div>
@@ -631,9 +792,11 @@ export default function VisionPage() {
             </label>
             <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
               {fieldImages.quarter_focus ? (
-                <img src={fieldImages.quarter_focus} alt="" style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                <button type="button" onClick={() => openImageViewer(fieldImages.quarter_focus)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block" }}>
+                  <img src={fieldImages.quarter_focus} alt="" style={{ width: 144, height: 144, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                </button>
               ) : (
-                <div style={{ width: 72, height: 72, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" }}>Image</div>
+                <div style={{ width: 144, height: 144, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" }}>Image</div>
               )}
               <button type="button" onClick={() => handleFieldImageClick("quarter_focus")} disabled={uploadingFieldKey !== null} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: uploadingFieldKey ? "wait" : "pointer" }}>{uploadingFieldKey === "quarter_focus" ? "…" : "Upload"}</button>
             </div>
@@ -650,9 +813,11 @@ export default function VisionPage() {
             </label>
             <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
               {fieldImages.immediate_step ? (
-                <img src={fieldImages.immediate_step} alt="" style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                <button type="button" onClick={() => openImageViewer(fieldImages.immediate_step)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block" }}>
+                  <img src={fieldImages.immediate_step} alt="" style={{ width: 144, height: 144, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                </button>
               ) : (
-                <div style={{ width: 72, height: 72, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" }}>Image</div>
+                <div style={{ width: 144, height: 144, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" }}>Image</div>
               )}
               <button type="button" onClick={() => handleFieldImageClick("immediate_step")} disabled={uploadingFieldKey !== null} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: uploadingFieldKey ? "wait" : "pointer" }}>{uploadingFieldKey === "immediate_step" ? "…" : "Upload"}</button>
             </div>
