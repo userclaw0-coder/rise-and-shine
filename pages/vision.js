@@ -67,6 +67,9 @@ export default function VisionPage() {
   const [quarterFocus, setQuarterFocus] = useState("");
   const [immediateStep, setImmediateStep] = useState("");
   const [goalsToThrive, setGoalsToThrive] = useState("");
+  const [fieldImages, setFieldImages] = useState({});
+  const [uploadingFieldKey, setUploadingFieldKey] = useState(null);
+  const fieldFileInputRef = useRef(null);
 
   useEffect(() => {
     if (!user) return;
@@ -97,6 +100,7 @@ export default function VisionPage() {
         setGoalsToThrive((p.thrive_goals || []).join("\n"));
         setPhotoUrl(p.photo_url || "");
         setVisionBoardImageUrl(p.vision_board_image_url || "");
+        setFieldImages(p.vision_field_images || {});
       }
       setLoadedOnce(true);
       setLoading(false);
@@ -149,6 +153,7 @@ export default function VisionPage() {
     quarterFocus,
     immediateStep,
     goalsToThrive,
+    fieldImages,
     loadedOnce,
   ]);
 
@@ -178,6 +183,7 @@ export default function VisionPage() {
       user_id: user.id,
       identity_attributes: identities,
       photo_url: photoUrl || (existing && existing.photo_url) || undefined,
+      vision_field_images: fieldImages,
       vision_board_image_url:
         visionBoardImageUrl ||
         (existing && existing.vision_board_image_url) ||
@@ -249,6 +255,45 @@ export default function VisionPage() {
     } finally {
       setUploadingPhoto(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  function handleFieldImageClick(fieldKey) {
+    setUploadingFieldKey(fieldKey);
+    fieldFileInputRef.current?.click();
+  }
+
+  async function handleFieldImageChange(e) {
+    const file = e.target?.files?.[0];
+    const fieldKey = uploadingFieldKey;
+    if (!file || !user || !fieldKey) {
+      setUploadingFieldKey(null);
+      return;
+    }
+    e.target.value = "";
+    setError("");
+    try {
+      const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z]/g, "jpg");
+      const path = `${user.id}/vision/${fieldKey}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("user-photos")
+        .upload(path, file, { upsert: true });
+      if (uploadError) {
+        setError(uploadError.message || "Upload failed.");
+        return;
+      }
+      const { data: urlData } = supabase.storage.from("user-photos").getPublicUrl(path);
+      const url = urlData?.publicUrl || "";
+      setFieldImages((prev) => ({ ...prev, [fieldKey]: url }));
+      const existingRes = await getUserProfile(user.id);
+      const existing = !existingRes.error && existingRes.data ? existingRes.data.profile || {} : {};
+      await upsertUserProfile(user.id, { ...buildProfile(existing), vision_field_images: { ...(existing.vision_field_images || {}), [fieldKey]: url } });
+      setSavedMsg("Image saved.");
+      setTimeout(() => setSavedMsg(""), 2000);
+    } catch (err) {
+      setError(err.message || "Upload failed.");
+    } finally {
+      setUploadingFieldKey(null);
     }
   }
 
@@ -417,6 +462,13 @@ export default function VisionPage() {
         </div>
       </section>
 
+      <input
+        type="file"
+        ref={fieldFileInputRef}
+        accept="image/*"
+        onChange={handleFieldImageChange}
+        style={{ display: "none" }}
+      />
       <section
         style={{
           padding: 16,
@@ -432,7 +484,8 @@ export default function VisionPage() {
           {error && (
             <p style={{ fontSize: 13, color: "#b91c1c", margin: 0 }}>{error}</p>
           )}
-          <div>
+          <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
           <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 6px" }}>
             Identity & vision
           </h2>
@@ -450,6 +503,15 @@ export default function VisionPage() {
               border: "1px solid #e5e7eb",
             }}
           />
+            </div>
+            <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+              {fieldImages.identity ? (
+                <img src={fieldImages.identity} alt="" style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+              ) : (
+                <div style={{ width: 72, height: 72, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" }}>Image</div>
+              )}
+              <button type="button" onClick={() => handleFieldImageClick("identity")} disabled={uploadingFieldKey !== null} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: uploadingFieldKey ? "wait" : "pointer" }}>{uploadingFieldKey === "identity" ? "…" : "Upload"}</button>
+            </div>
           </div>
           <div>
           <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 6px" }}>
@@ -462,39 +524,34 @@ export default function VisionPage() {
               gap: 8,
             }}
           >
-            {Object.entries(lifeDomains).map(([key, value]) => (
-              <label
-                key={key}
-                style={{
-                  fontSize: 12,
-                  color: "#4b5563",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 4,
-                }}
-              >
-                <span style={{ textTransform: "capitalize" }}>{key}</span>
-                <AutoHeightTextarea
-                  value={value}
-                  onChange={(v) =>
-                    setLifeDomains((prev) => ({
-                      ...prev,
-                      [key]: v,
-                    }))
-                  }
-                  rows={2}
-                  style={{
-                    fontSize: 13,
-                    padding: 6,
-                    borderRadius: 6,
-                    border: "1px solid #e5e7eb",
-                  }}
-                />
-              </label>
-            ))}
+            {Object.entries(lifeDomains).map(([key, value]) => {
+              const fieldKey = `life_domain_${key}`;
+              return (
+                <div key={key} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                  <label style={{ flex: 1, minWidth: 0, fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
+                    <span style={{ textTransform: "capitalize" }}>{key}</span>
+                    <AutoHeightTextarea
+                      value={value}
+                      onChange={(v) => setLifeDomains((prev) => ({ ...prev, [key]: v }))}
+                      rows={2}
+                      style={{ fontSize: 13, padding: 6, borderRadius: 6, border: "1px solid #e5e7eb" }}
+                    />
+                  </label>
+                  <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                    {fieldImages[fieldKey] ? (
+                      <img src={fieldImages[fieldKey]} alt="" style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                    ) : (
+                      <div style={{ width: 56, height: 56, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "#9ca3af" }}>Img</div>
+                    )}
+                    <button type="button" onClick={() => handleFieldImageClick(fieldKey)} disabled={uploadingFieldKey !== null} style={{ fontSize: 10, padding: "2px 6px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: uploadingFieldKey ? "wait" : "pointer" }}>{uploadingFieldKey === fieldKey ? "…" : "Upload"}</button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
           </div>
-          <div>
+          <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
           <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 6px" }}>
             Desired outcomes (12 months)
           </h2>
@@ -502,15 +559,20 @@ export default function VisionPage() {
             value={desiredOutcomes}
             onChange={setDesiredOutcomes}
             rows={4}
-            style={{
-              fontSize: 13,
-              padding: 8,
-              borderRadius: 8,
-              border: "1px solid #e5e7eb",
-            }}
+            style={{ fontSize: 13, padding: 8, borderRadius: 8, border: "1px solid #e5e7eb" }}
           />
+            </div>
+            <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+              {fieldImages.desired_outcomes ? (
+                <img src={fieldImages.desired_outcomes} alt="" style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+              ) : (
+                <div style={{ width: 72, height: 72, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" }}>Image</div>
+              )}
+              <button type="button" onClick={() => handleFieldImageClick("desired_outcomes")} disabled={uploadingFieldKey !== null} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: uploadingFieldKey ? "wait" : "pointer" }}>{uploadingFieldKey === "desired_outcomes" ? "…" : "Upload"}</button>
+            </div>
           </div>
-          <div>
+          <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
           <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 6px" }}>
             3 Goals to Thrive
           </h2>
@@ -522,86 +584,79 @@ export default function VisionPage() {
             onChange={setGoalsToThrive}
             rows={3}
             placeholder="e.g. Daily movement&#10;Meaningful connections&#10;Learn one new skill"
-            style={{
-              fontSize: 13,
-              padding: 8,
-              borderRadius: 8,
-              border: "1px solid #e5e7eb",
-            }}
+            style={{ fontSize: 13, padding: 8, borderRadius: 8, border: "1px solid #e5e7eb" }}
           />
+            </div>
+            <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+              {fieldImages.goals_to_thrive ? (
+                <img src={fieldImages.goals_to_thrive} alt="" style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+              ) : (
+                <div style={{ width: 72, height: 72, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" }}>Image</div>
+              )}
+              <button type="button" onClick={() => handleFieldImageClick("goals_to_thrive")} disabled={uploadingFieldKey !== null} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: uploadingFieldKey ? "wait" : "pointer" }}>{uploadingFieldKey === "goals_to_thrive" ? "…" : "Upload"}</button>
+            </div>
           </div>
           <div>
           <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 6px" }}>
             Strategic focus
           </h2>
-          <label
-            style={{
-              fontSize: 12,
-              color: "#4b5563",
-              display: "flex",
-              flexDirection: "column",
-              gap: 4,
-              marginBottom: 8,
-            }}
-          >
-            Leverage areas (one per line)
-            <AutoHeightTextarea
-              value={leverageFocus}
-              onChange={setLeverageFocus}
-              rows={3}
-              style={{
-                fontSize: 13,
-                padding: 8,
-                borderRadius: 8,
-                border: "1px solid #e5e7eb",
-              }}
-            />
-          </label>
-          <label
-            style={{
-              fontSize: 12,
-              color: "#4b5563",
-              display: "flex",
-              flexDirection: "column",
-              gap: 4,
-              marginBottom: 8,
-            }}
-          >
-            Quarter focus (comma separated)
-            <input
-              type="text"
-              value={quarterFocus}
-              onChange={(e) => setQuarterFocus(e.target.value)}
-              style={{
-                fontSize: 13,
-                padding: 6,
-                borderRadius: 6,
-                border: "1px solid #e5e7eb",
-              }}
-            />
-          </label>
-          <label
-            style={{
-              fontSize: 12,
-              color: "#4b5563",
-              display: "flex",
-              flexDirection: "column",
-              gap: 4,
-            }}
-          >
-            Immediate step
-            <AutoHeightTextarea
-              value={immediateStep}
-              onChange={setImmediateStep}
-              rows={2}
-              style={{
-                fontSize: 13,
-                padding: 8,
-                borderRadius: 8,
-                border: "1px solid #e5e7eb",
-              }}
-            />
-          </label>
+          <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 8 }}>
+            <label style={{ flex: 1, minWidth: 0, fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
+              Leverage areas (one per line)
+              <AutoHeightTextarea
+                value={leverageFocus}
+                onChange={setLeverageFocus}
+                rows={3}
+                style={{ fontSize: 13, padding: 8, borderRadius: 8, border: "1px solid #e5e7eb" }}
+              />
+            </label>
+            <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+              {fieldImages.leverage_focus ? (
+                <img src={fieldImages.leverage_focus} alt="" style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+              ) : (
+                <div style={{ width: 72, height: 72, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" }}>Image</div>
+              )}
+              <button type="button" onClick={() => handleFieldImageClick("leverage_focus")} disabled={uploadingFieldKey !== null} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: uploadingFieldKey ? "wait" : "pointer" }}>{uploadingFieldKey === "leverage_focus" ? "…" : "Upload"}</button>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 8 }}>
+            <label style={{ flex: 1, minWidth: 0, fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
+              Quarter focus (comma separated)
+              <input
+                type="text"
+                value={quarterFocus}
+                onChange={(e) => setQuarterFocus(e.target.value)}
+                style={{ fontSize: 13, padding: 6, borderRadius: 6, border: "1px solid #e5e7eb" }}
+              />
+            </label>
+            <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+              {fieldImages.quarter_focus ? (
+                <img src={fieldImages.quarter_focus} alt="" style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+              ) : (
+                <div style={{ width: 72, height: 72, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" }}>Image</div>
+              )}
+              <button type="button" onClick={() => handleFieldImageClick("quarter_focus")} disabled={uploadingFieldKey !== null} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: uploadingFieldKey ? "wait" : "pointer" }}>{uploadingFieldKey === "quarter_focus" ? "…" : "Upload"}</button>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+            <label style={{ flex: 1, minWidth: 0, fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
+              Immediate step
+              <AutoHeightTextarea
+                value={immediateStep}
+                onChange={setImmediateStep}
+                rows={2}
+                style={{ fontSize: 13, padding: 8, borderRadius: 8, border: "1px solid #e5e7eb" }}
+              />
+            </label>
+            <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+              {fieldImages.immediate_step ? (
+                <img src={fieldImages.immediate_step} alt="" style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+              ) : (
+                <div style={{ width: 72, height: 72, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" }}>Image</div>
+              )}
+              <button type="button" onClick={() => handleFieldImageClick("immediate_step")} disabled={uploadingFieldKey !== null} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: uploadingFieldKey ? "wait" : "pointer" }}>{uploadingFieldKey === "immediate_step" ? "…" : "Upload"}</button>
+            </div>
+          </div>
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8, gap: 8 }}>
             <button
@@ -734,6 +789,7 @@ export default function VisionPage() {
                         );
                         setImmediateStep(p.immediate_step || "");
                         setGoalsToThrive((p.thrive_goals || []).join("\n"));
+                        setFieldImages(p.vision_field_images || {});
                         setSavedMsg("Snapshot restored (will autosave).");
                         setTimeout(() => setSavedMsg(""), 2500);
                       }
