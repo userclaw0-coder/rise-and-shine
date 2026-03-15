@@ -116,7 +116,7 @@ export default function BacklogPage() {
   const [addTaskOpen, setAddTaskOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState("");
   const [modalCategoryId, setModalCategoryId] = useState("");
-  const [modalSubcategoryId, setModalSubcategoryId] = useState("");
+  const [modalSubcategoryText, setModalSubcategoryText] = useState("");
   const [modalTagsText, setModalTagsText] = useState("");
   const [addingTask, setAddingTask] = useState(false);
 
@@ -585,7 +585,7 @@ export default function BacklogPage() {
   function openAddTaskModal() {
     setModalTitle("");
     setModalCategoryId(categories[0]?.id ?? "");
-    setModalSubcategoryId("");
+    setModalSubcategoryText("");
     setModalTagsText("");
     setError("");
     setAddTaskOpen(true);
@@ -600,18 +600,41 @@ export default function BacklogPage() {
     }
     setAddingTask(true);
     setError("");
+    let subcategoryId = null;
+    const subName = (modalSubcategoryText || "").trim();
+    if (subName) {
+      const cat = categories.find((c) => c.id === categoryId);
+      const existing = (cat?.subcategories || []).find(
+        (s) => (s.name || "").trim().toLowerCase() === subName.toLowerCase()
+      );
+      if (existing) {
+        subcategoryId = existing.id;
+      } else {
+        const subRes = await ensureSubcategory(user.id, categoryId, subName);
+        if (subRes.error) {
+          setError(subRes.error.message || "Failed to create subcategory.");
+          setAddingTask(false);
+          return;
+        }
+        if (subRes.data?.id) subcategoryId = subRes.data.id;
+      }
+    }
     const res = await createTask(user.id, {
       title: modalTitle.trim(),
       status: "todo",
       category_id: categoryId,
-      subcategory_id: modalSubcategoryId || null,
+      subcategory_id: subcategoryId,
     });
     if (res.error) {
       setError(res.error.message);
       setAddingTask(false);
       return;
     }
-    const created = { ...res.data, _tagsText: modalTagsText, _subcategoryText: "" };
+    const created = {
+      ...res.data,
+      _tagsText: modalTagsText,
+      _subcategoryText: subName || (res.data?.subcategory?.name ?? ""),
+    };
     if (parseTagText(modalTagsText).length > 0) {
       const tagRes = await setTaskTags(user.id, res.data.id, parseTagText(modalTagsText));
       if (!tagRes.error) {
@@ -1272,14 +1295,6 @@ export default function BacklogPage() {
               }}
             />
           </div>
-
-          {task.category_id && (
-            <datalist id={`subcategory-options-${task.category_id}`}>
-              {(categories.find((c) => c.id === task.category_id)?.subcategories || []).map((s) => (
-                <option key={s.id} value={s.name} />
-              ))}
-            </datalist>
-          )}
 
           {!isCompact && (
             <div style={{ display: "flex", alignItems: "center" }}>
@@ -2132,7 +2147,7 @@ export default function BacklogPage() {
                 value={modalCategoryId}
                 onChange={(e) => {
                   setModalCategoryId(e.target.value || "");
-                  setModalSubcategoryId("");
+                  setModalSubcategoryText("");
                 }}
                 style={{
                   fontSize: 14,
@@ -2152,9 +2167,12 @@ export default function BacklogPage() {
             </label>
             <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <span style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}>Subcategory (optional)</span>
-              <select
-                value={modalSubcategoryId}
-                onChange={(e) => setModalSubcategoryId(e.target.value || "")}
+              <input
+                type="text"
+                placeholder="Type or choose existing…"
+                value={modalSubcategoryText}
+                onChange={(e) => setModalSubcategoryText(e.target.value)}
+                list={modalCategoryId ? `subcategory-datalist-modal-${modalCategoryId}` : undefined}
                 style={{
                   fontSize: 14,
                   padding: "10px 12px",
@@ -2162,14 +2180,14 @@ export default function BacklogPage() {
                   border: "1px solid #e5e7eb",
                   background: "#ffffff",
                 }}
-              >
-                <option value="">None</option>
-                {(categories.find((c) => c.id === modalCategoryId)?.subcategories || []).map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
+              />
+              {modalCategoryId && (
+                <datalist id={`subcategory-datalist-modal-${modalCategoryId}`}>
+                  {(categories.find((c) => c.id === modalCategoryId)?.subcategories || []).map((s) => (
+                    <option key={s.id} value={s.name} />
+                  ))}
+                </datalist>
+              )}
             </label>
             <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <span style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}>Tags (optional, comma-separated)</span>
@@ -2411,6 +2429,14 @@ export default function BacklogPage() {
               </div>
             )}
 
+            {/* One datalist per category so subcategory inputs get a dropdown of existing subcategories (single id per category) */}
+            {categories.map((c) => (
+              <datalist key={c.id} id={`subcategory-options-${c.id}`}>
+                {(c.subcategories || []).map((s) => (
+                  <option key={s.id} value={s.name} />
+                ))}
+              </datalist>
+            ))}
             <div>
               {sortedRootTasks.length === 0 ? (
                 <p
