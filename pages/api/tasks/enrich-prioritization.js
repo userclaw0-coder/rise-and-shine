@@ -11,6 +11,8 @@ import {
   normalizeTagList,
 } from "../../../lib/task-enrichment";
 
+const LIFE_DOMAIN_KEYS = ["business", "finances", "health", "relationships", "lifestyle", "growth"];
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -48,7 +50,7 @@ async function fetchAllCandidateTasks(userId) {
   while (true) {
     const { data, error } = await supabase
       .from("tasks")
-      .select("id,title,priority,effort_hours,due_date,status,category_id")
+      .select("id,title,priority,effort_hours,due_date,status,category_id,outcome_ids,primary_life_domain")
       .eq("user_id", userId)
       .in("status", ["todo", "doing"])
       .order("created_at", { ascending: false })
@@ -64,7 +66,7 @@ async function fetchAllCandidateTasks(userId) {
   return allTasks;
 }
 
-async function fetchAiEnrichmentsInBatches(tasks) {
+async function fetchAiEnrichmentsInBatches(tasks, visionContext = {}) {
   if (!Array.isArray(tasks) || tasks.length === 0) {
     return { rows: [], error: null, batches: 0, batchSize: AI_BATCH_SIZE };
   }
@@ -74,7 +76,7 @@ async function fetchAiEnrichmentsInBatches(tasks) {
 
   for (let i = 0; i < tasks.length; i += AI_BATCH_SIZE) {
     const batch = tasks.slice(i, i + AI_BATCH_SIZE);
-    const result = await fetchAiEnrichments(batch);
+    const result = await fetchAiEnrichments(batch, visionContext);
     rows.push(...(result.rows || []));
     if (result.error) {
       errors.push(`batch_${Math.floor(i / AI_BATCH_SIZE) + 1}:${result.error}`);
@@ -126,12 +128,17 @@ async function ensureTagIds(userId, names) {
   return ids;
 }
 
-async function fetchAiEnrichments(tasks) {
+async function fetchAiEnrichments(tasks, visionContext = {}) {
   if (!Array.isArray(tasks) || tasks.length === 0) return { rows: [], error: null };
+
+  const desiredOutcomes = visionContext.desired_outcomes || [];
+  const lifeDomains = visionContext.life_domains || {};
 
   const input = {
     task_count: tasks.length,
     allowed_tags: ENRICHMENT_TAGS,
+    desired_outcomes: desiredOutcomes.map((o) => ({ id: o.id || o.title, title: o.title || o.id })),
+    life_domain_keys: LIFE_DOMAIN_KEYS,
     tasks: tasks.map((t) => ({
       task_id: t.id,
       title: t.title,
@@ -149,13 +156,15 @@ async function fetchAiEnrichments(tasks) {
           priority: "Critical|High|Medium|Low",
           effort_bucket: "XS|S|M|L",
           tags_add: ["quick-win|high-leverage|urgent|blocked|waiting"],
+          outcome_ids: "optional array of outcome ids from desired_outcomes",
+          primary_life_domain: "optional one of: " + LIFE_DOMAIN_KEYS.join(", "),
           rationale: "string",
         },
       ],
     },
   };
 
-  const instructions = `You enrich task prioritization metadata. Return ONLY valid JSON matching the schema. Keep rationale under 180 chars. Be conservative and practical.`;
+  const instructions = `You enrich task prioritization metadata and optionally link tasks to the user's desired outcomes and life domains. Return ONLY valid JSON matching the schema. Keep rationale under 180 chars. For outcome_ids use only ids from desired_outcomes. For primary_life_domain use one of the life_domain_keys. Be conservative and practical; leave outcome_ids/primary_life_domain empty if unclear.`;
 
   try {
     const response = await withTimeout(
@@ -195,14 +204,26 @@ export default async function handler(req, res) {
     const tasks = await fetchAllCandidateTasks(userId);
     const taskIds = (tasks || []).map((t) => t.id);
 
-    const [{ data: categories, error: catErr }, { data: links, error: linksErr }, { data: tags, error: tagsErr }] =
-      await Promise.all([
-        supabase.from("categories").select("id,name").eq("user_id", userId),
-        taskIds.length > 0
-          ? supabase.from("task_tags").select("task_id,tag_id").eq("user_id", userId).in("task_id", taskIds)
-          : Promise.resolve({ data: [], error: null }),
-        supabase.from("tags").select("id,name").eq("user_id", userId),
-      ]);
+    const [
+      { data: categories, error: catErr },
+      { data: links, error: linksErr },
+      { data: tags, error: tagsErr },
+      { data: profileData },
+    ] = await Promise.all([
+      supabase.from("categories").select("id,name").eq("user_id", userId),
+      taskIds.length > 0
+        ? supabase.from("task_tags").select("task_id,tag_id").eq("user_id", userId).in("task_id", taskIds)
+        : Promise.resolve({ data: [], error: null }),
+      supabase.from("tags").select("id,name").eq("user_id", userId),
+      supabase.from("user_profile").select("profile").eq("user_id", userId).maybeSingle(),
+    ]);
+
+    const profile = profileData?.profile || {};
+    const visionContext = {
+      desired_outcomes: profile.desired_outcomes || [],
+      life_domains: profile.life_domains || {},
+    };
+    const allowedOutcomeIds = (profile.desired_outcomes || []).map((o) => o.id || o.title).filter(Boolean);
 
     if (catErr) throw catErr;
     if (linksErr) throw linksErr;
@@ -242,13 +263,13 @@ export default async function handler(req, res) {
       });
     }
 
-    const aiResult = await fetchAiEnrichmentsInBatches(candidates);
+    const aiResult = await fetchAiEnrichmentsInBatches(candidates, visionContext);
     const aiByTaskId = Object.fromEntries(
       (aiResult.rows || [])
         .map((row) => {
           const task = candidates.find((t) => t.id === row.task_id);
           if (!task) return null;
-          return [task.id, sanitizeAiEnrichment(row, task)];
+          return [task.id, sanitizeAiEnrichment(row, task, { allowedOutcomeIds })];
         })
         .filter(Boolean)
     );
@@ -276,7 +297,7 @@ export default async function handler(req, res) {
           source: aiSuggestion ? "ai+heuristic" : "heuristic",
         };
 
-        const patch = computeTaskPatch(task, enrichment);
+        const patch = computeTaskPatch(task, enrichment, { allowedOutcomeIds });
         const finalTags = mergeTagNames(task.tags || [], enrichment.tags_add || []);
         const hasTagChanges = finalTags.length > normalizeTagList(task.tags || []).length;
 

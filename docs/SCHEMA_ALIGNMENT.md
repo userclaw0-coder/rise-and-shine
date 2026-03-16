@@ -23,8 +23,8 @@ This doc records how the app maps to the Supabase schema.
 - **pages/today.js:** Builds completion map from `ev.value?.date` for the workout task so synthetic key `workout-${date}` works.
 
 ## tasks
-- **Schema:** `category_id` is NOT NULL.
-- **lib/db.js:** `createTask` resolves a default category (first category for user) when `category_id` is null. `promoteIdeaToTask` uses Business category or first category.
+- **Schema:** `category_id` is NOT NULL. Outcome/domain alignment: `outcome_ids` (text[]), `primary_life_domain` (text), `life_domains` (text[]), `alignment_source` (text). See `db/TASKS_OUTCOME_DOMAIN_COLUMNS.sql`.
+- **lib/db.js:** `createTask` resolves a default category (first category for user) when `category_id` is null; accepts `outcome_ids`, `primary_life_domain`, `life_domains`, `alignment_source`. `updateTask` allows the same alignment fields. `getBacklogTasks` and `getLastCompletedEventsWithTasks` (task relation) select them. `promoteIdeaToTask` uses Business category or first category.
 
 ## tags
 - **Schema:** `name`, `color`; no `slug`.

@@ -129,6 +129,10 @@ Core task structure:
   "status": "todo|doing|done|archived",
   "parent_task_id": "uuid|null",
   "tags": ["urgent", "high-leverage"],
+  "outcome_ids": ["vision-0", "vision-1"],
+  "primary_life_domain": "finances",
+  "life_domains": ["finances", "business"],
+  "alignment_source": "user|ai|null",
   "created_at": "timestamp",
   "updated_at": "timestamp",
   "archived_at": "timestamp|null"
@@ -138,6 +142,7 @@ Core task structure:
 Notes:
 - **Archive instead of delete** to preserve analytics and audit history.
 - Tags are many-to-many in DB; represented as list in API.
+- **Outcome/domain alignment:** `outcome_ids` reference `user_profile.profile.desired_outcomes[].id` (e.g. `vision-0`). `primary_life_domain` and `life_domains` use vision life_domain keys (business, finances, health, relationships, lifestyle, growth). `alignment_source` indicates who set the mapping (`user`, `ai`, or unset). Used for analytics: distribution of completed effort by outcome and life domain.
 
 ---
 

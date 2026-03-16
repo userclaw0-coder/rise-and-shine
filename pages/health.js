@@ -25,6 +25,16 @@ function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
+// Occam's Protocol: Workout A = Pull-down, Shoulder Press; Workout B = Bench Press, Leg Press, Swings. Goals: bench = 1× BW, squat = 2× BW.
+const OCCAM_EXERCISES = [
+  "Bench Press",
+  "Squat",
+  "Leg Press",
+  "Shoulder Press",
+  "Pull-down",
+  "Kettlebell Swings",
+];
+
 export default function HealthPage() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -135,6 +145,38 @@ export default function HealthPage() {
       weight: r.unit === "kg" ? Math.round(r.weight * 2.205) : r.weight,
     }));
 
+  // Latest body weight (lb) for goal %
+  const latestBodyWeightLb = (() => {
+    const sorted = [...(weightLogs || [])].sort(
+      (a, b) => new Date(b.measured_at) - new Date(a.measured_at)
+    );
+    const r = sorted[0];
+    if (!r) return null;
+    return r.unit === "kg" ? r.weight * 2.205 : r.weight;
+  })();
+
+  // Best bench and squat (lb) from all-time sets; match by name for goal lifts
+  const { bestBenchLb, bestSquatLb } = (() => {
+    const rows = setsWithSession || [];
+    let bench = null;
+    let squat = null;
+    for (const row of rows) {
+      const w = row.weight != null ? Number(row.weight) : null;
+      if (w == null) continue;
+      const ex = (row.exercise || "").trim().toLowerCase();
+      if (ex.includes("bench")) bench = bench == null ? w : Math.max(bench, w);
+      if (ex.includes("squat")) squat = squat == null ? w : Math.max(squat, w);
+    }
+    return { bestBenchLb: bench, bestSquatLb: squat };
+  })();
+
+  const pctBenchGoal = latestBodyWeightLb && latestBodyWeightLb > 0 && bestBenchLb != null
+    ? Math.round((bestBenchLb / latestBodyWeightLb) * 100)
+    : null;
+  const pctSquatGoal = latestBodyWeightLb && latestBodyWeightLb > 0 && bestSquatLb != null
+    ? Math.round((bestSquatLb / (2 * latestBodyWeightLb)) * 100)
+    : null;
+
   // Build exercise progress: max weight per exercise per session date (for Occam's exercise plots)
   const exerciseChartData = (() => {
     const rows = setsWithSession || [];
@@ -185,7 +227,7 @@ export default function HealthPage() {
             letterSpacing: "-0.02em",
           }}
         >
-          Health
+          Occam Workout
         </h1>
         <p
           style={{
@@ -194,7 +236,7 @@ export default function HealthPage() {
             color: "#6b7280",
           }}
         >
-          Body weight and lifting sessions.
+          Tim Ferriss’ Occam’s Protocol: body weight, key lifts (5/5 cadence, 7+ reps), and goal progress.
         </p>
 
         {error && (
@@ -259,6 +301,49 @@ export default function HealthPage() {
           )}
         </section>
 
+        <section
+          style={{
+            marginTop: 24,
+            padding: 16,
+            background: "#fff",
+            borderRadius: 16,
+            border: "1px solid #e5e7eb",
+          }}
+        >
+          <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 6px" }}>
+            Goal progress
+          </h2>
+          <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 12px" }}>
+            Bench press = 1× body weight; squat = 2× body weight. Log body weight and lifts below to track.
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 16 }}>
+            <div style={{ padding: "12px 14px", background: "#f9fafb", borderRadius: 12, border: "1px solid #e5e7eb" }}>
+              <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>Body weight</div>
+              <div style={{ fontSize: 18, fontWeight: 600, color: "#111827" }}>
+                {latestBodyWeightLb != null ? `${Number(latestBodyWeightLb).toFixed(1)} lb` : "—"}
+              </div>
+            </div>
+            <div style={{ padding: "12px 14px", background: "#f0fdf4", borderRadius: 12, border: "1px solid #bbf7d0" }}>
+              <div style={{ fontSize: 11, color: "#166534", marginBottom: 4 }}>Bench → 1× BW</div>
+              <div style={{ fontSize: 18, fontWeight: 600, color: "#15803d" }}>
+                {bestBenchLb != null ? `${bestBenchLb} lb` : "—"}
+              </div>
+              <div style={{ fontSize: 12, color: "#166534", marginTop: 4 }}>
+                {pctBenchGoal != null ? `${pctBenchGoal}% of goal` : "Log bench to see %"}
+              </div>
+            </div>
+            <div style={{ padding: "12px 14px", background: "#eff6ff", borderRadius: 12, border: "1px solid #bfdbfe" }}>
+              <div style={{ fontSize: 11, color: "#1e40af", marginBottom: 4 }}>Squat → 2× BW</div>
+              <div style={{ fontSize: 18, fontWeight: 600, color: "#1d4ed8" }}>
+                {bestSquatLb != null ? `${bestSquatLb} lb` : "—"}
+              </div>
+              <div style={{ fontSize: 12, color: "#1e40af", marginTop: 4 }}>
+                {pctSquatGoal != null ? `${pctSquatGoal}% of goal` : "Log squat to see %"}
+              </div>
+            </div>
+          </div>
+        </section>
+
         {exerciseChartData.data.length > 0 && exerciseChartData.exerciseNames.length > 0 && (
           <section
             style={{
@@ -270,10 +355,10 @@ export default function HealthPage() {
             }}
           >
             <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
-              Exercise progress (max weight per session, lb)
+              Lift progress (gains)
             </h2>
             <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 12px" }}>
-              Weight (lb) over time by exercise. One line per exercise.
+              Max weight (lb) per session by exercise. Track progression for Occam’s Protocol.
             </p>
             <div style={{ height: 260 }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -310,7 +395,7 @@ export default function HealthPage() {
           }}
         >
           <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
-            Lifting sessions
+            Occam sessions
           </h2>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
             <input
@@ -366,10 +451,26 @@ export default function HealthPage() {
                   </button>
                   {expandedSessionId === s.id && (
                     <div style={{ paddingLeft: 12, marginTop: 8 }}>
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                      <p style={{ fontSize: 11, color: "#6b7280", margin: "0 0 6px" }}>
+                        Occam: one set to failure, 7+ reps, 5 sec up / 5 sec down. Add weight (lb) and reps.
+                      </p>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8, alignItems: "center" }}>
+                        <select
+                          value={OCCAM_EXERCISES.includes(newSetExercise) ? newSetExercise : ""}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setNewSetExercise(v || "");
+                          }}
+                          style={{ padding: "4px 6px", minWidth: 140, borderRadius: 6, border: "1px solid #e5e7eb", fontSize: 13 }}
+                        >
+                          <option value="">Other (type below)</option>
+                          {OCCAM_EXERCISES.map((ex) => (
+                            <option key={ex} value={ex}>{ex}</option>
+                          ))}
+                        </select>
                         <input
                           type="text"
-                          placeholder="Exercise"
+                          placeholder="Or type exercise"
                           value={newSetExercise}
                           onChange={(e) => setNewSetExercise(e.target.value)}
                           style={{ padding: "4px 6px", width: 120, borderRadius: 6, border: "1px solid #e5e7eb", fontSize: 13 }}

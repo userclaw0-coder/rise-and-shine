@@ -139,7 +139,7 @@ export default function SubtaskOrchestrator({
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {items.map((item) => {
+        {items.map((item, index) => {
           const isFirstApproved =
             item._approved && item._key === firstApprovedKey;
           const isOtherApproved =
@@ -180,7 +180,7 @@ export default function SubtaskOrchestrator({
                 <input
                   type="checkbox"
                   checked={item._approved}
-                  onChange={() => toggleApproval(items.indexOf(item))}
+                  onChange={() => toggleApproval(index)}
                   title={item._approved ? "Deselect" : "Approve"}
                   style={{ flexShrink: 0 }}
                 />
@@ -188,7 +188,7 @@ export default function SubtaskOrchestrator({
                   type="text"
                   value={item._editTitle}
                   onChange={(e) =>
-                    updateTitle(items.indexOf(item), e.target.value)
+                    updateTitle(index, e.target.value)
                   }
                   style={{
                     flex: 1,
@@ -252,7 +252,7 @@ export default function SubtaskOrchestrator({
 
                 <button
                   type="button"
-                  onClick={() => removeItem(items.indexOf(item))}
+                  onClick={() => removeItem(index)}
                   style={{
                     fontSize: 12,
                     padding: "2px 8px",

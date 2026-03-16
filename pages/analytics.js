@@ -9,6 +9,7 @@ import {
   getWeeklyReview,
   getDailyTemplateTaskIds,
   getBacklogTasks,
+  getUserProfile,
 } from "../lib/db";
 import {
   BarChart,
@@ -150,6 +151,8 @@ export default function AnalyticsPage() {
   const [puttingOff, setPuttingOff] = useState({ overdue: 0, highPriorityOpen: 0 });
   const [completionsByCategory, setCompletionsByCategory] = useState([]);
   const [outcomeProgress, setOutcomeProgress] = useState([]);
+  const [completionsByOutcome, setCompletionsByOutcome] = useState([]);
+  const [completionsByLifeDomain, setCompletionsByLifeDomain] = useState([]);
 
   useEffect(() => {
     if (!user) return;
@@ -162,7 +165,7 @@ export default function AnalyticsPage() {
       const start30 = addDays(today, -30);
 
       try {
-        const [range7, range30, last, weeks, plannerRefinements, dailyTaskIdsRes, backlogOpen, backlogAll] = await Promise.all([
+        const [range7, range30, last, weeks, plannerRefinements, dailyTaskIdsRes, backlogOpen, backlogAll, profileRes] = await Promise.all([
           getCompletedEventsInRange(user.id, dateStrLocal(start7), dateStrLocal(today)),
           getCompletedEventsInRange(user.id, dateStrLocal(start30), dateStrLocal(today)),
           getLastCompletedEventsWithTasks(user.id, 50),
@@ -171,6 +174,7 @@ export default function AnalyticsPage() {
           getDailyTemplateTaskIds(user.id),
           getBacklogTasks(user.id, { includeArchived: false }),
           getBacklogTasks(user.id, { includeArchived: true }),
+          getUserProfile(user.id),
         ]);
 
         const dailyTemplateTaskIds = dailyTaskIdsRes.data || new Set();
@@ -325,6 +329,39 @@ export default function AnalyticsPage() {
         setOutcomeProgress(
           Array.from(byOutcome.entries())
             .map(([name, count]) => ({ name, count }))
+            .sort((a, b) => b.count - a.count)
+        );
+
+        const profile = profileRes?.data?.profile || {};
+        const desiredOutcomes = profile.desired_outcomes || [];
+        const outcomesById = new Map(desiredOutcomes.map((o) => [o.id || o.title, o.title || o.id]));
+        const lifeDomains = profile.life_domains || {};
+        const byOutcomeId = {};
+        const byDomain = {};
+        (range30.data || []).forEach((ev) => {
+          const task = tasksById.get(ev.task_id);
+          const outcomeIds = Array.isArray(task?.outcome_ids) ? task.outcome_ids : [];
+          if (outcomeIds.length > 0) {
+            outcomeIds.forEach((oid) => {
+              byOutcomeId[oid] = (byOutcomeId[oid] || 0) + 1;
+            });
+          }
+          const domain = task?.primary_life_domain;
+          if (domain) {
+            byDomain[domain] = (byDomain[domain] || 0) + 1;
+          }
+        });
+        setCompletionsByOutcome(
+          Object.entries(byOutcomeId)
+            .map(([id, count]) => ({ name: outcomesById.get(id) || id, count }))
+            .sort((a, b) => b.count - a.count)
+        );
+        setCompletionsByLifeDomain(
+          Object.entries(byDomain)
+            .map(([key, count]) => ({
+              name: (lifeDomains[key] && String(lifeDomains[key]).slice(0, 30)) || key,
+              count,
+            }))
             .sort((a, b) => b.count - a.count)
         );
       } catch (e) {
@@ -686,6 +723,76 @@ export default function AnalyticsPage() {
           ) : (
             <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
               Complete tasks in categorized areas to see progress toward your outcomes.
+            </p>
+          )}
+        </section>
+
+        <section
+          style={{
+            marginTop: 0,
+            padding: 16,
+            background: "linear-gradient(180deg, #eff6ff 0%, #fff 100%)",
+            borderRadius: 16,
+            border: "1px solid #bfdbfe",
+          }}
+        >
+          <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px", color: "#1e40af" }}>
+            Completions by outcome (30 days)
+          </h2>
+          <p style={{ fontSize: 12, color: "#2563eb", margin: "0 0 8px" }}>
+            Tasks linked to your Vision outcomes — assign on Action Items or use AI Enrich.
+          </p>
+          {completionsByOutcome.length > 0 ? (
+            <MeasuredChart
+              height={260}
+              renderChart={({ width, height }) => (
+                <BarChart width={width} height={height} data={completionsByOutcome} layout="vertical" margin={{ left: 80 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#dbeafe" />
+                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} />
+                  <YAxis type="category" dataKey="name" width={76} tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Bar dataKey="count" fill="#2563eb" radius={[0, 4, 4, 0]} name="Completions" />
+                </BarChart>
+              )}
+            />
+          ) : (
+            <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
+              Link tasks to outcomes on the Action Items page (Outcome column) or run Apply enrichment to see distribution here.
+            </p>
+          )}
+        </section>
+
+        <section
+          style={{
+            marginTop: 0,
+            padding: 16,
+            background: "linear-gradient(180deg, #f5f3ff 0%, #fff 100%)",
+            borderRadius: 16,
+            border: "1px solid #ddd6fe",
+          }}
+        >
+          <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px", color: "#5b21b6" }}>
+            Completions by life domain (30 days)
+          </h2>
+          <p style={{ fontSize: 12, color: "#6d28d9", margin: "0 0 8px" }}>
+            Effort by life domain — set Domain on Action Items or via AI Enrich.
+          </p>
+          {completionsByLifeDomain.length > 0 ? (
+            <MeasuredChart
+              height={260}
+              renderChart={({ width, height }) => (
+                <BarChart width={width} height={height} data={completionsByLifeDomain} layout="vertical" margin={{ left: 80 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e9d5ff" />
+                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} />
+                  <YAxis type="category" dataKey="name" width={76} tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Bar dataKey="count" fill="#7c3aed" radius={[0, 4, 4, 0]} name="Completions" />
+                </BarChart>
+              )}
+            />
+          ) : (
+            <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
+              Set Life domain on Action Items or run Apply enrichment to see effort by domain.
             </p>
           )}
         </section>
