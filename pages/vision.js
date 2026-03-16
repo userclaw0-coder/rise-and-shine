@@ -290,8 +290,8 @@ export default function VisionPage() {
       const existingRes = await getUserProfile(user.id);
       const existing =
         !existingRes.error && existingRes.data ? existingRes.data.profile || {} : {};
-      const profile = { ...buildProfile(existing), photo_url: null };
-      await upsertUserProfile(user.id, profile);
+      const updated = { ...existing, photo_url: null };
+      await upsertUserProfile(user.id, updated);
       setSavedMsg("Photo removed.");
       setTimeout(() => setSavedMsg(""), 2500);
     } catch (err) {
@@ -307,8 +307,8 @@ export default function VisionPage() {
       const existingRes = await getUserProfile(user.id);
       const existing =
         !existingRes.error && existingRes.data ? existingRes.data.profile || {} : {};
-      const profile = { ...buildProfile(existing), vision_board_image_url: null };
-      await upsertUserProfile(user.id, profile);
+      const updated = { ...existing, vision_board_image_url: null };
+      await upsertUserProfile(user.id, updated);
       setSavedMsg("Vision board removed.");
       setTimeout(() => setSavedMsg(""), 2500);
     } catch (err) {
@@ -335,8 +335,8 @@ export default function VisionPage() {
         !existingRes.error && existingRes.data ? existingRes.data.profile || {} : {};
       const existingImages = { ...(existing.vision_field_images || {}) };
       delete existingImages[fieldKey];
-      const profile = { ...buildProfile(existing), vision_field_images: existingImages };
-      await upsertUserProfile(user.id, profile);
+      const updated = { ...existing, vision_field_images: existingImages };
+      await upsertUserProfile(user.id, updated);
       setSavedMsg("Image removed.");
       setTimeout(() => setSavedMsg(""), 2000);
     } catch (err) {
