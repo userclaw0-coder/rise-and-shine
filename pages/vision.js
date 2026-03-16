@@ -75,6 +75,27 @@ export default function VisionPage() {
   const imageViewerRef = useRef(null);
 
   useEffect(() => {
+    if (!imageViewerUrl) return;
+    function onKeyDown(e) {
+      if (e.key === "Escape") setImageViewerUrl(null);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [imageViewerUrl]);
+
+  useEffect(() => {
+    const el = imageViewerRef.current;
+    if (!el || !imageViewerUrl) return;
+    function onWheel(e) {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.15 : 0.15;
+      setImageViewerZoom((z) => Math.min(4, Math.max(0.5, z + delta)));
+    }
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [imageViewerUrl]);
+
+  useEffect(() => {
     if (!user) return;
     async function load() {
       setLoading(true);
@@ -271,27 +292,6 @@ export default function VisionPage() {
     setImageViewerUrl(url);
     setImageViewerZoom(1);
   }
-
-  useEffect(() => {
-    if (!imageViewerUrl) return;
-    function onKeyDown(e) {
-      if (e.key === "Escape") setImageViewerUrl(null);
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [imageViewerUrl]);
-
-  useEffect(() => {
-    const el = imageViewerRef.current;
-    if (!el || !imageViewerUrl) return;
-    function onWheel(e) {
-      e.preventDefault();
-      const delta = e.deltaY > 0 ? -0.15 : 0.15;
-      setImageViewerZoom((z) => Math.min(4, Math.max(0.5, z + delta)));
-    }
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, [imageViewerUrl]);
 
   async function handleFieldImageChange(e) {
     const file = e.target?.files?.[0];
