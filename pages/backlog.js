@@ -39,7 +39,15 @@ const STANDARD_TAGS = [
 ];
 
 const COMFORTABLE_GRID_COLUMNS =
-  "minmax(200px, 3fr) minmax(140px, 1.5fr) 86px minmax(120px, 1.1fr) 90px 130px minmax(100px, 1fr)";
+  "minmax(200px, 3fr) minmax(140px, 1.5fr) 86px minmax(120px, 1.1fr) 90px 130px minmax(120px, 1fr) minmax(100px, 0.9fr) minmax(100px, 1fr)";
+
+const LIFE_DOMAIN_KEYS = ["business", "finances", "health", "relationships", "lifestyle", "growth"];
+function lifeDomainLabel(key, profile) {
+  if (!key) return "";
+  const ld = profile?.life_domains;
+  const text = ld && ld[key] ? String(ld[key]).slice(0, 24) : key;
+  return text || key;
+}
 
 function normalize(str) {
   return (str || "").toLowerCase();
@@ -100,6 +108,7 @@ export default function BacklogPage() {
   const [categories, setCategories] = useState([]);
   const [categoryOrder, setCategoryOrder] = useState([]);
   const [tags, setTags] = useState([]);
+  const [profile, setProfile] = useState(null);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("todo_doing");
@@ -184,6 +193,9 @@ export default function BacklogPage() {
 
         if (!tagsRes.error) {
           setTags(tagsRes.data || []);
+        }
+        if (profileRes?.data?.profile) {
+          setProfile(profileRes.data.profile);
         }
       } catch (e) {
         setError(e.message || "Failed to load backlog.");
@@ -438,6 +450,8 @@ export default function BacklogPage() {
         const db = b.due_date ? new Date(b.due_date).getTime() : 0;
         cmp = da - db;
       } else if (key === "status") cmp = (STATUS_ORDER[a.status] ?? 0) - (STATUS_ORDER[b.status] ?? 0);
+      else if (key === "outcome") cmp = String((Array.isArray(a.outcome_ids) && a.outcome_ids[0]) || "").localeCompare(String((Array.isArray(b.outcome_ids) && b.outcome_ids[0]) || ""), undefined, { sensitivity: "base" });
+      else if (key === "domain") cmp = String(a.primary_life_domain || "").localeCompare(String(b.primary_life_domain || ""), undefined, { sensitivity: "base" });
       else if (key === "tags") cmp = (a._tagsText || "").localeCompare(b._tagsText || "", undefined, { sensitivity: "base" });
       if (cmp !== 0) return dir * cmp;
       return String(a.title || "").localeCompare(String(b.title || ""), undefined, { sensitivity: "base" });
@@ -462,7 +476,7 @@ export default function BacklogPage() {
   }, []);
   function handleComfortableSort(key) {
     const same = comfortableSortKey === key;
-    const nextDir = same ? (comfortableSortDir === "asc" ? "desc" : "asc") : (["title", "category", "tags"].includes(key) ? "asc" : "desc");
+    const nextDir = same ? (comfortableSortDir === "asc" ? "desc" : "asc") : (["title", "category", "outcome", "domain", "tags"].includes(key) ? "asc" : "desc");
     setComfortableSortKey(key);
     setComfortableSortDir(nextDir);
   }
@@ -801,7 +815,7 @@ export default function BacklogPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "minmax(0, 2fr) minmax(80px, 1fr) 70px 56px 70px 90px 90px minmax(60px, 1fr)",
+              gridTemplateColumns: "minmax(0, 2fr) minmax(80px, 1fr) 70px 56px 70px 90px 70px 56px minmax(60px, 1fr)",
               gap: 6,
               alignItems: "center",
               padding: "4px 0",
@@ -887,6 +901,37 @@ export default function BacklogPage() {
               <option value="doing">Doing</option>
               <option value="done">Done</option>
               <option value="archived">Arch</option>
+            </select>
+            <select
+              value={(Array.isArray(task.outcome_ids) && task.outcome_ids[0]) || ""}
+              onChange={(e) => {
+                const v = e.target.value || null;
+                const outcome_ids = v ? [v] : [];
+                updateTaskLocal(task.id, { outcome_ids });
+                handleInlineSave(task.id, { outcome_ids, primary_life_domain: task.primary_life_domain || undefined, alignment_source: "user" });
+              }}
+              title="Outcome"
+              style={{ fontSize: 11, padding: "3px 4px", borderRadius: 4, border: "1px solid #e5e7eb", background: "#fff", minWidth: 0 }}
+            >
+              <option value="">Outcome</option>
+              {(profile?.desired_outcomes || []).map((o) => (
+                <option key={o.id || o.title} value={o.id || o.title}>{(o.title || o.id || "").slice(0, 20)}</option>
+              ))}
+            </select>
+            <select
+              value={task.primary_life_domain || ""}
+              onChange={(e) => {
+                const v = e.target.value || null;
+                updateTaskLocal(task.id, { primary_life_domain: v });
+                handleInlineSave(task.id, { outcome_ids: task.outcome_ids, primary_life_domain: v || null, alignment_source: "user" });
+              }}
+              title="Domain"
+              style={{ fontSize: 11, padding: "3px 4px", borderRadius: 4, border: "1px solid #e5e7eb", background: "#fff", minWidth: 0 }}
+            >
+              <option value="">Domain</option>
+              {LIFE_DOMAIN_KEYS.map((key) => (
+                <option key={key} value={key}>{key.slice(0, 6)}</option>
+              ))}
             </select>
             <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
               <button type="button" onClick={() => handleAddSubtask(task)} style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, border: "1px solid #e5e7eb", background: "#f9fafb", cursor: "pointer" }}>+Sub</button>
@@ -1446,6 +1491,60 @@ export default function BacklogPage() {
                 </button>
               )}
             </div>
+          </div>
+
+          <div style={{ minWidth: 0 }}>
+            <select
+              value={(Array.isArray(task.outcome_ids) && task.outcome_ids[0]) || ""}
+              onChange={(e) => {
+                const v = e.target.value || null;
+                const outcome_ids = v ? [v] : [];
+                updateTaskLocal(task.id, { outcome_ids });
+                handleInlineSave(task.id, { outcome_ids, primary_life_domain: task.primary_life_domain || undefined, alignment_source: "user" });
+              }}
+              title="Outcome (Vision)"
+              style={{
+                width: "100%",
+                fontSize: 12,
+                padding: "5px 6px",
+                borderRadius: 6,
+                border: "1px solid #e5e7eb",
+                background: "#ffffff",
+              }}
+            >
+              <option value="">Outcome…</option>
+              {(profile?.desired_outcomes || []).map((o) => (
+                <option key={o.id || o.title} value={o.id || o.title}>
+                  {(o.title || o.id || "").slice(0, 40)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <select
+              value={task.primary_life_domain || ""}
+              onChange={(e) => {
+                const v = e.target.value || null;
+                updateTaskLocal(task.id, { primary_life_domain: v });
+                handleInlineSave(task.id, { outcome_ids: task.outcome_ids, primary_life_domain: v || null, alignment_source: "user" });
+              }}
+              title="Life domain"
+              style={{
+                width: "100%",
+                fontSize: 12,
+                padding: "5px 6px",
+                borderRadius: 6,
+                border: "1px solid #e5e7eb",
+                background: "#ffffff",
+              }}
+            >
+              <option value="">Domain…</option>
+              {LIFE_DOMAIN_KEYS.map((key) => (
+                <option key={key} value={key}>
+                  {lifeDomainLabel(key, profile) || key}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div style={{ minWidth: 0 }} title="e.g. quick-win, high-leverage, urgent">
@@ -2361,7 +2460,7 @@ export default function BacklogPage() {
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "minmax(0, 2fr) minmax(80px, 1fr) 70px 56px 70px 90px 90px minmax(60px, 1fr)",
+                  gridTemplateColumns: "minmax(0, 2fr) minmax(80px, 1fr) 70px 56px 70px 90px 70px 56px 90px minmax(60px, 1fr)",
                   gap: 6,
                   fontSize: 11,
                   fontWeight: 600,
@@ -2376,6 +2475,8 @@ export default function BacklogPage() {
                 <div>Hrs</div>
                 <div>Due</div>
                 <div>Status</div>
+                <div>Outcome</div>
+                <div>Domain</div>
                 <div>Actions</div>
                 <div>Tags</div>
               </div>
@@ -2401,6 +2502,8 @@ export default function BacklogPage() {
                   { key: "priority", label: "Priority" },
                   { key: "due", label: "Due" },
                   { key: "status", label: "Status" },
+                  { key: "outcome", label: "Outcome" },
+                  { key: "domain", label: "Domain" },
                   { key: "tags", label: "Tags" },
                 ].map(({ key, label }) => {
                   const active = comfortableSortKey === key;
