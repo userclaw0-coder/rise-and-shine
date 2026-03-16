@@ -38,7 +38,7 @@ export default function DashboardLayout({ children }) {
     { href: "/analytics", label: "Analytics" },
     { href: "/notes", label: "Notes" },
     { href: "/ideas", label: "Ideas" },
-    { href: "/health", label: "Health" },
+    { href: "/health", label: "Occam Workout" },
     { href: "/vision", label: "Vision" },
     { href: "/weekly-review", label: "Weekly review" },
   ];
