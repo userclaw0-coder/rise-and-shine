@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { chooseKeyOutcomes } from "../../../lib/scoring";
+import { reduceParentsToBestSubtask } from "../../../lib/today-queue";
 import { getAuthenticatedUserId } from "../../../lib/api-auth";
 
 const supabase = createClient(
@@ -112,16 +113,24 @@ export default async function handler(req, res) {
       }
     }
 
-    const candidates = (tasks || [])
-      .map((t) => ({
-        ...t,
-        category: catMap[t.category_id] || "Unknown",
-        tags: tagsByTask[t.id] || [],
-      }))
+    const withMeta = (tasks || []).map((t) => ({
+      ...t,
+      category: catMap[t.category_id] || "Unknown",
+      tags: tagsByTask[t.id] || [],
+    }));
+    const filtered = withMeta
       .filter((t) => t.category !== "Daily Repeat")
       .filter((t) => !t.tags.includes("blocked") && !t.tags.includes("waiting"));
+    const reduced = reduceParentsToBestSubtask(filtered, {
+      dailyTemplateTaskIds: [],
+      mode: chosenMode,
+      now: new Date(),
+      lastCompletedMap,
+      baseCategoryWeights: effectiveWeights,
+      quickWinMinutes: quick_win_minutes ?? prefs.quick_win_definition_minutes,
+    });
 
-    const chosen = chooseKeyOutcomes(candidates, {
+    const chosen = chooseKeyOutcomes(reduced, {
       mode: chosenMode,
       todayStr: today,
       lastCompletedMap,

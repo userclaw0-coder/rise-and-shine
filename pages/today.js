@@ -35,6 +35,7 @@ import {
   buildQueueCandidates,
   buildQueueFromChosen,
   promoteSubtaskToQueue,
+  reduceParentsToBestSubtask,
 } from "../lib/today-queue";
 
 function getTodayDateStr() {
@@ -257,10 +258,24 @@ export default function TodayPage() {
         setDailyPlan(plan);
 
         const tasks = tasksRes.data || [];
-        const candidates = buildQueueCandidates(
-          tasks,
-          (loadedItems || []).map((it) => it.task?.id).filter(Boolean)
-        );
+        const catIdToName = {};
+        tasks.forEach((t) => {
+          if (t.category_id) {
+            const name = typeof t.category === "string" ? t.category : t.category?.name;
+            if (name) catIdToName[t.category_id] = name;
+          }
+        });
+        const seedWeights = getEffectiveCategoryWeights(profilePrefs, catIdToName);
+        const dailyIds = (loadedItems || []).map((it) => it.task?.id).filter(Boolean);
+        const reduced = reduceParentsToBestSubtask(tasks, {
+          dailyTemplateTaskIds: dailyIds,
+          mode,
+          now: new Date(),
+          lastCompletedMap: buildLastCompletedMap(lastRes.data || []),
+          baseCategoryWeights: seedWeights,
+          quickWinMinutes: profilePrefs?.quick_win_definition_minutes,
+        });
+        const candidates = buildQueueCandidates(reduced, dailyIds);
         const tasksById = new Map(candidates.map((t) => [t.id, t]));
 
         const queue = (plan?.queue && Array.isArray(plan.queue)) ? plan.queue : [];
@@ -275,14 +290,6 @@ export default function TodayPage() {
         const hasPersistedQueue = Array.isArray(plan?.queue) && plan.queue.length > 0;
         const shouldSeedInitialQueue = plan && !hasPersistedQueue && candidates.length > 0;
         if (shouldSeedInitialQueue) {
-          const catIdToName = {};
-          (tasksRes.data || []).forEach((t) => {
-            if (t.category_id) {
-              const name = typeof t.category === "string" ? t.category : t.category?.name;
-              if (name) catIdToName[t.category_id] = name;
-            }
-          });
-          const seedWeights = getEffectiveCategoryWeights(profilePrefs, catIdToName);
           const chosen = chooseKeyOutcomes(candidates, {
             mode,
             todayStr,
@@ -439,7 +446,15 @@ export default function TodayPage() {
 
   async function refillQueue() {
     if (!user || !dailyPlan || isRefilling) return;
-    const candidates = buildQueueCandidates(backlogTasks || [], dailyTemplateTaskIds);
+    const reduced = reduceParentsToBestSubtask(backlogTasks || [], {
+      dailyTemplateTaskIds,
+      mode,
+      now: new Date(),
+      lastCompletedMap,
+      baseCategoryWeights: effectiveCategoryWeights,
+      quickWinMinutes: profilePrefs?.quick_win_definition_minutes,
+    });
+    const candidates = buildQueueCandidates(reduced, dailyTemplateTaskIds);
     if (candidates.length === 0) {
       setQueueEntries([]);
       return;
