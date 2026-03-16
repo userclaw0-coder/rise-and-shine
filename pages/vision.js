@@ -73,6 +73,17 @@ export default function VisionPage() {
   const [imageViewerUrl, setImageViewerUrl] = useState(null);
   const [imageViewerZoom, setImageViewerZoom] = useState(1);
   const imageViewerRef = useRef(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 768px)");
+    function onMatch(e) {
+      setIsMobile(e.matches);
+    }
+    onMatch(mq);
+    mq.addEventListener("change", onMatch);
+    return () => mq.removeEventListener("change", onMatch);
+  }, []);
 
   useEffect(() => {
     if (!imageViewerUrl) return;
@@ -416,6 +427,20 @@ export default function VisionPage() {
     }
   }
 
+  const contentPadding = isMobile ? 12 : 0;
+  const fieldRowLayout = isMobile
+    ? { flexDirection: "column", alignItems: "stretch" }
+    : { flexDirection: "row", gap: 12, alignItems: "flex-start" };
+  const fieldImageWrapper = isMobile
+    ? { width: "100%", maxWidth: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }
+    : { flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 };
+  const fieldImageStyle = isMobile
+    ? { width: "100%", maxWidth: "100%", height: "auto", minHeight: 120, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }
+    : { width: 144, height: 144, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" };
+  const placeholderImageStyle = isMobile
+    ? { width: "100%", maxWidth: "100%", minHeight: 120, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" }
+    : { width: 144, height: 144, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" };
+
   return (
     <DashboardLayout>
       {imageViewerUrl && (
@@ -515,19 +540,21 @@ export default function VisionPage() {
           </div>
         </div>
       )}
+      <div style={{ maxWidth: 720, margin: "0 auto", padding: contentPadding ? `0 ${contentPadding}px` : 0 }}>
       <div
         style={{
           display: "flex",
+          flexDirection: isMobile ? "column" : "row",
           justifyContent: "space-between",
-          alignItems: "baseline",
+          alignItems: isMobile ? "flex-start" : "baseline",
           marginBottom: 16,
           gap: 12,
         }}
       >
-          <div>
+          <div style={{ flex: 1, minWidth: 0 }}>
           <h1
             style={{
-              fontSize: 22,
+              fontSize: isMobile ? 20 : 22,
               fontWeight: 600,
               margin: 0,
               letterSpacing: "-0.02em",
@@ -540,12 +567,13 @@ export default function VisionPage() {
               margin: "4px 0 0",
               fontSize: 13,
               color: "#6b7280",
+              wordBreak: "break-word",
             }}
           >
             Edit your identity, domains, outcomes, and strategic focus. Your Vision board can be edited and modified at any time.
           </p>
         </div>
-        <div style={{ fontSize: 12 }}>
+        <div style={{ fontSize: 12, flexShrink: 0 }}>
           {autoSaving && (
             <span style={{ color: "#6b7280" }}>Autosaving… </span>
           )}
@@ -557,7 +585,7 @@ export default function VisionPage() {
       <section
         style={{
           marginBottom: 20,
-          padding: 16,
+          padding: isMobile ? 12 : 16,
           borderRadius: 16,
           border: "1px solid #e5e7eb",
           background: "#fafbfc",
@@ -566,10 +594,10 @@ export default function VisionPage() {
         <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
           Your photo & Vision Board
         </h2>
-        <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 12px" }}>
+        <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 12px", wordBreak: "break-word" }}>
           Upload a photo of yourself. We use it with your vision text to generate an AI Vision Board that integrates your likeness.
         </p>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 24, alignItems: "flex-start" }}>
+        <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", flexWrap: "wrap", gap: 24, alignItems: "flex-start" }}>
           <div>
             <input
               ref={fileInputRef}
@@ -595,7 +623,7 @@ export default function VisionPage() {
               {uploadingPhoto ? "Uploading…" : "Upload photo"}
             </button>
             {photoUrl && (
-              <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
+              <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6, width: isMobile ? "100%" : undefined }}>
                 <button
                   type="button"
                   onClick={() => openImageViewer(photoUrl)}
@@ -605,14 +633,16 @@ export default function VisionPage() {
                     background: "none",
                     cursor: "pointer",
                     display: "block",
+                    width: isMobile ? "100%" : undefined,
                   }}
                 >
                   <img
                     src={photoUrl}
                     alt="You"
                     style={{
-                      width: 120,
-                      height: 120,
+                      width: isMobile ? "100%" : 120,
+                      height: isMobile ? "auto" : 120,
+                      minHeight: isMobile ? 120 : undefined,
                       objectFit: "cover",
                       borderRadius: 12,
                       border: "1px solid #e5e7eb",
@@ -656,7 +686,7 @@ export default function VisionPage() {
               {generatingBoard ? "Generating…" : "Generate Vision Board"}
             </button>
             {visionBoardImageUrl && (
-              <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
+              <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6, width: isMobile ? "100%" : undefined }}>
                 <button
                   type="button"
                   onClick={() => openImageViewer(visionBoardImageUrl)}
@@ -666,13 +696,15 @@ export default function VisionPage() {
                     background: "none",
                     cursor: "pointer",
                     display: "block",
+                    width: isMobile ? "100%" : undefined,
                   }}
                 >
                   <img
                     src={visionBoardImageUrl}
                     alt="Vision Board"
                     style={{
-                      maxWidth: 280,
+                      maxWidth: isMobile ? "100%" : 280,
+                      width: isMobile ? "100%" : undefined,
                       maxHeight: 200,
                       objectFit: "contain",
                       borderRadius: 12,
@@ -711,7 +743,7 @@ export default function VisionPage() {
       />
       <section
         style={{
-          padding: 16,
+          padding: isMobile ? 12 : 16,
           borderRadius: 16,
           border: "1px solid #e5e7eb",
           background: "#ffffff",
@@ -724,12 +756,12 @@ export default function VisionPage() {
           {error && (
             <p style={{ fontSize: 13, color: "#b91c1c", margin: 0 }}>{error}</p>
           )}
-          <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+          <div style={{ display: "flex", ...fieldRowLayout }}>
             <div style={{ flex: 1, minWidth: 0 }}>
           <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 6px" }}>
             Identity & vision
           </h2>
-          <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 6px" }}>
+          <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 6px", wordBreak: "break-word" }}>
             Short identity phrases that describe who you are becoming.
           </p>
           <AutoHeightTextarea
@@ -741,21 +773,23 @@ export default function VisionPage() {
               padding: 8,
               borderRadius: 8,
               border: "1px solid #e5e7eb",
+              width: "100%",
+              boxSizing: "border-box",
             }}
           />
             </div>
-            <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+            <div style={fieldImageWrapper}>
               {fieldImages.identity ? (
                 <>
-                  <button type="button" onClick={() => openImageViewer(fieldImages.identity)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block" }}>
-                    <img src={fieldImages.identity} alt="" style={{ width: 144, height: 144, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                  <button type="button" onClick={() => openImageViewer(fieldImages.identity)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block", width: isMobile ? "100%" : undefined }}>
+                    <img src={fieldImages.identity} alt="" style={fieldImageStyle} />
                   </button>
                   <button type="button" onClick={() => handleRemoveFieldImage("identity")} style={{ fontSize: 10, padding: "2px 6px", borderRadius: 999, border: "1px solid #e5e7eb", background: "#ffffff", color: "#6b7280", cursor: "pointer" }}>
                     Remove
                   </button>
                 </>
               ) : (
-                <div style={{ width: 144, height: 144, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" }}>Image</div>
+                <div style={placeholderImageStyle}>Image</div>
               )}
               <button type="button" onClick={() => handleFieldImageClick("identity")} disabled={uploadingFieldKey !== null} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: uploadingFieldKey ? "wait" : "pointer" }}>{uploadingFieldKey === "identity" ? "…" : "Upload"}</button>
             </div>
@@ -767,35 +801,35 @@ export default function VisionPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-              gap: 8,
+              gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
+              gap: isMobile ? 12 : 8,
             }}
           >
             {Object.entries(lifeDomains).map(([key, value]) => {
               const fieldKey = `life_domain_${key}`;
               return (
-                <div key={key} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                <div key={key} style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 8, alignItems: isMobile ? "stretch" : "flex-start" }}>
                   <label style={{ flex: 1, minWidth: 0, fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
                     <span style={{ textTransform: "capitalize" }}>{key}</span>
                     <AutoHeightTextarea
                       value={value}
                       onChange={(v) => setLifeDomains((prev) => ({ ...prev, [key]: v }))}
                       rows={2}
-                      style={{ fontSize: 13, padding: 6, borderRadius: 6, border: "1px solid #e5e7eb" }}
+                      style={{ fontSize: 13, padding: 6, borderRadius: 6, border: "1px solid #e5e7eb", width: "100%", boxSizing: "border-box" }}
                     />
                   </label>
-                  <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                  <div style={isMobile ? fieldImageWrapper : { flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
                     {fieldImages[fieldKey] ? (
                       <>
-                        <button type="button" onClick={() => openImageViewer(fieldImages[fieldKey])} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block" }}>
-                          <img src={fieldImages[fieldKey]} alt="" style={{ width: 112, height: 112, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                        <button type="button" onClick={() => openImageViewer(fieldImages[fieldKey])} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block", width: isMobile ? "100%" : undefined }}>
+                          <img src={fieldImages[fieldKey]} alt="" style={isMobile ? { ...fieldImageStyle, minHeight: 80 } : { width: 112, height: 112, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
                         </button>
                         <button type="button" onClick={() => handleRemoveFieldImage(fieldKey)} style={{ fontSize: 9, padding: "2px 6px", borderRadius: 999, border: "1px solid #e5e7eb", background: "#ffffff", color: "#6b7280", cursor: "pointer" }}>
                           Remove
                         </button>
                       </>
                     ) : (
-                      <div style={{ width: 112, height: 112, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "#9ca3af" }}>Img</div>
+                      <div style={isMobile ? { ...placeholderImageStyle, minHeight: 80 } : { width: 112, height: 112, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "#9ca3af" }}>Img</div>
                     )}
                     <button type="button" onClick={() => handleFieldImageClick(fieldKey)} disabled={uploadingFieldKey !== null} style={{ fontSize: 10, padding: "2px 6px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: uploadingFieldKey ? "wait" : "pointer" }}>{uploadingFieldKey === fieldKey ? "…" : "Upload"}</button>
                   </div>
@@ -804,7 +838,7 @@ export default function VisionPage() {
             })}
           </div>
           </div>
-          <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+          <div style={{ display: "flex", ...fieldRowLayout }}>
             <div style={{ flex: 1, minWidth: 0 }}>
           <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 6px" }}>
             Desired outcomes (12 months)
@@ -813,31 +847,31 @@ export default function VisionPage() {
             value={desiredOutcomes}
             onChange={setDesiredOutcomes}
             rows={4}
-            style={{ fontSize: 13, padding: 8, borderRadius: 8, border: "1px solid #e5e7eb" }}
+            style={{ fontSize: 13, padding: 8, borderRadius: 8, border: "1px solid #e5e7eb", width: "100%", boxSizing: "border-box" }}
           />
             </div>
-            <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+            <div style={fieldImageWrapper}>
               {fieldImages.desired_outcomes ? (
                 <>
-                  <button type="button" onClick={() => openImageViewer(fieldImages.desired_outcomes)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block" }}>
-                    <img src={fieldImages.desired_outcomes} alt="" style={{ width: 144, height: 144, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                  <button type="button" onClick={() => openImageViewer(fieldImages.desired_outcomes)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block", width: isMobile ? "100%" : undefined }}>
+                    <img src={fieldImages.desired_outcomes} alt="" style={fieldImageStyle} />
                   </button>
                   <button type="button" onClick={() => handleRemoveFieldImage("desired_outcomes")} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 999, border: "1px solid #e5e7eb", background: "#ffffff", color: "#6b7280", cursor: "pointer" }}>
                     Remove
                   </button>
                 </>
               ) : (
-                <div style={{ width: 144, height: 144, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" }}>Image</div>
+                <div style={placeholderImageStyle}>Image</div>
               )}
               <button type="button" onClick={() => handleFieldImageClick("desired_outcomes")} disabled={uploadingFieldKey !== null} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: uploadingFieldKey ? "wait" : "pointer" }}>{uploadingFieldKey === "desired_outcomes" ? "…" : "Upload"}</button>
             </div>
           </div>
-          <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+          <div style={{ display: "flex", ...fieldRowLayout }}>
             <div style={{ flex: 1, minWidth: 0 }}>
           <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 6px" }}>
             3 Goals to Thrive
           </h2>
-          <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 6px" }}>
+          <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 6px", wordBreak: "break-word" }}>
             Up to three goals that help you thrive (one per line). Included in your Vision Board.
           </p>
           <AutoHeightTextarea
@@ -845,21 +879,21 @@ export default function VisionPage() {
             onChange={setGoalsToThrive}
             rows={3}
             placeholder="e.g. Daily movement&#10;Meaningful connections&#10;Learn one new skill"
-            style={{ fontSize: 13, padding: 8, borderRadius: 8, border: "1px solid #e5e7eb" }}
+            style={{ fontSize: 13, padding: 8, borderRadius: 8, border: "1px solid #e5e7eb", width: "100%", boxSizing: "border-box" }}
           />
             </div>
-            <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+            <div style={fieldImageWrapper}>
               {fieldImages.goals_to_thrive ? (
                 <>
-                  <button type="button" onClick={() => openImageViewer(fieldImages.goals_to_thrive)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block" }}>
-                    <img src={fieldImages.goals_to_thrive} alt="" style={{ width: 144, height: 144, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                  <button type="button" onClick={() => openImageViewer(fieldImages.goals_to_thrive)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block", width: isMobile ? "100%" : undefined }}>
+                    <img src={fieldImages.goals_to_thrive} alt="" style={fieldImageStyle} />
                   </button>
                   <button type="button" onClick={() => handleRemoveFieldImage("goals_to_thrive")} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 999, border: "1px solid #e5e7eb", background: "#ffffff", color: "#6b7280", cursor: "pointer" }}>
                     Remove
                   </button>
                 </>
               ) : (
-                <div style={{ width: 144, height: 144, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" }}>Image</div>
+                <div style={placeholderImageStyle}>Image</div>
               )}
               <button type="button" onClick={() => handleFieldImageClick("goals_to_thrive")} disabled={uploadingFieldKey !== null} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: uploadingFieldKey ? "wait" : "pointer" }}>{uploadingFieldKey === "goals_to_thrive" ? "…" : "Upload"}</button>
             </div>
@@ -868,75 +902,75 @@ export default function VisionPage() {
           <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 6px" }}>
             Strategic focus
           </h2>
-          <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 8 }}>
+          <div style={{ display: "flex", ...fieldRowLayout, marginBottom: 8 }}>
             <label style={{ flex: 1, minWidth: 0, fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
               Leverage areas (one per line)
               <AutoHeightTextarea
                 value={leverageFocus}
                 onChange={setLeverageFocus}
                 rows={3}
-                style={{ fontSize: 13, padding: 8, borderRadius: 8, border: "1px solid #e5e7eb" }}
+                style={{ fontSize: 13, padding: 8, borderRadius: 8, border: "1px solid #e5e7eb", width: "100%", boxSizing: "border-box" }}
               />
             </label>
-            <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+            <div style={fieldImageWrapper}>
               {fieldImages.leverage_focus ? (
                 <>
-                  <button type="button" onClick={() => openImageViewer(fieldImages.leverage_focus)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block" }}>
-                    <img src={fieldImages.leverage_focus} alt="" style={{ width: 144, height: 144, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                  <button type="button" onClick={() => openImageViewer(fieldImages.leverage_focus)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block", width: isMobile ? "100%" : undefined }}>
+                    <img src={fieldImages.leverage_focus} alt="" style={fieldImageStyle} />
                   </button>
                   <button type="button" onClick={() => handleRemoveFieldImage("leverage_focus")} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 999, border: "1px solid #e5e7eb", background: "#ffffff", color: "#6b7280", cursor: "pointer" }}>
                     Remove
                   </button>
                 </>
               ) : (
-                <div style={{ width: 144, height: 144, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" }}>Image</div>
+                <div style={placeholderImageStyle}>Image</div>
               )}
               <button type="button" onClick={() => handleFieldImageClick("leverage_focus")} disabled={uploadingFieldKey !== null} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: uploadingFieldKey ? "wait" : "pointer" }}>{uploadingFieldKey === "leverage_focus" ? "…" : "Upload"}</button>
             </div>
           </div>
-          <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 8 }}>
+          <div style={{ display: "flex", ...fieldRowLayout, marginBottom: 8 }}>
             <label style={{ flex: 1, minWidth: 0, fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
               Quarter focus (comma separated)
               <input
                 type="text"
                 value={quarterFocus}
                 onChange={(e) => setQuarterFocus(e.target.value)}
-                style={{ fontSize: 13, padding: 6, borderRadius: 6, border: "1px solid #e5e7eb" }}
+                style={{ fontSize: 13, padding: 6, borderRadius: 6, border: "1px solid #e5e7eb", width: "100%", boxSizing: "border-box" }}
               />
             </label>
-            <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+            <div style={fieldImageWrapper}>
               {fieldImages.quarter_focus ? (
-                <button type="button" onClick={() => openImageViewer(fieldImages.quarter_focus)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block" }}>
-                  <img src={fieldImages.quarter_focus} alt="" style={{ width: 144, height: 144, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                <button type="button" onClick={() => openImageViewer(fieldImages.quarter_focus)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block", width: isMobile ? "100%" : undefined }}>
+                  <img src={fieldImages.quarter_focus} alt="" style={fieldImageStyle} />
                 </button>
               ) : (
-                <div style={{ width: 144, height: 144, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" }}>Image</div>
+                <div style={placeholderImageStyle}>Image</div>
               )}
               <button type="button" onClick={() => handleFieldImageClick("quarter_focus")} disabled={uploadingFieldKey !== null} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: uploadingFieldKey ? "wait" : "pointer" }}>{uploadingFieldKey === "quarter_focus" ? "…" : "Upload"}</button>
             </div>
           </div>
-          <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+          <div style={{ display: "flex", ...fieldRowLayout }}>
             <label style={{ flex: 1, minWidth: 0, fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
               Immediate step
               <AutoHeightTextarea
                 value={immediateStep}
                 onChange={setImmediateStep}
                 rows={2}
-                style={{ fontSize: 13, padding: 8, borderRadius: 8, border: "1px solid #e5e7eb" }}
+                style={{ fontSize: 13, padding: 8, borderRadius: 8, border: "1px solid #e5e7eb", width: "100%", boxSizing: "border-box" }}
               />
             </label>
-            <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+            <div style={fieldImageWrapper}>
               {fieldImages.immediate_step ? (
                 <>
-                  <button type="button" onClick={() => openImageViewer(fieldImages.immediate_step)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block" }}>
-                    <img src={fieldImages.immediate_step} alt="" style={{ width: 144, height: 144, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                  <button type="button" onClick={() => openImageViewer(fieldImages.immediate_step)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block", width: isMobile ? "100%" : undefined }}>
+                    <img src={fieldImages.immediate_step} alt="" style={fieldImageStyle} />
                   </button>
                   <button type="button" onClick={() => handleRemoveFieldImage("immediate_step")} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 999, border: "1px solid #e5e7eb", background: "#ffffff", color: "#6b7280", cursor: "pointer" }}>
                     Remove
                   </button>
                 </>
               ) : (
-                <div style={{ width: 144, height: 144, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" }}>Image</div>
+                <div style={placeholderImageStyle}>Image</div>
               )}
               <button type="button" onClick={() => handleFieldImageClick("immediate_step")} disabled={uploadingFieldKey !== null} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: uploadingFieldKey ? "wait" : "pointer" }}>{uploadingFieldKey === "immediate_step" ? "…" : "Upload"}</button>
             </div>
@@ -976,18 +1010,21 @@ export default function VisionPage() {
           <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 8px" }}>
             Save snapshots of your vision and restore older versions.
           </p>
-          <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
             <input
               type="text"
               value={snapshotLabel}
               onChange={(e) => setSnapshotLabel(e.target.value)}
               placeholder="Label (optional)"
               style={{
-                flex: 1,
+                flex: "1 1 140px",
+                minWidth: 0,
                 fontSize: 12,
                 padding: "4px 8px",
                 borderRadius: 999,
                 border: "1px solid #e5e7eb",
+                width: isMobile ? "100%" : undefined,
+                boxSizing: "border-box",
               }}
             />
             <button
@@ -1096,11 +1133,12 @@ export default function VisionPage() {
                       : ""}
                   </button>
                 </li>
-              ))}
-            </ul>
+              )          )}
+        </ul>
           )}
         </div>
       </section>
+      </div>
     </DashboardLayout>
   );
 }

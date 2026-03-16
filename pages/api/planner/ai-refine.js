@@ -48,8 +48,14 @@ function withTimeout(promise, timeoutMs) {
   });
 }
 
+const SLOT_WHY_FALLBACKS = [
+  "Quick win — low friction so you build momentum.",
+  "High leverage — moves the needle on what matters most.",
+  "Progress — keeps you advancing on a key area.",
+];
+
 function buildFallbackPlannerResponse(queueTasks) {
-  const taskRefinements = (queueTasks || []).map((task) => {
+  const taskRefinements = (queueTasks || []).map((task, idx) => {
     const tags = Array.isArray(task.tags) ? task.tags : [];
     const extraTags = [];
     if ((task.effort_hours ?? 0) > 0 && task.effort_hours <= 0.5 && !tags.includes('quick-win')) extraTags.push('quick-win');
@@ -61,6 +67,7 @@ function buildFallbackPlannerResponse(queueTasks) {
       suggested_title: String(task.title || '').trim(),
       suggested_tags_add: Array.from(new Set(extraTags)).slice(0, 3),
       suggested_effort_minutes: Math.max(15, Math.round(((task.effort_hours || 0.5) * 60) / 5) * 5),
+      why_this_task_now: SLOT_WHY_FALLBACKS[idx] || SLOT_WHY_FALLBACKS[2],
     };
   });
 
@@ -190,6 +197,7 @@ export default async function handler(req, res) {
 You are Rise & Shine — a calm operator planning assistant.
 Return ONLY valid JSON with:
 - rewording suggestions for the 3 tasks (verb-first next actions)
+- for each task, why_this_task_now: one short sentence (under 100 chars) explaining why this task is in this slot today — e.g. quick win for momentum, high leverage for impact, or progress on a key area
 - recommended tags to add (quick-win, high-leverage, urgent, blocked, waiting, deep, physical, low-energy)
 - recommended effort_minutes (integer)
 - up to 3 suggested subtasks (approval required)
@@ -211,6 +219,7 @@ Keep responses concise.
             suggested_title: "string",
             suggested_tags_add: ["string"],
             suggested_effort_minutes: 30,
+            why_this_task_now: "string (one short sentence why this task is in this slot today)",
           },
         ],
         suggested_subtasks_to_create: [

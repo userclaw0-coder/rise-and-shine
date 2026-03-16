@@ -937,6 +937,17 @@ export default function TodayPage() {
     profilePrefs?.quick_win_definition_minutes,
   ]);
 
+  // Prefer AI-generated "why this task now" when present (from Refine with AI)
+  const displayReasonByTaskId = useMemo(() => {
+    const m = new Map(queueReasonByTaskId);
+    for (const r of aiSuggestions?.task_refinements || []) {
+      if (r.why_this_task_now && r.task_id) {
+        m.set(r.task_id, String(r.why_this_task_now).trim());
+      }
+    }
+    return m;
+  }, [queueReasonByTaskId, aiSuggestions?.task_refinements]);
+
   // Show loading when: still checking auth, no user (redirecting), or data loading
   if (isCheckingAuth || !user || loading) {
     return (
@@ -1245,7 +1256,7 @@ export default function TodayPage() {
                         <span style={{ fontWeight: 600, color: "#059669" }}>
                           Why now:
                         </span>{" "}
-                        {queueReasonByTaskId.get(entry.task.id) || "Top-scored task for your current focus"}
+                        {displayReasonByTaskId.get(entry.task.id) || "Top-scored task for your current focus"}
                       </div>
                       {(() => {
                         const hint = getNextActionHint(entry.task.id, queueEntries, completionMap);
@@ -1368,6 +1379,21 @@ export default function TodayPage() {
                       <div style={{ fontSize: 13, marginBottom: 4 }}>
                         <strong>Title:</strong> {item.suggested_title ?? "—"}
                       </div>
+                      {item.why_this_task_now && (
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: "#059669",
+                            marginBottom: 6,
+                            padding: "4px 8px",
+                            background: "#f0fdf4",
+                            borderRadius: 6,
+                            borderLeft: "3px solid #86efac",
+                          }}
+                        >
+                          <strong>Why now:</strong> {item.why_this_task_now}
+                        </div>
+                      )}
                       {(item.suggested_tags_add?.length > 0) && (
                         <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>
                           Tags to add: {item.suggested_tags_add.join(", ")}
