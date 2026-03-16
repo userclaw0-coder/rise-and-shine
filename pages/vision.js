@@ -282,9 +282,66 @@ export default function VisionPage() {
     }
   }
 
+  async function handleRemovePhoto() {
+    if (!user) return;
+    setError("");
+    try {
+      setPhotoUrl("");
+      const existingRes = await getUserProfile(user.id);
+      const existing =
+        !existingRes.error && existingRes.data ? existingRes.data.profile || {} : {};
+      const profile = { ...buildProfile(existing), photo_url: null };
+      await upsertUserProfile(user.id, profile);
+      setSavedMsg("Photo removed.");
+      setTimeout(() => setSavedMsg(""), 2500);
+    } catch (err) {
+      setError(err.message || "Failed to remove photo.");
+    }
+  }
+
+  async function handleRemoveVisionBoard() {
+    if (!user) return;
+    setError("");
+    try {
+      setVisionBoardImageUrl("");
+      const existingRes = await getUserProfile(user.id);
+      const existing =
+        !existingRes.error && existingRes.data ? existingRes.data.profile || {} : {};
+      const profile = { ...buildProfile(existing), vision_board_image_url: null };
+      await upsertUserProfile(user.id, profile);
+      setSavedMsg("Vision board removed.");
+      setTimeout(() => setSavedMsg(""), 2500);
+    } catch (err) {
+      setError(err.message || "Failed to remove vision board.");
+    }
+  }
+
   function handleFieldImageClick(fieldKey) {
     setUploadingFieldKey(fieldKey);
     fieldFileInputRef.current?.click();
+  }
+
+  async function handleRemoveFieldImage(fieldKey) {
+    if (!user) return;
+    setError("");
+    setFieldImages((prev) => {
+      const next = { ...prev };
+      delete next[fieldKey];
+      return next;
+    });
+    try {
+      const existingRes = await getUserProfile(user.id);
+      const existing =
+        !existingRes.error && existingRes.data ? existingRes.data.profile || {} : {};
+      const existingImages = { ...(existing.vision_field_images || {}) };
+      delete existingImages[fieldKey];
+      const profile = { ...buildProfile(existing), vision_field_images: existingImages };
+      await upsertUserProfile(user.id, profile);
+      setSavedMsg("Image removed.");
+      setTimeout(() => setSavedMsg(""), 2000);
+    } catch (err) {
+      setError(err.message || "Failed to remove image.");
+    }
   }
 
   function openImageViewer(url) {
@@ -538,7 +595,7 @@ export default function VisionPage() {
               {uploadingPhoto ? "Uploading…" : "Upload photo"}
             </button>
             {photoUrl && (
-              <div style={{ marginTop: 10 }}>
+              <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
                 <button
                   type="button"
                   onClick={() => openImageViewer(photoUrl)}
@@ -562,6 +619,22 @@ export default function VisionPage() {
                     }}
                   />
                 </button>
+                <button
+                  type="button"
+                  onClick={handleRemovePhoto}
+                  style={{
+                    alignSelf: "flex-start",
+                    fontSize: 11,
+                    padding: "3px 8px",
+                    borderRadius: 999,
+                    border: "1px solid #e5e7eb",
+                    background: "#ffffff",
+                    color: "#6b7280",
+                    cursor: "pointer",
+                  }}
+                >
+                  Remove photo
+                </button>
               </div>
             )}
           </div>
@@ -583,7 +656,7 @@ export default function VisionPage() {
               {generatingBoard ? "Generating…" : "Generate Vision Board"}
             </button>
             {visionBoardImageUrl && (
-              <div style={{ marginTop: 10 }}>
+              <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
                 <button
                   type="button"
                   onClick={() => openImageViewer(visionBoardImageUrl)}
@@ -606,6 +679,22 @@ export default function VisionPage() {
                       border: "1px solid #e5e7eb",
                     }}
                   />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRemoveVisionBoard}
+                  style={{
+                    alignSelf: "flex-start",
+                    fontSize: 11,
+                    padding: "3px 8px",
+                    borderRadius: 999,
+                    border: "1px solid #e5e7eb",
+                    background: "#ffffff",
+                    color: "#6b7280",
+                    cursor: "pointer",
+                  }}
+                >
+                  Remove board
                 </button>
               </div>
             )}
@@ -657,9 +746,14 @@ export default function VisionPage() {
             </div>
             <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
               {fieldImages.identity ? (
-                <button type="button" onClick={() => openImageViewer(fieldImages.identity)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block" }}>
-                  <img src={fieldImages.identity} alt="" style={{ width: 144, height: 144, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
-                </button>
+                <>
+                  <button type="button" onClick={() => openImageViewer(fieldImages.identity)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block" }}>
+                    <img src={fieldImages.identity} alt="" style={{ width: 144, height: 144, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                  </button>
+                  <button type="button" onClick={() => handleRemoveFieldImage("identity")} style={{ fontSize: 10, padding: "2px 6px", borderRadius: 999, border: "1px solid #e5e7eb", background: "#ffffff", color: "#6b7280", cursor: "pointer" }}>
+                    Remove
+                  </button>
+                </>
               ) : (
                 <div style={{ width: 144, height: 144, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" }}>Image</div>
               )}
@@ -692,9 +786,14 @@ export default function VisionPage() {
                   </label>
                   <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
                     {fieldImages[fieldKey] ? (
-                      <button type="button" onClick={() => openImageViewer(fieldImages[fieldKey])} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block" }}>
-                        <img src={fieldImages[fieldKey]} alt="" style={{ width: 112, height: 112, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
-                      </button>
+                      <>
+                        <button type="button" onClick={() => openImageViewer(fieldImages[fieldKey])} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block" }}>
+                          <img src={fieldImages[fieldKey]} alt="" style={{ width: 112, height: 112, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                        </button>
+                        <button type="button" onClick={() => handleRemoveFieldImage(fieldKey)} style={{ fontSize: 9, padding: "2px 6px", borderRadius: 999, border: "1px solid #e5e7eb", background: "#ffffff", color: "#6b7280", cursor: "pointer" }}>
+                          Remove
+                        </button>
+                      </>
                     ) : (
                       <div style={{ width: 112, height: 112, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "#9ca3af" }}>Img</div>
                     )}
@@ -719,9 +818,14 @@ export default function VisionPage() {
             </div>
             <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
               {fieldImages.desired_outcomes ? (
-                <button type="button" onClick={() => openImageViewer(fieldImages.desired_outcomes)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block" }}>
-                  <img src={fieldImages.desired_outcomes} alt="" style={{ width: 144, height: 144, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
-                </button>
+                <>
+                  <button type="button" onClick={() => openImageViewer(fieldImages.desired_outcomes)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block" }}>
+                    <img src={fieldImages.desired_outcomes} alt="" style={{ width: 144, height: 144, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                  </button>
+                  <button type="button" onClick={() => handleRemoveFieldImage("desired_outcomes")} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 999, border: "1px solid #e5e7eb", background: "#ffffff", color: "#6b7280", cursor: "pointer" }}>
+                    Remove
+                  </button>
+                </>
               ) : (
                 <div style={{ width: 144, height: 144, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" }}>Image</div>
               )}
@@ -746,9 +850,14 @@ export default function VisionPage() {
             </div>
             <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
               {fieldImages.goals_to_thrive ? (
-                <button type="button" onClick={() => openImageViewer(fieldImages.goals_to_thrive)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block" }}>
-                  <img src={fieldImages.goals_to_thrive} alt="" style={{ width: 144, height: 144, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
-                </button>
+                <>
+                  <button type="button" onClick={() => openImageViewer(fieldImages.goals_to_thrive)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block" }}>
+                    <img src={fieldImages.goals_to_thrive} alt="" style={{ width: 144, height: 144, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                  </button>
+                  <button type="button" onClick={() => handleRemoveFieldImage("goals_to_thrive")} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 999, border: "1px solid #e5e7eb", background: "#ffffff", color: "#6b7280", cursor: "pointer" }}>
+                    Remove
+                  </button>
+                </>
               ) : (
                 <div style={{ width: 144, height: 144, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" }}>Image</div>
               )}
@@ -771,9 +880,14 @@ export default function VisionPage() {
             </label>
             <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
               {fieldImages.leverage_focus ? (
-                <button type="button" onClick={() => openImageViewer(fieldImages.leverage_focus)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block" }}>
-                  <img src={fieldImages.leverage_focus} alt="" style={{ width: 144, height: 144, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
-                </button>
+                <>
+                  <button type="button" onClick={() => openImageViewer(fieldImages.leverage_focus)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block" }}>
+                    <img src={fieldImages.leverage_focus} alt="" style={{ width: 144, height: 144, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                  </button>
+                  <button type="button" onClick={() => handleRemoveFieldImage("leverage_focus")} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 999, border: "1px solid #e5e7eb", background: "#ffffff", color: "#6b7280", cursor: "pointer" }}>
+                    Remove
+                  </button>
+                </>
               ) : (
                 <div style={{ width: 144, height: 144, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" }}>Image</div>
               )}
@@ -813,9 +927,14 @@ export default function VisionPage() {
             </label>
             <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
               {fieldImages.immediate_step ? (
-                <button type="button" onClick={() => openImageViewer(fieldImages.immediate_step)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block" }}>
-                  <img src={fieldImages.immediate_step} alt="" style={{ width: 144, height: 144, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
-                </button>
+                <>
+                  <button type="button" onClick={() => openImageViewer(fieldImages.immediate_step)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block" }}>
+                    <img src={fieldImages.immediate_step} alt="" style={{ width: 144, height: 144, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                  </button>
+                  <button type="button" onClick={() => handleRemoveFieldImage("immediate_step")} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 999, border: "1px solid #e5e7eb", background: "#ffffff", color: "#6b7280", cursor: "pointer" }}>
+                    Remove
+                  </button>
+                </>
               ) : (
                 <div style={{ width: 144, height: 144, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" }}>Image</div>
               )}
