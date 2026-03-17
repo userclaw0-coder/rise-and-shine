@@ -40,6 +40,7 @@ export default function DashboardLayout({ children }) {
     { href: "/ideas", label: "Ideas" },
     { href: "/health", label: "Occam Workout" },
     { href: "/vision", label: "Vision" },
+    { href: "/account", label: "Account" },
     { href: "/weekly-review", label: "Weekly review" },
   ];
 
