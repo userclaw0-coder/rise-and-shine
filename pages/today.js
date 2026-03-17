@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import AiPlannerGuidance from "../components/AiPlannerGuidance";
 import DashboardLayout from "../components/DashboardLayout";
 import ProgressToOutcome from "../components/ProgressToOutcome";
