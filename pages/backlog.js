@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/router";
 import DashboardLayout from "../components/DashboardLayout";
 import Modal from "../components/Modal";
 import { useAuth } from "../hooks/useAuth";
@@ -53,6 +54,13 @@ function normalize(str) {
   return (str || "").toLowerCase();
 }
 
+function localDateKey(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function extractTagNames(task) {
   if (!task || !task.tags) return [];
   const result = [];
@@ -100,6 +108,7 @@ function formatEnrichmentStatus(report) {
 }
 
 export default function BacklogPage() {
+  const router = useRouter();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -115,6 +124,7 @@ export default function BacklogPage() {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [subcategoryFilter, setSubcategoryFilter] = useState("");
   const [tagFilter, setTagFilter] = useState("");
+  const [quickFilter, setQuickFilter] = useState("");
   const [newCategoryName, setNewCategoryName] = useState("");
   const [addingCategory, setAddingCategory] = useState(false);
 
@@ -207,6 +217,21 @@ export default function BacklogPage() {
     load();
   }, [user]);
 
+  // Apply quick filters from Analytics links.
+  useEffect(() => {
+    if (!router.isReady) return;
+    const q = String(router.query.quick || "").trim();
+    if (!q) return;
+
+    setQuickFilter(q);
+    // ensure we’re looking at open tasks by default for these quick views
+    setStatusFilter("todo_doing");
+    setSearch("");
+    setCategoryFilter("");
+    setSubcategoryFilter("");
+    setTagFilter("");
+  }, [router.isReady, router.query.quick]);
+
   useEffect(() => {
     if (!user) return;
     if (!categoryOrder || categoryOrder.length === 0) return;
@@ -230,6 +255,14 @@ export default function BacklogPage() {
     const remaining = categories.filter((c) => !categoryOrder.includes(c.id));
     return [...inOrder, ...remaining];
   }, [categories, categoryOrder]);
+
+  const categoryOptions = useMemo(() => {
+    const list = orderedCategories || [];
+    return list
+      .map((c) => ({ id: c.id, name: c.name }))
+      .filter((c) => c.id && c.name)
+      .sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { sensitivity: "base" }));
+  }, [orderedCategories]);
 
   async function persistCategoryOrderToServer(order) {
     if (!user || !order?.length) return;
@@ -379,6 +412,8 @@ export default function BacklogPage() {
   const filteredRootTasks = useMemo(() => {
     const q = normalize(search);
     const tagNeedle = normalize(tagFilter);
+    const todayLocal = localDateKey(new Date());
+    const quick = String(quickFilter || "").toLowerCase();
 
     const filtered = rootTasks.filter((t) => {
       const titleMatch = !q || normalize(t.title).includes(q);
@@ -406,7 +441,15 @@ export default function BacklogPage() {
         tagOk = names.includes(tagNeedle);
       }
 
-      return titleMatch && statusOk && categoryOk && subcategoryOk && tagOk;
+      let quickOk = true;
+      if (quick === "overdue") {
+        quickOk =
+          !!t.due_date && localDateKey(new Date(t.due_date)) < todayLocal;
+      } else if (quick === "critical_high") {
+        quickOk = t.priority === "Critical" || t.priority === "High";
+      }
+
+      return titleMatch && statusOk && categoryOk && subcategoryOk && tagOk && quickOk;
     });
 
     return filtered
@@ -427,6 +470,7 @@ export default function BacklogPage() {
     categoryFilter,
     subcategoryFilter,
     tagFilter,
+    quickFilter,
   ]);
 
   const [comfortableSortKey, setComfortableSortKey] = useState("score");
@@ -1614,6 +1658,32 @@ export default function BacklogPage() {
             >
               Manage non-daily tasks, tags, subtasks, and AI-scored priority order.
             </p>
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <select
+              value=""
+              onChange={(e) => {
+                const id = e.target.value;
+                if (!id) return;
+                router.push(`/category/${id}`);
+              }}
+              style={{
+                fontSize: 13,
+                padding: "8px 10px",
+                borderRadius: 10,
+                border: "1px solid #e5e7eb",
+                background: "#ffffff",
+                cursor: "pointer",
+                minWidth: 220,
+              }}
+            >
+              <option value="">Category pages…</option>
+              {categoryOptions.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import DashboardLayout from "../components/DashboardLayout";
 import { useAuth } from "../hooks/useAuth";
 import {
@@ -305,8 +306,9 @@ export default function AnalyticsPage() {
           dailyHitsRate7: maxDailyPossible > 0 ? Math.round((totalDailyIn7 / maxDailyPossible) * 100) : null,
         });
 
-        const overdue = openTasks.filter((t) => t.due_date && dateStrLocal(new Date(t.due_date)) < todayStr).length;
-        const highPriorityOpen = openTasks.filter((t) => (t.priority === "Critical" || t.priority === "High")).length;
+        const openTodoDoing = openTasks.filter((t) => t.status === "todo" || t.status === "doing");
+        const overdue = openTodoDoing.filter((t) => t.due_date && dateStrLocal(new Date(t.due_date)) < todayStr).length;
+        const highPriorityOpen = openTodoDoing.filter((t) => (t.priority === "Critical" || t.priority === "High")).length;
         setPuttingOff({ overdue, highPriorityOpen });
 
         const categoryCounts = {};
@@ -463,14 +465,20 @@ export default function AnalyticsPage() {
             </h3>
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap", fontSize: 13 }}>
               {puttingOff.overdue > 0 && (
-                <span style={{ color: "#b91c1c" }}>
+                <Link
+                  href="/backlog?quick=overdue"
+                  style={{ color: "#b91c1c", textDecoration: "underline" }}
+                >
                   <strong>{puttingOff.overdue}</strong> overdue task{puttingOff.overdue === 1 ? "" : "s"}
-                </span>
+                </Link>
               )}
               {puttingOff.highPriorityOpen > 0 && (
-                <span style={{ color: "#b91c1c" }}>
+                <Link
+                  href="/backlog?quick=critical_high"
+                  style={{ color: "#b91c1c", textDecoration: "underline" }}
+                >
                   <strong>{puttingOff.highPriorityOpen}</strong> open Critical/High priority
-                </span>
+                </Link>
               )}
             </div>
           </div>
