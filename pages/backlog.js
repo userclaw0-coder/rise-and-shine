@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/router";
 import DashboardLayout from "../components/DashboardLayout";
 import Modal from "../components/Modal";
 import { useAuth } from "../hooks/useAuth";
@@ -53,6 +54,13 @@ function normalize(str) {
   return (str || "").toLowerCase();
 }
 
+function localDateKey(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function extractTagNames(task) {
   if (!task || !task.tags) return [];
   const result = [];
@@ -100,6 +108,7 @@ function formatEnrichmentStatus(report) {
 }
 
 export default function BacklogPage() {
+  const router = useRouter();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -115,6 +124,7 @@ export default function BacklogPage() {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [subcategoryFilter, setSubcategoryFilter] = useState("");
   const [tagFilter, setTagFilter] = useState("");
+  const [quickFilter, setQuickFilter] = useState("");
   const [newCategoryName, setNewCategoryName] = useState("");
   const [addingCategory, setAddingCategory] = useState(false);
 
@@ -206,6 +216,21 @@ export default function BacklogPage() {
 
     load();
   }, [user]);
+
+  // Apply quick filters from Analytics links.
+  useEffect(() => {
+    if (!router.isReady) return;
+    const q = String(router.query.quick || "").trim();
+    if (!q) return;
+
+    setQuickFilter(q);
+    // ensure we’re looking at open tasks by default for these quick views
+    setStatusFilter("todo_doing");
+    setSearch("");
+    setCategoryFilter("");
+    setSubcategoryFilter("");
+    setTagFilter("");
+  }, [router.isReady, router.query.quick]);
 
   useEffect(() => {
     if (!user) return;
@@ -379,6 +404,8 @@ export default function BacklogPage() {
   const filteredRootTasks = useMemo(() => {
     const q = normalize(search);
     const tagNeedle = normalize(tagFilter);
+    const todayLocal = localDateKey(new Date());
+    const quick = String(quickFilter || "").toLowerCase();
 
     const filtered = rootTasks.filter((t) => {
       const titleMatch = !q || normalize(t.title).includes(q);
@@ -406,7 +433,15 @@ export default function BacklogPage() {
         tagOk = names.includes(tagNeedle);
       }
 
-      return titleMatch && statusOk && categoryOk && subcategoryOk && tagOk;
+      let quickOk = true;
+      if (quick === "overdue") {
+        quickOk =
+          !!t.due_date && localDateKey(new Date(t.due_date)) < todayLocal;
+      } else if (quick === "critical_high") {
+        quickOk = t.priority === "Critical" || t.priority === "High";
+      }
+
+      return titleMatch && statusOk && categoryOk && subcategoryOk && tagOk && quickOk;
     });
 
     return filtered
@@ -427,6 +462,7 @@ export default function BacklogPage() {
     categoryFilter,
     subcategoryFilter,
     tagFilter,
+    quickFilter,
   ]);
 
   const [comfortableSortKey, setComfortableSortKey] = useState("score");
