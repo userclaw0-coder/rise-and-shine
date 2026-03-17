@@ -97,6 +97,65 @@ const HINT_STYLES = {
   success: { color: "#059669", background: "#ecfdf5", border: "#86efac" },
 };
 
+function ConfettiOverlay({ seed }) {
+  const pieces = Array.from({ length: 80 }, (_, i) => i);
+  const colors = ["#22c55e", "#3b82f6", "#f97316", "#e11d48", "#a855f7"];
+
+  return (
+    <div
+      key={seed}
+      style={{
+        position: "fixed",
+        inset: 0,
+        pointerEvents: "none",
+        overflow: "hidden",
+        zIndex: 9999,
+      }}
+    >
+      {pieces.map((i) => {
+        const left = (i / pieces.length) * 100;
+        const delay = (i % 10) * 0.15;
+        const duration = 2 + (i % 5) * 0.3;
+        const size = 6 + (i % 4) * 2;
+        const color = colors[i % colors.length];
+        return (
+          <div
+            key={`${seed}-${i}`}
+            style={{
+              position: "absolute",
+              top: "-16px",
+              left: `${left}%`,
+              width: size,
+              height: size * 0.4,
+              background: color,
+              borderRadius: 2,
+              opacity: 0.9,
+              transform: `rotate(${i * 11}deg)`,
+              animationName: "rs-confetti-fall",
+              animationDuration: `${duration}s`,
+              animationTimingFunction: "ease-out",
+              animationDelay: `${delay}s`,
+              animationFillMode: "forwards",
+            }}
+          />
+        );
+      })}
+      <style>{`
+        @keyframes rs-confetti-fall {
+          0% {
+            transform: translate3d(0, -100px, 0) rotateZ(0deg);
+            opacity: 1;
+          }
+          100% {
+            transform: translate3d(0, 110vh, 0) rotateZ(360deg);
+            opacity: 0;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 export default function TodayPage() {
   const { user, isCheckingAuth } = useAuth();
   const [mode, setMode] = useState("Strategic Push");
@@ -134,6 +193,19 @@ export default function TodayPage() {
 
   const [profilePrefs, setProfilePrefs] = useState(null);
   const [showOnboardingCompleteBanner, setShowOnboardingCompleteBanner] = useState(false);
+
+  const [showConfetti, setShowConfetti] = useState(false);
+  const confettiSeedRef = useRef(0);
+  const dailyHitsConfettiTriggeredRef = useRef(false);
+  const prevQueueLenRef = useRef(0);
+
+  function triggerConfetti() {
+    confettiSeedRef.current += 1;
+    setShowConfetti(true);
+    if (typeof window !== "undefined") {
+      window.setTimeout(() => setShowConfetti(false), 2500);
+    }
+  }
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -173,6 +245,34 @@ export default function TodayPage() {
       }
     });
   }, [user, mode]);
+
+  // Confetti when all Daily Hits are completed
+  useEffect(() => {
+    const total = items?.length ?? 0;
+    if (total <= 0) {
+      dailyHitsConfettiTriggeredRef.current = false;
+      return;
+    }
+    if (
+      dailyHitsCompleted === total &&
+      !dailyHitsConfettiTriggeredRef.current
+    ) {
+      dailyHitsConfettiTriggeredRef.current = true;
+      triggerConfetti();
+    } else if (dailyHitsCompleted < total) {
+      dailyHitsConfettiTriggeredRef.current = false;
+    }
+  }, [dailyHitsCompleted, items]);
+
+  // Confetti when Today's 3 Actions queue first reaches 3 tasks
+  useEffect(() => {
+    const prev = prevQueueLenRef.current;
+    const current = Array.isArray(queueEntries) ? queueEntries.length : 0;
+    if (prev !== 3 && current === 3) {
+      triggerConfetti();
+    }
+    prevQueueLenRef.current = current;
+  }, [queueEntries]);
 
   useEffect(() => {
     if (!user) return;
@@ -952,6 +1052,7 @@ export default function TodayPage() {
   if (isCheckingAuth || !user || loading) {
     return (
       <DashboardLayout>
+        {showConfetti && <ConfettiOverlay seed={confettiSeedRef.current} />}
         <p style={{ fontSize: 14, color: "#6b7280" }}>Loading...</p>
       </DashboardLayout>
     );
@@ -959,6 +1060,7 @@ export default function TodayPage() {
 
   return (
     <DashboardLayout>
+      {showConfetti && <ConfettiOverlay seed={confettiSeedRef.current} />}
       <div
         className="today-header"
         style={{
