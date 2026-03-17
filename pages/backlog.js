@@ -256,6 +256,14 @@ export default function BacklogPage() {
     return [...inOrder, ...remaining];
   }, [categories, categoryOrder]);
 
+  const categoryOptions = useMemo(() => {
+    const list = orderedCategories || [];
+    return list
+      .map((c) => ({ id: c.id, name: c.name }))
+      .filter((c) => c.id && c.name)
+      .sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { sensitivity: "base" }));
+  }, [orderedCategories]);
+
   async function persistCategoryOrderToServer(order) {
     if (!user || !order?.length) return;
     try {
@@ -1650,6 +1658,32 @@ export default function BacklogPage() {
             >
               Manage non-daily tasks, tags, subtasks, and AI-scored priority order.
             </p>
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <select
+              value=""
+              onChange={(e) => {
+                const id = e.target.value;
+                if (!id) return;
+                router.push(`/category/${id}`);
+              }}
+              style={{
+                fontSize: 13,
+                padding: "8px 10px",
+                borderRadius: 10,
+                border: "1px solid #e5e7eb",
+                background: "#ffffff",
+                cursor: "pointer",
+                minWidth: 220,
+              }}
+            >
+              <option value="">Category pages…</option>
+              {categoryOptions.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
