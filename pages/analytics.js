@@ -306,8 +306,9 @@ export default function AnalyticsPage() {
           dailyHitsRate7: maxDailyPossible > 0 ? Math.round((totalDailyIn7 / maxDailyPossible) * 100) : null,
         });
 
-        const overdue = openTasks.filter((t) => t.due_date && dateStrLocal(new Date(t.due_date)) < todayStr).length;
-        const highPriorityOpen = openTasks.filter((t) => (t.priority === "Critical" || t.priority === "High")).length;
+        const openTodoDoing = openTasks.filter((t) => t.status === "todo" || t.status === "doing");
+        const overdue = openTodoDoing.filter((t) => t.due_date && dateStrLocal(new Date(t.due_date)) < todayStr).length;
+        const highPriorityOpen = openTodoDoing.filter((t) => (t.priority === "Critical" || t.priority === "High")).length;
         setPuttingOff({ overdue, highPriorityOpen });
 
         const categoryCounts = {};

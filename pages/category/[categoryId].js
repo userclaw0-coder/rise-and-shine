@@ -13,8 +13,9 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 import DashboardLayout from "../../components/DashboardLayout";
+import Modal from "../../components/Modal";
 import { useAuth } from "../../hooks/useAuth";
-import { getBacklogTasks, getCategoriesWithSubcategories, getUserProfile, upsertUserProfile } from "../../lib/db";
+import { createTask, getAllTags, getBacklogTasks, getCategoriesWithSubcategories, getUserProfile, setTaskTags, updateTask, upsertUserProfile } from "../../lib/db";
 
 function SortableTaskRow({ task }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -38,6 +39,7 @@ function SortableTaskRow({ task }) {
         gap: 10,
         opacity: isDragging ? 0.8 : 1,
         marginLeft: isSubtask ? 18 : 0,
+        cursor: "pointer",
       }}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -52,6 +54,7 @@ function SortableTaskRow({ task }) {
       <div
         {...attributes}
         {...listeners}
+        onClick={(e) => e.stopPropagation()}
         style={{
           cursor: "grab",
           color: "#9ca3af",
@@ -78,12 +81,67 @@ export default function CategoryPage() {
   const [categories, setCategories] = useState([]);
   const [category, setCategory] = useState(null);
   const [tasks, setTasks] = useState([]);
+  const [tags, setTags] = useState([]);
 
   const [projectLinks, setProjectLinks] = useState("");
   const [savingLinks, setSavingLinks] = useState(false);
 
   const [orderIds, setOrderIds] = useState([]);
   const [savingOrder, setSavingOrder] = useState(false);
+
+  const [taskModalOpen, setTaskModalOpen] = useState(false);
+  const [taskModalMode, setTaskModalMode] = useState("create"); // create | edit
+  const [activeTaskId, setActiveTaskId] = useState(null);
+  const [taskTitle, setTaskTitle] = useState("");
+  const [taskPriority, setTaskPriority] = useState("Medium");
+  const [taskStatus, setTaskStatus] = useState("todo");
+  const [taskDueDate, setTaskDueDate] = useState("");
+  const [taskEffortHours, setTaskEffortHours] = useState("");
+  const [taskTagsText, setTaskTagsText] = useState("");
+  const [savingTask, setSavingTask] = useState(false);
+
+  function extractTagNames(task) {
+    if (!task || !task.tags) return [];
+    const result = [];
+    for (const t of task.tags) {
+      if (!t) continue;
+      if (typeof t === "string") result.push(t);
+      else if (t.tag && t.tag.name) result.push(t.tag.name);
+      else if (t.name) result.push(t.name);
+    }
+    return result;
+  }
+
+  function parseTagText(text) {
+    return (text || "")
+      .split(",")
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0);
+  }
+
+  function openCreateTaskModal() {
+    setTaskModalMode("create");
+    setActiveTaskId(null);
+    setTaskTitle("");
+    setTaskPriority("Medium");
+    setTaskStatus("todo");
+    setTaskDueDate("");
+    setTaskEffortHours("");
+    setTaskTagsText("");
+    setTaskModalOpen(true);
+  }
+
+  function openEditTaskModal(task) {
+    setTaskModalMode("edit");
+    setActiveTaskId(task?.id || null);
+    setTaskTitle(task?.title || "");
+    setTaskPriority(task?.priority || "Medium");
+    setTaskStatus(task?.status || "todo");
+    setTaskDueDate(task?.due_date ? String(task.due_date).slice(0, 10) : "");
+    setTaskEffortHours(task?.effort_hours != null ? String(task.effort_hours) : "");
+    setTaskTagsText(extractTagNames(task).join(", "));
+    setTaskModalOpen(true);
+  }
 
   useEffect(() => {
     if (!user || !categoryId) return;
@@ -106,6 +164,10 @@ export default function CategoryPage() {
         const all = tasksRes.data || [];
         const inCat = all.filter((t) => String(t.category_id) === String(categoryId));
         setTasks(inCat);
+
+        getAllTags(user.id).then((tRes) => {
+          if (!tRes.error) setTags(tRes.data || []);
+        });
 
         const prefs = profileRes?.data?.profile?.preferences || {};
         const linksMap = prefs.category_project_links || {};
@@ -146,6 +208,64 @@ export default function CategoryPage() {
     const remaining = (tasks || []).filter((t) => !(orderIds || []).includes(t.id));
     return [...inOrder, ...remaining];
   }, [tasks, orderIds]);
+
+  async function reloadCategoryTasks() {
+    if (!user || !categoryId) return;
+    const tasksRes = await getBacklogTasks(user.id, { includeArchived: false });
+    if (!tasksRes.error) {
+      const all = tasksRes.data || [];
+      const inCat = all.filter((t) => String(t.category_id) === String(categoryId));
+      setTasks(inCat);
+    }
+  }
+
+  async function handleSaveTask() {
+    if (!user || !categoryId) return;
+    const title = String(taskTitle || "").trim();
+    if (!title) return;
+
+    setSavingTask(true);
+    setError("");
+    try {
+      const updates = {
+        title,
+        priority: taskPriority || "Medium",
+        status: taskStatus || "todo",
+        due_date: taskDueDate ? taskDueDate : null,
+        effort_hours: taskEffortHours ? Number(taskEffortHours) : null,
+        category_id: categoryId,
+      };
+
+      if (taskModalMode === "create") {
+        const res = await createTask(user.id, updates);
+        if (res.error) {
+          setError(res.error.message || "Failed to create task.");
+          return;
+        }
+        const newTaskId = res.data?.id;
+        if (newTaskId) {
+          const tagNames = parseTagText(taskTagsText);
+          await setTaskTags(user.id, newTaskId, tagNames);
+          // include in order (append)
+          setOrderIds((prev) => (prev.includes(newTaskId) ? prev : [...prev, newTaskId]));
+        }
+      } else {
+        if (!activeTaskId) return;
+        const res = await updateTask(user.id, activeTaskId, updates);
+        if (res.error) {
+          setError(res.error.message || "Failed to update task.");
+          return;
+        }
+        const tagNames = parseTagText(taskTagsText);
+        await setTaskTags(user.id, activeTaskId, tagNames);
+      }
+
+      await reloadCategoryTasks();
+      setTaskModalOpen(false);
+    } finally {
+      setSavingTask(false);
+    }
+  }
 
   async function handleSaveProjectLinks() {
     if (!user || !categoryId) return;
@@ -255,6 +375,21 @@ export default function CategoryPage() {
             >
               Action Items
             </button>
+            <button
+              type="button"
+              onClick={openCreateTaskModal}
+              style={{
+                fontSize: 13,
+                padding: "8px 12px",
+                borderRadius: 999,
+                border: "1px solid #111827",
+                background: "#111827",
+                cursor: "pointer",
+                color: "#ffffff",
+              }}
+            >
+              Add task
+            </button>
           </div>
         </div>
 
@@ -337,16 +472,17 @@ export default function CategoryPage() {
                 <SortableContext items={orderedTasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {orderedTasks.map((t) => (
-                      <SortableTaskRow
-                        key={t.id}
-                        task={{
-                          ...t,
-                          _parentTitle:
-                            t.parent_task_id && parentTitleById.get(t.parent_task_id)
-                              ? parentTitleById.get(t.parent_task_id)
-                              : null,
-                        }}
-                      />
+                      <div key={t.id} onClick={() => openEditTaskModal(t)}>
+                        <SortableTaskRow
+                          task={{
+                            ...t,
+                            _parentTitle:
+                              t.parent_task_id && parentTitleById.get(t.parent_task_id)
+                                ? parentTitleById.get(t.parent_task_id)
+                                : null,
+                          }}
+                        />
+                      </div>
                     ))}
                   </div>
                 </SortableContext>
@@ -355,6 +491,122 @@ export default function CategoryPage() {
           )}
         </section>
       </div>
+
+      <Modal
+        title={taskModalMode === "create" ? "Add task" : "Edit task"}
+        open={taskModalOpen}
+        onClose={() => !savingTask && setTaskModalOpen(false)}
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
+            Title
+            <input
+              type="text"
+              value={taskTitle}
+              onChange={(e) => setTaskTitle(e.target.value)}
+              style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 13 }}
+            />
+          </label>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
+              Priority
+              <select
+                value={taskPriority}
+                onChange={(e) => setTaskPriority(e.target.value)}
+                style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 13, background: "#fff" }}
+              >
+                <option>Critical</option>
+                <option>High</option>
+                <option>Medium</option>
+                <option>Low</option>
+              </select>
+            </label>
+            <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
+              Status
+              <select
+                value={taskStatus}
+                onChange={(e) => setTaskStatus(e.target.value)}
+                style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 13, background: "#fff" }}
+              >
+                <option value="todo">todo</option>
+                <option value="doing">doing</option>
+                <option value="done">done</option>
+                <option value="archived">archived</option>
+              </select>
+            </label>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
+              Due date
+              <input
+                type="date"
+                value={taskDueDate}
+                onChange={(e) => setTaskDueDate(e.target.value)}
+                style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 13 }}
+              />
+            </label>
+            <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
+              Effort hours
+              <input
+                type="number"
+                step="0.25"
+                value={taskEffortHours}
+                onChange={(e) => setTaskEffortHours(e.target.value)}
+                style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 13 }}
+              />
+            </label>
+          </div>
+
+          <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
+            Tags (comma separated)
+            <input
+              type="text"
+              value={taskTagsText}
+              onChange={(e) => setTaskTagsText(e.target.value)}
+              placeholder={tags?.length ? `e.g. ${tags.slice(0, 5).map((t) => t.name).join(", ")}` : "e.g. quick-win, urgent"}
+              style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 13 }}
+            />
+          </label>
+
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
+            <button
+              type="button"
+              onClick={() => setTaskModalOpen(false)}
+              disabled={savingTask}
+              style={{
+                padding: "8px 12px",
+                borderRadius: 999,
+                border: "1px solid #e5e7eb",
+                background: "#ffffff",
+                cursor: savingTask ? "not-allowed" : "pointer",
+                color: "#111827",
+                fontSize: 13,
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveTask}
+              disabled={savingTask || !String(taskTitle || "").trim()}
+              style={{
+                padding: "8px 12px",
+                borderRadius: 999,
+                border: "1px solid #111827",
+                background: "#111827",
+                cursor: savingTask || !String(taskTitle || "").trim() ? "not-allowed" : "pointer",
+                color: "#ffffff",
+                fontSize: 13,
+                opacity: savingTask || !String(taskTitle || "").trim() ? 0.8 : 1,
+              }}
+            >
+              {savingTask ? "Saving…" : "Save"}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </DashboardLayout>
   );
 }
