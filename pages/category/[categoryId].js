@@ -20,6 +20,8 @@ function SortableTaskRow({ task }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id });
 
+  const isSubtask = !!task.parent_task_id;
+
   return (
     <div
       ref={setNodeRef}
@@ -35,13 +37,15 @@ function SortableTaskRow({ task }) {
         alignItems: "center",
         gap: 10,
         opacity: isDragging ? 0.8 : 1,
+        marginLeft: isSubtask ? 18 : 0,
       }}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 600, fontSize: 14, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {task.title}
+          {isSubtask ? "↳ " : ""}{task.title}
         </div>
         <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>
+          {task._parentTitle ? `Parent: ${task._parentTitle} • ` : ""}
           {task.priority || "n/a"}{task.due_date ? ` • due ${String(task.due_date).slice(0, 10)}` : ""}{task.status ? ` • ${task.status}` : ""}
         </div>
       </div>
@@ -71,6 +75,7 @@ export default function CategoryPage() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [categories, setCategories] = useState([]);
   const [category, setCategory] = useState(null);
   const [tasks, setTasks] = useState([]);
 
@@ -94,6 +99,7 @@ export default function CategoryPage() {
         ]);
 
         const cats = catsRes.data || [];
+        setCategories(cats);
         const cat = cats.find((c) => String(c.id) === String(categoryId)) || null;
         setCategory(cat);
 
@@ -116,6 +122,23 @@ export default function CategoryPage() {
 
     load();
   }, [user, categoryId]);
+
+  const categoryOptions = useMemo(() => {
+    return (categories || [])
+      .map((c) => ({ id: c.id, name: c.name }))
+      .filter((c) => c.id && c.name)
+      .sort((a, b) =>
+        String(a.name).localeCompare(String(b.name), undefined, { sensitivity: "base" })
+      );
+  }, [categories]);
+
+  const parentTitleById = useMemo(() => {
+    const m = new Map();
+    for (const t of tasks || []) {
+      if (t?.id && t?.title) m.set(t.id, t.title);
+    }
+    return m;
+  }, [tasks]);
 
   const orderedTasks = useMemo(() => {
     const byId = new Map((tasks || []).map((t) => [t.id, t]));
@@ -186,24 +209,53 @@ export default function CategoryPage() {
               {category?.name || "Category"}
             </h1>
             <p style={{ margin: "4px 0 0", fontSize: 13, color: "#6b7280" }}>
-              Drag to reorder tasks in this category.
+              Drag to reorder tasks in this category. Subtasks are shown and can be reordered too.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => router.push("/backlog")}
-            style={{
-              fontSize: 13,
-              padding: "8px 12px",
-              borderRadius: 999,
-              border: "1px solid #e5e7eb",
-              background: "#ffffff",
-              cursor: "pointer",
-              color: "#111827",
-            }}
-          >
-            Back to Action Items
-          </button>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <select
+              value={String(categoryId || "")}
+              onChange={(e) => {
+                const id = e.target.value;
+                if (!id) return;
+                router.push(`/category/${id}`);
+              }}
+              style={{
+                fontSize: 13,
+                padding: "8px 10px",
+                borderRadius: 10,
+                border: "1px solid #e5e7eb",
+                background: "#ffffff",
+                cursor: "pointer",
+                minWidth: 240,
+              }}
+            >
+              {categoryOptions.length === 0 ? (
+                <option value={String(categoryId || "")}>Category pages…</option>
+              ) : (
+                categoryOptions.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))
+              )}
+            </select>
+            <button
+              type="button"
+              onClick={() => router.push("/backlog")}
+              style={{
+                fontSize: 13,
+                padding: "8px 12px",
+                borderRadius: 999,
+                border: "1px solid #e5e7eb",
+                background: "#ffffff",
+                cursor: "pointer",
+                color: "#111827",
+              }}
+            >
+              Action Items
+            </button>
+          </div>
         </div>
 
         {error && (
@@ -285,7 +337,16 @@ export default function CategoryPage() {
                 <SortableContext items={orderedTasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {orderedTasks.map((t) => (
-                      <SortableTaskRow key={t.id} task={t} />
+                      <SortableTaskRow
+                        key={t.id}
+                        task={{
+                          ...t,
+                          _parentTitle:
+                            t.parent_task_id && parentTitleById.get(t.parent_task_id)
+                              ? parentTitleById.get(t.parent_task_id)
+                              : null,
+                        }}
+                      />
                     ))}
                   </div>
                 </SortableContext>
