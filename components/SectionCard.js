@@ -1,14 +1,6 @@
 export default function SectionCard({ title, subtitle, children }) {
   return (
-    <section
-      style={{
-        marginBottom: 20,
-        padding: 16,
-        background: "#ffffff",
-        borderRadius: 16,
-        border: "1px solid #e5e7eb",
-      }}
-    >
+    <section className="rs-section-card">
       <div
         style={{
           marginBottom: 10,
@@ -19,26 +11,9 @@ export default function SectionCard({ title, subtitle, children }) {
         }}
       >
         <div>
-          <h2
-            style={{
-              fontSize: 16,
-              fontWeight: 600,
-              letterSpacing: "-0.01em",
-              margin: 0,
-            }}
-          >
-            {title}
-          </h2>
+          <h2 className="rs-section-card__title">{title}</h2>
           {subtitle && (
-            <p
-              style={{
-                margin: "4px 0 0",
-                fontSize: 13,
-                color: "#6b7280",
-              }}
-            >
-              {subtitle}
-            </p>
+            <div className="rs-section-card__subtitle">{subtitle}</div>
           )}
         </div>
       </div>

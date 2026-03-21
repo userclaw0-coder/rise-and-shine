@@ -20,7 +20,7 @@ function useLocalDateTime() {
     }
     update();
     const id = setInterval(update, 60 * 1000);
-    return () => clearInterval(id);
+    return () => clearTimeout(id);
   }, []);
   return dateTime;
 }
@@ -50,19 +50,8 @@ export default function DashboardLayout({ children }) {
   }
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "#f5f5f5",
-        fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
-      }}
-    >
-      <header
-        style={{
-          borderBottom: "1px solid #e5e5e5",
-          background: "#ffffff",
-        }}
-      >
+    <div className="rs-shell">
+      <header className="rs-header">
         <div
           className="dashboard-header-inner"
           style={{
@@ -80,42 +69,17 @@ export default function DashboardLayout({ children }) {
               gap: 12,
             }}
           >
-            <div
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: 999,
-                background: "#111827",
-                color: "white",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 14,
-                fontWeight: 600,
-              }}
-            >
-              RS
-            </div>
+            <div className="rs-brand-mark">RS</div>
             <div>
-              <div
-                style={{
-                  fontWeight: 600,
-                  fontSize: 16,
-                  letterSpacing: "-0.01em",
-                }}
-              >
-                Rise &amp; Shine
-              </div>
-              <div style={{ fontSize: 12, color: "#6b7280" }}>
-                Intentional daily planning
-              </div>
+              <div className="rs-brand-title">Rise &amp; Shine</div>
+              <div className="rs-brand-tagline">Intentional daily planning</div>
               {user && (
                 <>
-                  <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>
+                  <div className="rs-brand-meta" style={{ marginTop: 2 }}>
                     Signed in as {user.email}
                   </div>
                   {localDateTime && (
-                    <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 1 }}>
+                    <div className="rs-brand-meta" style={{ marginTop: 1 }}>
                       {localDateTime}
                     </div>
                   )}
@@ -130,16 +94,8 @@ export default function DashboardLayout({ children }) {
                 <button
                   key={link.href}
                   type="button"
+                  className={`rs-nav-btn${isActive ? " rs-nav-btn--active" : ""}`}
                   onClick={() => router.push(link.href)}
-                  style={{
-                    borderRadius: 999,
-                    border: "1px solid",
-                    borderColor: isActive ? "#111827" : "#e5e7eb",
-                    fontSize: 13,
-                    background: isActive ? "#111827" : "#ffffff",
-                    color: isActive ? "#ffffff" : "#111827",
-                    cursor: "pointer",
-                  }}
                 >
                   {link.label}
                 </button>
@@ -147,16 +103,9 @@ export default function DashboardLayout({ children }) {
             })}
             <button
               type="button"
+              className="rs-nav-btn rs-nav-btn--muted"
               onClick={handleSignOut}
-              style={{
-                marginLeft: 4,
-                borderRadius: 999,
-                border: "1px solid #e5e7eb",
-                fontSize: 13,
-                background: "#f9fafb",
-                color: "#374151",
-                cursor: "pointer",
-              }}
+              style={{ marginLeft: 4 }}
             >
               Sign out
             </button>
@@ -175,4 +124,3 @@ export default function DashboardLayout({ children }) {
     </div>
   );
 }
-
