@@ -2009,3 +2009,338 @@ body {
   background: linear-gradient(90deg, var(--rs-olive) 0%, var(--rs-accent-gold) 100%);
   transition: width 0.4s ease;
 }
+
+/* Strategic project workspace (/category/[id]) */
+.rs-project-workspace {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding-bottom: 32px;
+}
+
+.rs-project-workspace__header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.rs-project-workspace__error {
+  color: var(--rs-error);
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.rs-project-hero {
+  margin-bottom: var(--rs-space-5);
+  background: linear-gradient(
+    160deg,
+    rgba(245, 206, 83, 0.06) 0%,
+    var(--rs-surface-raised) 50%
+  );
+  border-color: rgba(212, 175, 55, 0.2);
+}
+
+.rs-project-hero__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (min-width: 900px) {
+  .rs-project-hero__grid {
+    grid-template-columns: minmax(0, 1fr) 200px;
+    gap: 28px;
+  }
+}
+
+.rs-project-mantra-input {
+  font-size: 1.15rem !important;
+  font-family: var(--rs-font-display);
+  font-weight: 600;
+  padding: 12px 14px !important;
+  margin-bottom: 14px;
+}
+
+.rs-project-narrative-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--rs-on-surface-variant);
+}
+
+.rs-project-narrative {
+  min-height: 120px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.rs-project-hero__save-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.rs-project-hero__hint {
+  font-size: 12px;
+  color: var(--rs-on-surface-variant);
+  max-width: 420px;
+  line-height: 1.4;
+}
+
+.rs-project-alignment-card {
+  border-radius: var(--rs-radius-md);
+  background: linear-gradient(145deg, #2c2820 0%, #1a1814 100%);
+  color: rgba(255, 255, 255, 0.95);
+  padding: 20px 18px;
+  text-align: center;
+  box-shadow: 0 12px 32px rgba(42, 38, 32, 0.15);
+}
+
+.rs-project-alignment-card__value {
+  font-family: var(--rs-font-display);
+  font-size: 2.25rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.rs-project-alignment-card__label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-top: 8px;
+  opacity: 0.85;
+}
+
+.rs-project-alignment-card__sub {
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 12px 0 0;
+  opacity: 0.75;
+  text-align: left;
+}
+
+.rs-project-workspace__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (min-width: 1024px) {
+  .rs-project-workspace__grid {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+    gap: 24px;
+  }
+}
+
+.rs-project-workspace__main-col {
+  min-width: 0;
+}
+
+.rs-project-workspace__aside {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.rs-project-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.rs-project-sort {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--rs-on-surface-variant);
+}
+
+.rs-project-sort label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rs-btn-ghost--small {
+  font-size: 12px !important;
+  padding: 6px 10px !important;
+}
+
+.rs-project-ai-card {
+  position: relative;
+  border-color: rgba(90, 118, 142, 0.2) !important;
+  background: linear-gradient(165deg, rgba(90, 118, 142, 0.06) 0%, var(--rs-surface-raised) 100%);
+}
+
+.rs-project-ai-card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.rs-project-ai-card__icon {
+  font-size: 22px !important;
+  color: var(--rs-accent-gold);
+}
+
+.rs-project-field-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--rs-on-surface-variant);
+  margin-bottom: 6px;
+}
+
+.rs-project-suggest-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rs-project-suggest-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--rs-on-surface);
+}
+
+.rs-project-suggest-list li .material-symbols-outlined {
+  font-size: 16px;
+  color: var(--rs-primary-strong);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.rs-project-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.rs-project-add-row .rs-input {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.rs-project-ai-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rs-project-health-card__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.rs-project-health-card__head .material-symbols-outlined {
+  font-size: 20px;
+  color: #7f5c53;
+}
+
+.rs-project-health-row {
+  margin-bottom: 12px;
+}
+
+.rs-project-health-row__label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--rs-on-surface);
+  margin-bottom: 4px;
+}
+
+.rs-project-range {
+  width: 100%;
+  accent-color: var(--rs-accent-gold);
+}
+
+.rs-project-resource-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.rs-project-resource-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  align-items: center;
+}
+
+@media (min-width: 400px) {
+  .rs-project-resource-row {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.4fr) auto auto;
+  }
+}
+
+.rs-project-icon-btn {
+  border: none;
+  background: var(--rs-surface-low);
+  border-radius: var(--rs-radius-sm);
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--rs-on-surface-variant);
+}
+
+.rs-project-icon-btn:hover {
+  background: rgba(174, 64, 37, 0.1);
+  color: #7a3d2c;
+}
+
+.rs-project-icon-btn .material-symbols-outlined {
+  font-size: 20px;
+}
+
+.rs-project-add-resource {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.rs-project-tips {
+  background: var(--rs-surface-low);
+}
+
+.rs-project-tips__list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--rs-on-surface-variant);
+}

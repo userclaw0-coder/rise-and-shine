@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/router";
 import BacklogStrategicTaskCard from "../components/BacklogStrategicTaskCard";
 import DashboardLayout from "../components/DashboardLayout";
@@ -1702,7 +1703,7 @@ export default function BacklogPage() {
               aria-label="Open category page"
               style={{ minWidth: 200 }}
             >
-              <option value="">Category pages…</option>
+              <option value="">Project workspaces…</option>
               {categoryOptions.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -1986,6 +1987,15 @@ export default function BacklogPage() {
                 ))}
             </select>
           </label>
+          {categoryFilter ? (
+            <Link
+              href={`/category/${categoryFilter}`}
+              className="rs-btn-ghost"
+              style={{ fontSize: 13, textDecoration: "none", whiteSpace: "nowrap" }}
+            >
+              Project workspace →
+            </Link>
+          ) : null}
           <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
             <span style={{ fontSize: 12, color: "#6b7280" }}>Tag</span>
             <select
