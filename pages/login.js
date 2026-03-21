@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { BrandMarkLockup } from "../components/BrandMark";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -50,13 +51,16 @@ export default function Login() {
         className="rs-section-card"
         style={{ maxWidth: 420, width: "100%", marginBottom: 0 }}
       >
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+          <BrandMarkLockup maxHeight={100} />
+        </div>
         <h1
           className="rs-section-card__title"
-          style={{ fontSize: "1.35rem", marginBottom: 6 }}
+          style={{ fontSize: "1.35rem", marginBottom: 6, textAlign: "center" }}
         >
-          Rise &amp; Shine
+          Welcome back
         </h1>
-        <p className="rs-section-card__subtitle" style={{ marginTop: 0, marginBottom: 16 }}>
+        <p className="rs-section-card__subtitle" style={{ marginTop: 0, marginBottom: 16, textAlign: "center" }}>
           Log in to continue, or create a new account.
         </p>
         <form onSubmit={handleSubmit}>

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/router";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../hooks/useAuth";
+import { BrandMarkIcon, BrandMarkLockup } from "./BrandMark";
 
 function useLocalDateTime() {
   const [dateTime, setDateTime] = useState("");
@@ -80,9 +81,7 @@ export default function DashboardLayout({ children }) {
           <span className="material-symbols-outlined">menu</span>
         </button>
         <div className="rs-mobile-brand">
-          <div className="rs-brand-mark" style={{ width: 36, height: 36, fontSize: 12 }}>
-            RS
-          </div>
+          <BrandMarkIcon size={36} title="" />
           <div className="rs-sidebar-brand__text" style={{ minWidth: 0 }}>
             <div className="rs-brand-title" style={{ fontSize: "1rem" }}>
               Rise &amp; Shine
@@ -105,12 +104,11 @@ export default function DashboardLayout({ children }) {
         className={`rs-sidebar${sidebarOpen ? " rs-sidebar--open" : ""}`}
         aria-label="Main navigation"
       >
-        <div className="rs-sidebar-brand">
-          <div className="rs-brand-mark">RS</div>
-          <div className="rs-sidebar-brand__text">
-            <div className="rs-brand-title">Rise &amp; Shine</div>
-            <div className="rs-sidebar-tagline">The mindful curator</div>
-          </div>
+        <div className="rs-sidebar-brand rs-sidebar-brand--lockup">
+          <BrandMarkLockup maxHeight={76} />
+          <p className="rs-sidebar-tagline" style={{ margin: 0 }}>
+            The mindful curator
+          </p>
         </div>
 
         <nav className="rs-sidebar-nav" aria-label="Sections">

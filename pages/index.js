@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { BrandMarkIcon } from "../components/BrandMark";
 
 export default function Landing() {
   const [user, setUser] = useState(null);
@@ -37,23 +38,8 @@ export default function Landing() {
           justifyContent: "space-between",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: 999,
-              background: "#111827",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#fefefe",
-              fontSize: 14,
-              fontWeight: 700,
-            }}
-          >
-            R
-          </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <BrandMarkIcon size={34} alt="" />
           <span style={{ fontWeight: 600, letterSpacing: "-0.03em" }}>Rise &amp; Shine</span>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>

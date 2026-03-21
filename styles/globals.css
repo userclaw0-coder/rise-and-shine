@@ -123,6 +123,35 @@ body {
   box-shadow: var(--rs-shadow-soft);
 }
 
+/* Logo image (replaces “RS” monogram) */
+.rs-brand-mark--logo {
+  border-radius: var(--rs-radius-md);
+  background: #1a2226;
+  padding: 3px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  overflow: hidden;
+  box-shadow: 0 4px 14px rgba(26, 34, 38, 0.25);
+}
+
+.rs-brand-mark--logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.rs-brand-lockup {
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.rs-sidebar-brand--lockup {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
 .rs-brand-title {
   font-family: var(--rs-font-display);
   font-weight: 700;

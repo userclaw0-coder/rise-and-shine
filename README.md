@@ -61,6 +61,10 @@ OPENAI_API_KEY=
 PLANNER_MODEL=
 RISE_PROJECT_ROOT=
 RISE_INGEST_TOKEN=
+
+# Canonical site URL for Open Graph / social previews (Facebook, LinkedIn, iMessage).
+# On Vercel, og:image still works without this using VERCEL_URL at build time; set this to your custom domain when you have one.
+NEXT_PUBLIC_SITE_URL=https://your-domain.com
 ```
 
 3. Start dev server:
