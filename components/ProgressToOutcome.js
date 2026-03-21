@@ -4,8 +4,8 @@ const EXPECTED_ACTIONS = 3;
 const MAX_SCALE = 10;
 
 /**
- * Bar 1: Daily Hits (template tasks) — grey background, fill = completed.
- * Bar 2: Today's 3 Actions (all other completions today) — expected 3, blue fill then gold overflow.
+ * Bar 1: Daily Hits — gold gradient fill.
+ * Bar 2: Today's actions — olive to goal, gold overflow.
  */
 function DualProgressBars({
   dailyHitsTotal,
@@ -23,51 +23,54 @@ function DualProgressBars({
   );
   const actionsFillPct =
     actionsScale > 0 ? (otherCompletedToday / actionsScale) * 100 : 0;
-  const actionsBluePct =
+  const actionsOlivePct =
     actionsScale > 0
       ? (Math.min(EXPECTED_ACTIONS, otherCompletedToday) / actionsScale) * 100
       : 0;
-  const actionsGoldPct = actionsFillPct - actionsBluePct;
+  const actionsGoldPct = actionsFillPct - actionsOlivePct;
 
   const queueTotal = queueEntries?.length ?? 0;
   const queueCompleted =
     queueEntries?.filter((e) => !!completionMap[e.task?.id]).length ?? 0;
 
+  const hitsComplete =
+    dailyHitsTotal > 0 && dailyHitsCompleted === dailyHitsTotal;
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       <div>
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
             alignItems: "baseline",
-            marginBottom: 4,
+            marginBottom: 6,
           }}
         >
-          <span style={{ fontSize: 12, fontWeight: 500, color: "#374151" }}>
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              color: "var(--rs-on-surface-variant)",
+            }}
+          >
             Daily Hits
           </span>
-          <span style={{ fontSize: 12, color: "#6b7280" }}>
+          <span style={{ fontSize: 12, color: "var(--rs-on-surface-variant)" }}>
             {dailyHitsCompleted} of {dailyHitsTotal} completed
           </span>
         </div>
-        <div
-          style={{
-            height: 10,
-            borderRadius: 999,
-            background: "#e5e7eb",
-            overflow: "hidden",
-          }}
-        >
+        <div className="rs-momentum__track" style={{ height: 10 }}>
           <div
             style={{
               height: "100%",
               width: `${dailyHitsPct}%`,
-              borderRadius: 999,
-              background:
-                dailyHitsCompleted === dailyHitsTotal && dailyHitsTotal > 0
-                  ? "#059669"
-                  : "#3b82f6",
+              borderRadius: "var(--rs-radius-full)",
+              background: hitsComplete
+                ? "linear-gradient(90deg, var(--rs-olive) 0%, #6b7530 100%)"
+                : "linear-gradient(90deg, var(--rs-primary-strong) 0%, var(--rs-accent-gold) 55%, var(--rs-primary-glow) 100%)",
               transition: "width 0.3s ease",
             }}
           />
@@ -80,16 +83,24 @@ function DualProgressBars({
             display: "flex",
             justifyContent: "space-between",
             alignItems: "baseline",
-            marginBottom: 4,
+            marginBottom: 6,
           }}
         >
-          <span style={{ fontSize: 12, fontWeight: 500, color: "#374151" }}>
-            Today&apos;s 3 Actions
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              color: "var(--rs-on-surface-variant)",
+            }}
+          >
+            Today&apos;s actions
           </span>
-          <span style={{ fontSize: 12, color: "#6b7280" }}>
+          <span style={{ fontSize: 12, color: "var(--rs-on-surface-variant)" }}>
             {otherCompletedToday} of {EXPECTED_ACTIONS}+
             {otherCompletedToday > EXPECTED_ACTIONS && (
-              <span style={{ color: "#b45309", marginLeft: 4 }}>
+              <span style={{ color: "var(--rs-accent-gold)", marginLeft: 4, fontWeight: 600 }}>
                 · exceeding goal
               </span>
             )}
@@ -98,8 +109,8 @@ function DualProgressBars({
         <div
           style={{
             height: 10,
-            borderRadius: 999,
-            background: "#e5e7eb",
+            borderRadius: "var(--rs-radius-full)",
+            background: "rgba(186, 177, 159, 0.2)",
             overflow: "hidden",
             position: "relative",
           }}
@@ -110,20 +121,21 @@ function DualProgressBars({
               left: 0,
               top: 0,
               bottom: 0,
-              width: `${actionsBluePct}%`,
+              width: `${actionsOlivePct}%`,
               borderRadius: "999px 0 0 999px",
-              background: "#3b82f6",
+              background: "linear-gradient(90deg, var(--rs-olive) 0%, #6b7530 100%)",
               transition: "width 0.3s ease",
             }}
           />
           <div
             style={{
               position: "absolute",
-              left: `${actionsBluePct}%`,
+              left: `${actionsOlivePct}%`,
               top: 0,
               bottom: 0,
               width: `${actionsGoldPct}%`,
-              background: "#b45309",
+              background:
+                "linear-gradient(90deg, var(--rs-primary-strong) 0%, var(--rs-primary-glow) 100%)",
               transition: "width 0.3s ease",
             }}
           />
@@ -131,7 +143,7 @@ function DualProgressBars({
       </div>
 
       {queueTotal > 0 && (
-        <div style={{ fontSize: 12, color: "#9ca3af", marginTop: -4 }}>
+        <div style={{ fontSize: 12, color: "var(--rs-on-surface-variant)", marginTop: -8 }}>
           Current queue: {queueCompleted} of {queueTotal} completed
         </div>
       )}
@@ -147,24 +159,24 @@ function OutcomePill({ category, outcomeLabel, done, total }) {
         display: "inline-flex",
         alignItems: "center",
         gap: 6,
-        padding: "4px 10px",
-        borderRadius: 999,
-        border: `1px solid ${allDone ? "#86efac" : "#e5e7eb"}`,
-        background: allDone ? "#f0fdf4" : "#f9fafb",
+        padding: "6px 12px",
+        borderRadius: "var(--rs-radius-full)",
+        border: `1px solid ${
+          allDone ? "rgba(85, 93, 30, 0.35)" : "rgba(186, 177, 159, 0.22)"
+        }`,
+        background: allDone ? "rgba(85, 93, 30, 0.08)" : "var(--rs-surface-low)",
         fontSize: 12,
-        color: allDone ? "#059669" : "#374151",
+        color: allDone ? "var(--rs-olive)" : "var(--rs-on-surface)",
         lineHeight: 1.4,
       }}
     >
-      <span style={{ fontWeight: 500 }}>{category}</span>
-      <span style={{ color: "#9ca3af" }}>·</span>
-      <span style={{ color: allDone ? "#059669" : "#6b7280" }}>
-        {outcomeLabel}
-      </span>
+      <span style={{ fontWeight: 600 }}>{category}</span>
+      <span style={{ color: "var(--rs-on-surface-variant)", opacity: 0.7 }}>·</span>
+      <span style={{ color: "var(--rs-on-surface-variant)" }}>{outcomeLabel}</span>
       <span
         style={{
           fontSize: 11,
-          color: allDone ? "#059669" : "#9ca3af",
+          color: allDone ? "var(--rs-olive)" : "var(--rs-on-surface-variant)",
           fontVariantNumeric: "tabular-nums",
         }}
       >
@@ -190,34 +202,20 @@ export default function ProgressToOutcome({
 
   return (
     <section
+      className="rs-section-card"
       style={{
-        marginBottom: 20,
-        padding: 16,
-        background: "#ffffff",
-        borderRadius: 16,
-        border: `1px solid ${allQueueDone ? "#86efac" : "#e5e7eb"}`,
+        marginBottom: "var(--rs-space-5)",
+        borderColor: allQueueDone ? "rgba(85, 93, 30, 0.22)" : undefined,
+        boxShadow: allQueueDone ? "0 12px 32px rgba(85, 93, 30, 0.08)" : undefined,
       }}
     >
-      <h2
-        style={{
-          fontSize: 16,
-          fontWeight: 600,
-          letterSpacing: "-0.01em",
-          margin: "0 0 4px",
-        }}
-      >
-        {allQueueDone ? "All actions complete" : "Today's Progress"}
+      <h2 className="rs-section-card__title" style={{ marginBottom: 4 }}>
+        {allQueueDone ? "All actions complete" : "Today's progress"}
       </h2>
-      <p
-        style={{
-          margin: "0 0 12px",
-          fontSize: 13,
-          color: "#6b7280",
-        }}
-      >
+      <p className="rs-section-card__subtitle" style={{ marginBottom: 14 }}>
         {allQueueDone
-          ? 'Great work! Hit "Refresh queue" below to get your next 3 actions.'
-          : "Daily Hits (template) and today's actions from your queue or Action Items. Beyond 3 actions turns gold."}
+          ? 'Great work! Tap "Refresh queue" to load your next three actions.'
+          : "Daily Hits and everything else you complete today. Beyond three actions, momentum shows in gold."}
       </p>
 
       <DualProgressBars
@@ -243,7 +241,7 @@ export default function ProgressToOutcome({
         }
         if (categories.size > 0) {
           return (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14 }}>
               {Array.from(categories.entries()).map(([cat, counts]) => (
                 <OutcomePill
                   key={cat}
@@ -257,7 +255,7 @@ export default function ProgressToOutcome({
           );
         }
         return (
-          <p style={{ fontSize: 12, color: "#9ca3af", margin: "12px 0 0" }}>
+          <p style={{ fontSize: 12, color: "var(--rs-on-surface-variant)", margin: "14px 0 0" }}>
             Assign categories to your tasks to see which outcomes they advance.
           </p>
         );

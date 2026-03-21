@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import DashboardLayout from "../components/DashboardLayout";
+import PageHeader from "../components/PageHeader";
 import { useAuth } from "../hooks/useAuth";
 import {
   getCompletedEventsInRange,
@@ -387,65 +388,43 @@ export default function AnalyticsPage() {
   return (
     <DashboardLayout>
       <div>
-        <h1
-          style={{
-            fontSize: 22,
-            fontWeight: 600,
-            margin: 0,
-            letterSpacing: "-0.02em",
-          }}
-        >
-          Analytics
-        </h1>
-        <p
-          style={{
-            margin: "4px 0 0",
-            fontSize: 13,
-            color: "#6b7280",
-          }}
-        >
-          Completion momentum, time-of-day, weekly reviews, and recent activity.
-        </p>
-        {weeklyStreak > 0 && (
-          <p
-            style={{
-              margin: "4px 0 0",
-              fontSize: 12,
-              color: "#059669",
-            }}
-          >
-            Weekly review streak: {weeklyStreak} week{weeklyStreak === 1 ? "" : "s"}.
-          </p>
-        )}
+        <PageHeader
+          eyebrow="Your momentum"
+          title="Analytics & rhythm"
+          subtitle={
+            weeklyStreak > 0
+              ? `Completion patterns, time-of-day, and reviews. Weekly review streak: ${weeklyStreak} week${weeklyStreak === 1 ? "" : "s"}.`
+              : "Quantifying the vision. Tracking the spirit — completions, time-of-day, and reviews."
+          }
+        />
 
         {error && (
           <p style={{ color: "#b91c1c", fontSize: 13, marginTop: 8 }}>{error}</p>
         )}
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
-            gap: 10,
-            marginTop: 16,
-          }}
-        >
-          <div style={{ padding: "10px 12px", borderRadius: 12, background: "#f0fdf4", border: "1px solid #bbf7d0", fontSize: 13 }}>
-            <div style={{ color: "#166534", fontWeight: 600 }}>{summaryMetrics.daysActive7}</div>
-            <div style={{ color: "#15803d", fontSize: 11 }}>Days active (7d)</div>
+        <div className="rs-stat-grid" style={{ marginTop: 8 }}>
+          <div className="rs-stat-tile">
+            <div className="rs-stat-tile__label">Days active</div>
+            <div className="rs-stat-tile__value">{summaryMetrics.daysActive7}</div>
+            <div className="rs-stat-tile__hint">Last 7 days</div>
           </div>
-          <div style={{ padding: "10px 12px", borderRadius: 12, background: "#f0fdf4", border: "1px solid #bbf7d0", fontSize: 13 }}>
-            <div style={{ color: "#166534", fontWeight: 600 }}>{summaryMetrics.daysActive30}</div>
-            <div style={{ color: "#15803d", fontSize: 11 }}>Days active (30d)</div>
+          <div className="rs-stat-tile">
+            <div className="rs-stat-tile__label">Days active</div>
+            <div className="rs-stat-tile__value">{summaryMetrics.daysActive30}</div>
+            <div className="rs-stat-tile__hint">Last 30 days</div>
           </div>
-          <div style={{ padding: "10px 12px", borderRadius: 12, background: "#eff6ff", border: "1px solid #bfdbfe", fontSize: 13 }}>
-            <div style={{ color: "#1d4ed8", fontWeight: 600 }}>{summaryMetrics.thisWeekTotal} vs {summaryMetrics.lastWeekTotal}</div>
-            <div style={{ color: "#2563eb", fontSize: 11 }}>This week vs last week</div>
+          <div className="rs-stat-tile rs-stat-tile--gold">
+            <div className="rs-stat-tile__label">This week vs last</div>
+            <div className="rs-stat-tile__value" style={{ fontSize: "1.35rem" }}>
+              {summaryMetrics.thisWeekTotal} / {summaryMetrics.lastWeekTotal}
+            </div>
+            <div className="rs-stat-tile__hint">Task completions</div>
           </div>
           {summaryMetrics.dailyHitsRate7 != null && (
-            <div style={{ padding: "10px 12px", borderRadius: 12, background: "#fefce8", border: "1px solid #fef08a", fontSize: 13 }}>
-              <div style={{ color: "#854d0e", fontWeight: 600 }}>{summaryMetrics.dailyHitsRate7}%</div>
-              <div style={{ color: "#a16207", fontSize: 11 }}>Daily hits (7d)</div>
+            <div className="rs-stat-tile">
+              <div className="rs-stat-tile__label">Daily hits</div>
+              <div className="rs-stat-tile__value">{summaryMetrics.dailyHitsRate7}%</div>
+              <div className="rs-stat-tile__hint">7-day ritual rate</div>
             </div>
           )}
         </div>
@@ -489,20 +468,11 @@ export default function AnalyticsPage() {
           @media (max-width: 768px) { .analytics-grid { grid-template-columns: 1fr; } }
         `}</style>
         <div className="analytics-grid">
-        <section
-          style={{
-            marginTop: 0,
-            padding: 16,
-            background: "linear-gradient(180deg, #fafbfc 0%, #fff 100%)",
-            borderRadius: 16,
-            border: "1px solid #e5e7eb",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-          }}
-        >
-          <h2 style={{ fontSize: 16, fontWeight: 600, margin: "0 0 4px", color: "#111827" }}>
-            Six Human Needs — change over time
+        <section className="rs-section-card">
+          <h2 className="rs-section-card__title" style={{ marginBottom: 4 }}>
+            Six human needs — change over time
           </h2>
-          <p style={{ fontSize: 13, color: "#6b7280", margin: "0 0 12px" }}>
+          <p className="rs-section-card__subtitle" style={{ marginBottom: 12 }}>
             Your needs scores from the two previous weeks (1–10). Overlap shows where scores stayed similar.
           </p>
           {humanNeedsRadarData.some((d) => d.older > 0 || d.newer > 0) ? (
@@ -515,86 +485,96 @@ export default function AnalyticsPage() {
                   data={humanNeedsRadarData}
                   margin={{ top: 24, right: 24, bottom: 24, left: 24 }}
                 >
-                  <PolarGrid stroke="#e5e7eb" strokeOpacity={0.8} />
+                  <PolarGrid stroke="rgba(186, 177, 159, 0.35)" strokeOpacity={0.9} />
                   <PolarAngleAxis
                     dataKey="subject"
-                    tick={{ fontSize: 12, fill: "#4b5563" }}
+                    tick={{ fontSize: 12, fill: "#655e4f" }}
                     tickLine={false}
                   />
                   <PolarRadiusAxis
                     angle={90}
                     domain={[0, 10]}
-                    tick={{ fontSize: 10, fill: "#9ca3af" }}
+                    tick={{ fontSize: 10, fill: "#9a9285" }}
                     tickCount={6}
                   />
                   <Radar
                     name={humanNeedsWeekLabels.older ? `Week of ${formatWeekLabel(humanNeedsWeekLabels.older)}` : "2 weeks ago"}
                     dataKey="older"
-                    stroke="#64748b"
-                    fill="#64748b"
-                    fillOpacity={0.35}
+                    stroke="#a89880"
+                    fill="#c4b5a0"
+                    fillOpacity={0.4}
                     strokeWidth={1.5}
                   />
                   <Radar
                     name={humanNeedsWeekLabels.newer ? `Week of ${formatWeekLabel(humanNeedsWeekLabels.newer)}` : "Last week"}
                     dataKey="newer"
-                    stroke="#0d9488"
-                    fill="#14b8a6"
-                    fillOpacity={0.55}
+                    stroke="#8a7020"
+                    fill="#d4af37"
+                    fillOpacity={0.5}
                     strokeWidth={2}
                   />
                   <Legend
                     wrapperStyle={{ fontSize: 12 }}
-                    formatter={(value) => <span style={{ color: "#374151" }}>{value}</span>}
+                    formatter={(value) => <span style={{ color: "#37322a" }}>{value}</span>}
                   />
                 </RadarChart>
               </ResponsiveContainer>
             </div>
           ) : (
-            <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
+            <p style={{ fontSize: 13, color: "var(--rs-on-surface-variant)", margin: 0 }}>
               Complete at least one weekly review (with needs scores) to see your chart here.
             </p>
           )}
         </section>
 
-        <section
-          style={{
-            marginTop: 0,
-            padding: 16,
-            background: "#fff",
-            borderRadius: 16,
-            border: "1px solid #e5e7eb",
-          }}
-        >
-          <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
-            Planner refinement analytics (last 30 days)
+        <section className="rs-section-card">
+          <h2 className="rs-section-card__title" style={{ fontSize: "1rem", marginBottom: 10 }}>
+            Planner refinement (30 days)
           </h2>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <div style={{ padding: "8px 12px", borderRadius: 10, background: "#ecfdf5", color: "#065f46", fontSize: 13 }}>
+            <div
+              style={{
+                padding: "8px 12px",
+                borderRadius: "var(--rs-radius-md)",
+                background: "rgba(85, 93, 30, 0.1)",
+                color: "var(--rs-olive)",
+                fontSize: 13,
+                fontWeight: 600,
+              }}
+            >
               Accepted: <strong>{plannerRefinementMetrics.accepted}</strong>
             </div>
-            <div style={{ padding: "8px 12px", borderRadius: 10, background: "#eff6ff", color: "#1d4ed8", fontSize: 13 }}>
+            <div
+              style={{
+                padding: "8px 12px",
+                borderRadius: "var(--rs-radius-md)",
+                background: "rgba(245, 206, 83, 0.2)",
+                color: "var(--rs-primary-strong)",
+                fontSize: 13,
+                fontWeight: 600,
+              }}
+            >
               Applied: <strong>{plannerRefinementMetrics.applied}</strong>
             </div>
-            <div style={{ padding: "8px 12px", borderRadius: 10, background: "#f9fafb", color: "#374151", fontSize: 13 }}>
+            <div
+              style={{
+                padding: "8px 12px",
+                borderRadius: "var(--rs-radius-md)",
+                background: "var(--rs-surface-low)",
+                color: "var(--rs-on-surface-variant)",
+                fontSize: 13,
+              }}
+            >
               Dismissed: <strong>{plannerRefinementMetrics.dismissed}</strong>
             </div>
           </div>
         </section>
 
-        <section
-          style={{
-            marginTop: 0,
-            padding: 16,
-            background: "#fff",
-            borderRadius: 16,
-            border: "1px solid #e5e7eb",
-          }}
-        >
-          <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
-            7-day momentum (tasks completed per day)
+        <section className="rs-section-card">
+          <h2 className="rs-section-card__title" style={{ fontSize: "1rem", marginBottom: 4 }}>
+            7-day momentum
           </h2>
-          <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 8px" }}>
+          <p className="rs-section-card__subtitle" style={{ marginBottom: 8, fontSize: 12 }}>
             Bottom: daily template tasks. Top: other tasks.
           </p>
           <MeasuredChart
@@ -605,26 +585,18 @@ export default function AnalyticsPage() {
                 <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="daily" name="Daily tasks" stackId="a" fill="#0d9488" radius={[0, 0, 0, 0]} />
-                <Bar dataKey="other" name="Other tasks" stackId="a" fill="#374151" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="daily" name="Daily tasks" stackId="a" fill="#555d1e" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="other" name="Other tasks" stackId="a" fill="#d4af37" radius={[4, 4, 0, 0]} />
               </BarChart>
             )}
           />
         </section>
 
-        <section
-          style={{
-            marginTop: 0,
-            padding: 16,
-            background: "#fff",
-            borderRadius: 16,
-            border: "1px solid #e5e7eb",
-          }}
-        >
-          <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
+        <section className="rs-section-card">
+          <h2 className="rs-section-card__title" style={{ fontSize: "1rem", marginBottom: 4 }}>
             30-day momentum
           </h2>
-          <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 8px" }}>
+          <p className="rs-section-card__subtitle" style={{ marginBottom: 8, fontSize: 12 }}>
             Bottom: daily template tasks. Top: other tasks.
           </p>
           <MeasuredChart
@@ -635,24 +607,16 @@ export default function AnalyticsPage() {
                 <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="daily" name="Daily tasks" stackId="a" fill="#0d9488" radius={[0, 0, 0, 0]} />
-                <Bar dataKey="other" name="Other tasks" stackId="a" fill="#374151" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="daily" name="Daily tasks" stackId="a" fill="#555d1e" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="other" name="Other tasks" stackId="a" fill="#d4af37" radius={[4, 4, 0, 0]} />
               </BarChart>
             )}
           />
         </section>
 
-        <section
-          style={{
-            marginTop: 0,
-            padding: 16,
-            background: "#fff",
-            borderRadius: 16,
-            border: "1px solid #e5e7eb",
-          }}
-        >
-          <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
-            Completion time of day (local hour)
+        <section className="rs-section-card">
+          <h2 className="rs-section-card__title" style={{ fontSize: "1rem", marginBottom: 10 }}>
+            Completion time of day
           </h2>
           <MeasuredChart
             renderChart={({ width, height }) => (
@@ -661,25 +625,17 @@ export default function AnalyticsPage() {
                 <XAxis dataKey="hour" tick={{ fontSize: 10 }} />
                 <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
                 <Tooltip />
-                <Bar dataKey="count" fill="#059669" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="count" fill="#6b5500" radius={[4, 4, 0, 0]} />
               </BarChart>
             )}
           />
         </section>
 
-        <section
-          style={{
-            marginTop: 0,
-            padding: 16,
-            background: "#fff",
-            borderRadius: 16,
-            border: "1px solid #e5e7eb",
-          }}
-        >
-          <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
+        <section className="rs-section-card">
+          <h2 className="rs-section-card__title" style={{ fontSize: "1rem", marginBottom: 4 }}>
             Progress by category (30 days)
           </h2>
-          <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 8px" }}>
+          <p className="rs-section-card__subtitle" style={{ marginBottom: 8, fontSize: 12 }}>
             Where your completions landed — helps see balance toward goals.
           </p>
           {completionsByCategory.length > 0 ? (
@@ -691,28 +647,28 @@ export default function AnalyticsPage() {
                   <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} />
                   <YAxis type="category" dataKey="name" width={56} tick={{ fontSize: 11 }} />
                   <Tooltip />
-                  <Bar dataKey="count" fill="#0d9488" radius={[0, 4, 4, 0]} name="Completions" />
+                  <Bar dataKey="count" fill="#555d1e" radius={[0, 4, 4, 0]} name="Completions" />
                 </BarChart>
               )}
             />
           ) : (
-            <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>Complete tasks to see breakdown by category.</p>
+            <p style={{ fontSize: 13, color: "var(--rs-on-surface-variant)", margin: 0 }}>
+              Complete tasks to see breakdown by category.
+            </p>
           )}
         </section>
 
         <section
+          className="rs-section-card"
           style={{
-            marginTop: 0,
-            padding: 16,
-            background: "linear-gradient(180deg, #f0fdf4 0%, #fff 100%)",
-            borderRadius: 16,
-            border: "1px solid #bbf7d0",
+            background: "linear-gradient(180deg, rgba(85, 93, 30, 0.06) 0%, var(--rs-surface-raised) 100%)",
+            borderColor: "rgba(85, 93, 30, 0.15)",
           }}
         >
-          <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px", color: "#14532d" }}>
+          <h2 className="rs-section-card__title" style={{ fontSize: "1rem", marginBottom: 4, color: "var(--rs-olive)" }}>
             Progress toward outcomes (30 days)
           </h2>
-          <p style={{ fontSize: 12, color: "#166534", margin: "0 0 8px" }}>
+          <p className="rs-section-card__subtitle" style={{ marginBottom: 8, fontSize: 12, color: "var(--rs-on-surface-variant)" }}>
             Completions that advance each outcome area — your goals in motion.
           </p>
           {outcomeProgress.length > 0 ? (
@@ -720,34 +676,35 @@ export default function AnalyticsPage() {
               height={260}
               renderChart={({ width, height }) => (
                 <BarChart width={width} height={height} data={outcomeProgress} layout="vertical" margin={{ left: 80 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#d1fae5" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(186, 177, 159, 0.25)" />
                   <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} />
                   <YAxis type="category" dataKey="name" width={76} tick={{ fontSize: 11 }} />
                   <Tooltip />
-                  <Bar dataKey="count" fill="#059669" radius={[0, 4, 4, 0]} name="Completions" />
+                  <Bar dataKey="count" fill="#6b5500" radius={[0, 4, 4, 0]} name="Completions" />
                 </BarChart>
               )}
             />
           ) : (
-            <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
+            <p style={{ fontSize: 13, color: "var(--rs-on-surface-variant)", margin: 0 }}>
               Complete tasks in categorized areas to see progress toward your outcomes.
             </p>
           )}
         </section>
 
         <section
+          className="rs-section-card"
           style={{
-            marginTop: 0,
-            padding: 16,
-            background: "linear-gradient(180deg, #eff6ff 0%, #fff 100%)",
-            borderRadius: 16,
-            border: "1px solid #bfdbfe",
+            background: "linear-gradient(180deg, rgba(212, 175, 55, 0.08) 0%, var(--rs-surface-raised) 100%)",
+            borderColor: "rgba(212, 175, 55, 0.22)",
           }}
         >
-          <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px", color: "#1e40af" }}>
+          <h2
+            className="rs-section-card__title"
+            style={{ fontSize: "1rem", marginBottom: 4, color: "var(--rs-primary-strong)" }}
+          >
             Completions by outcome (30 days)
           </h2>
-          <p style={{ fontSize: 12, color: "#2563eb", margin: "0 0 8px" }}>
+          <p className="rs-section-card__subtitle" style={{ marginBottom: 8, fontSize: 12 }}>
             Tasks linked to your Vision outcomes — assign on Action Items or use AI Enrich.
           </p>
           {completionsByOutcome.length > 0 ? (
@@ -755,34 +712,31 @@ export default function AnalyticsPage() {
               height={260}
               renderChart={({ width, height }) => (
                 <BarChart width={width} height={height} data={completionsByOutcome} layout="vertical" margin={{ left: 80 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#dbeafe" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(186, 177, 159, 0.25)" />
                   <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} />
                   <YAxis type="category" dataKey="name" width={76} tick={{ fontSize: 11 }} />
                   <Tooltip />
-                  <Bar dataKey="count" fill="#2563eb" radius={[0, 4, 4, 0]} name="Completions" />
+                  <Bar dataKey="count" fill="#b8860b" radius={[0, 4, 4, 0]} name="Completions" />
                 </BarChart>
               )}
             />
           ) : (
-            <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
+            <p style={{ fontSize: 13, color: "var(--rs-on-surface-variant)", margin: 0 }}>
               Link tasks to outcomes on the Action Items page (Outcome column) or run Apply enrichment to see distribution here.
             </p>
           )}
         </section>
 
         <section
+          className="rs-section-card"
           style={{
-            marginTop: 0,
-            padding: 16,
-            background: "linear-gradient(180deg, #f5f3ff 0%, #fff 100%)",
-            borderRadius: 16,
-            border: "1px solid #ddd6fe",
+            background: "linear-gradient(180deg, var(--rs-surface-low) 0%, var(--rs-surface-raised) 100%)",
           }}
         >
-          <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px", color: "#5b21b6" }}>
+          <h2 className="rs-section-card__title" style={{ fontSize: "1rem", marginBottom: 4 }}>
             Completions by life domain (30 days)
           </h2>
-          <p style={{ fontSize: 12, color: "#6d28d9", margin: "0 0 8px" }}>
+          <p className="rs-section-card__subtitle" style={{ marginBottom: 8, fontSize: 12 }}>
             Effort by life domain — set Domain on Action Items or via AI Enrich.
           </p>
           {completionsByLifeDomain.length > 0 ? (
@@ -790,36 +744,27 @@ export default function AnalyticsPage() {
               height={260}
               renderChart={({ width, height }) => (
                 <BarChart width={width} height={height} data={completionsByLifeDomain} layout="vertical" margin={{ left: 80 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e9d5ff" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(186, 177, 159, 0.25)" />
                   <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} />
                   <YAxis type="category" dataKey="name" width={76} tick={{ fontSize: 11 }} />
                   <Tooltip />
-                  <Bar dataKey="count" fill="#7c3aed" radius={[0, 4, 4, 0]} name="Completions" />
+                  <Bar dataKey="count" fill="#7f5c53" radius={[0, 4, 4, 0]} name="Completions" />
                 </BarChart>
               )}
             />
           ) : (
-            <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
+            <p style={{ fontSize: 13, color: "var(--rs-on-surface-variant)", margin: 0 }}>
               Set Life domain on Action Items or run Apply enrichment to see effort by domain.
             </p>
           )}
         </section>
 
-        <section
-          style={{
-            marginTop: 0,
-            padding: 16,
-            background: "#fff",
-            borderRadius: 16,
-            border: "1px solid #e5e7eb",
-            gridColumn: "1 / -1",
-          }}
-        >
-          <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
+        <section className="rs-section-card" style={{ gridColumn: "1 / -1" }}>
+          <h2 className="rs-section-card__title" style={{ fontSize: "1rem", marginBottom: 10 }}>
             Completed tasks with timestamps (last 50)
           </h2>
           {lastCompleted.length === 0 ? (
-            <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
+            <p style={{ fontSize: 13, color: "var(--rs-on-surface-variant)", margin: 0 }}>
               No completed events yet.
             </p>
           ) : (

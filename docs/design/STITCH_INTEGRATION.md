@@ -20,5 +20,8 @@ Subfolders:
 | **Borders** | **No-line** preference: sectioning via **background shifts**; **ghost** borders only where needed (e.g. subtle nav outline ~15% opacity). |
 | **Shadows** | Soft, warm-tinted ambient shadow (low opacity), not heavy Material-style drops. |
 | **Implementation** | **CSS variables** in `styles/globals.css` + shared classes on **DashboardLayout**, **SectionCard**, **Modal**; app-wide fonts via `_app.js`. |
+| **Shell** | **Left sidebar** (Material Symbols + olive **Start on Today** CTA) on desktop; **drawer + top bar** under ~1080px. |
+| **Editorial type** | **Cormorant Garamond** (`--rs-font-serif`) for page titles via **`PageHeader`**. |
+| **Olive / gold** | `--rs-olive` / `--rs-accent-gold` for CTAs, charts, and dark insight panels. |
 
 Individual pages still use many inline styles; over time, prefer `var(--rs-*)` or shared classes for new UI.

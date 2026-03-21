@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import AiPlannerGuidance from "../components/AiPlannerGuidance";
 import DashboardLayout from "../components/DashboardLayout";
+import PageHeader from "../components/PageHeader";
 import ProgressToOutcome from "../components/ProgressToOutcome";
 import QueueBehaviorHelper from "../components/QueueBehaviorHelper";
 import SectionCard from "../components/SectionCard";
@@ -92,9 +93,21 @@ function getNextActionHint(taskId, queueEntries, completionMap) {
 }
 
 const HINT_STYLES = {
-  action: { color: "#1d4ed8", background: "#eff6ff", border: "#bfdbfe" },
-  done: { color: "#6b7280", background: "#f9fafb", border: "#e5e7eb" },
-  success: { color: "#059669", background: "#ecfdf5", border: "#86efac" },
+  action: {
+    color: "var(--rs-primary-strong)",
+    background: "rgba(245, 206, 83, 0.18)",
+    border: "rgba(212, 175, 55, 0.45)",
+  },
+  done: {
+    color: "var(--rs-on-surface-variant)",
+    background: "var(--rs-surface-low)",
+    border: "rgba(186, 177, 159, 0.25)",
+  },
+  success: {
+    color: "var(--rs-olive)",
+    background: "rgba(85, 93, 30, 0.1)",
+    border: "rgba(85, 93, 30, 0.28)",
+  },
 };
 
 function ConfettiOverlay({ seed }) {
@@ -217,6 +230,22 @@ export default function TodayPage() {
   }, []);
 
   const todayStr = useMemo(() => getTodayDateStr(), []);
+
+  const dateLabel = useMemo(() => {
+    const d = new Date(`${todayStr}T12:00:00`);
+    return d.toLocaleDateString(undefined, {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+  }, [todayStr]);
+
+  const dailyMomentumPct = useMemo(() => {
+    const n = items?.length ?? 0;
+    if (n <= 0) return 0;
+    return Math.round((dailyHitsCompleted / n) * 100);
+  }, [items, dailyHitsCompleted]);
 
   const dailyTemplateTaskIds = useMemo(() => {
     const ids = [];
@@ -1053,7 +1082,7 @@ export default function TodayPage() {
     return (
       <DashboardLayout>
         {showConfetti && <ConfettiOverlay seed={confettiSeedRef.current} />}
-        <p style={{ fontSize: 14, color: "#6b7280" }}>Loading...</p>
+        <p style={{ fontSize: 14, color: "var(--rs-on-surface-variant)" }}>Loading…</p>
       </DashboardLayout>
     );
   }
@@ -1061,90 +1090,62 @@ export default function TodayPage() {
   return (
     <DashboardLayout>
       {showConfetti && <ConfettiOverlay seed={confettiSeedRef.current} />}
-      <div
-        className="today-header"
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "baseline",
-          marginBottom: 16,
-          gap: 12,
-        }}
-      >
-        <div>
-          <h1
-            style={{
-              fontSize: 22,
-              fontWeight: 600,
-              margin: 0,
-              letterSpacing: "-0.02em",
-            }}
-          >
-            Today
-          </h1>
-          <p
-            style={{
-              margin: "4px 0 0",
-              fontSize: 13,
-              color: "#6b7280",
-            }}
-          >
-            {todayStr}
-          </p>
-        </div>
-        <div
-          className="today-header-controls"
-          style={{
-            display: "flex",
-            gap: 8,
-            alignItems: "center",
-            flexWrap: "wrap",
-          }}
-        >
-          <label
-            style={{
-              fontSize: 13,
-              color: "#4b5563",
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-          >
-            Mode
-            <select
-              value={mode}
-              onChange={(e) => setMode(e.target.value)}
+      <PageHeader
+        eyebrow="Morning intentions"
+        title="Today"
+        subtitle={dateLabel}
+        right={
+          <div className="today-header-controls rs-toolbar">
+            <label
               style={{
                 fontSize: 13,
-                padding: "4px 8px",
-                borderRadius: 999,
-                border: "1px solid #d1d5db",
-                background: "#ffffff",
+                color: "var(--rs-on-surface-variant)",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                fontWeight: 600,
               }}
             >
-              {MODES.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            onClick={handleRefreshQueue}
-            disabled={isRefilling}
-            style={{
-              fontSize: 13,
-              padding: "4px 10px",
-              borderRadius: 999,
-              border: "1px solid #d1d5db",
-              background: "#ffffff",
-              cursor: isRefilling ? "wait" : "pointer",
-            }}
-          >
-            {isRefilling ? "Refilling…" : "Refresh queue"}
-          </button>
+              Mode
+              <select
+                className="rs-select-compact"
+                value={mode}
+                onChange={(e) => setMode(e.target.value)}
+              >
+                {MODES.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="rs-btn-ghost"
+              onClick={handleRefreshQueue}
+              disabled={isRefilling}
+              style={{ cursor: isRefilling ? "wait" : "pointer", opacity: isRefilling ? 0.65 : 1 }}
+            >
+              {isRefilling ? "Refilling…" : "Refresh queue"}
+            </button>
+          </div>
+        }
+      >
+        <div className="rs-momentum" aria-label="Daily hits progress">
+          <div className="rs-momentum__row">
+            <span className="rs-momentum__label">Daily momentum</span>
+            <span className="rs-momentum__pct">{dailyMomentumPct}%</span>
+          </div>
+          <div className="rs-momentum__track" role="progressbar" aria-valuenow={dailyMomentumPct} aria-valuemin={0} aria-valuemax={100}>
+            <div className="rs-momentum__fill" style={{ width: `${dailyMomentumPct}%` }} />
+          </div>
+          <p className="rs-momentum__meta">
+            {(items?.length ?? 0) === 0
+              ? "Add rituals on Daily Hits to track morning consistency."
+              : `${dailyHitsCompleted} of ${items.length} daily hits complete.`}
+          </p>
         </div>
-      </div>
+      </PageHeader>
 
       {showOnboardingCompleteBanner && (
         <div
@@ -1216,28 +1217,19 @@ export default function TodayPage() {
                 No daily items yet. Configure them on the Daily Hits page.
               </p>
             )}
-            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+            <ul className="rs-daily-hit-list">
               {items.map((it) => (
-                <li
-                  key={it.id}
-                  style={{
-                    padding: "6px 0",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    borderBottom: "1px solid #f3f4f6",
-                  }}
-                >
+                <li key={it.id} className="rs-daily-hit-row">
                   <input
                     type="checkbox"
                     checked={!!completionMap[it.task?.id]}
                     onChange={() => toggleTaskCompletion(it.task?.id)}
                   />
-                  <div>
-                    <div style={{ fontSize: 14 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="rs-daily-hit-row__title">
                       {it.task?.title || "Untitled task"}
                     </div>
-                    <div style={{ fontSize: 12, color: "#9ca3af" }}>
+                    <div className="rs-daily-hit-row__meta">
                       {it.task?.priority || "Priority n/a"}
                     </div>
                   </div>
@@ -1346,16 +1338,16 @@ export default function TodayPage() {
                       <div
                         style={{
                           fontSize: 12,
-                          color: "#4b5563",
+                          color: "var(--rs-on-surface)",
                           marginTop: 4,
-                          padding: "3px 8px",
-                          background: "#f0fdf4",
-                          borderRadius: 6,
-                          borderLeft: "3px solid #86efac",
-                          lineHeight: 1.4,
+                          padding: "8px 10px",
+                          background: "rgba(245, 206, 83, 0.12)",
+                          borderRadius: "var(--rs-radius-sm)",
+                          borderLeft: "3px solid var(--rs-accent-gold)",
+                          lineHeight: 1.45,
                         }}
                       >
-                        <span style={{ fontWeight: 600, color: "#059669" }}>
+                        <span style={{ fontWeight: 700, color: "var(--rs-primary-strong)" }}>
                           Why now:
                         </span>{" "}
                         {displayReasonByTaskId.get(entry.task.id) || "Top-scored task for your current focus"}
@@ -1421,23 +1413,18 @@ export default function TodayPage() {
         <div style={{ marginBottom: 12 }}>
           <button
             type="button"
+            className="rs-btn-primary"
             onClick={handleRefineWithAi}
             disabled={aiLoading || queueEntries.length !== 3}
             style={{
               fontSize: 13,
-              padding: "8px 14px",
-              borderRadius: 999,
-              border: "1px solid #111827",
-              background: "#111827",
-              color: "#fff",
               cursor: aiLoading || queueEntries.length !== 3 ? "not-allowed" : "pointer",
-              opacity: aiLoading || queueEntries.length !== 3 ? 0.7 : 1,
             }}
           >
             {aiLoading ? "Refining…" : "Refine these 3 with AI"}
           </button>
           {queueEntries.length !== 3 && (
-            <span style={{ marginLeft: 8, fontSize: 12, color: "#6b7280" }}>
+            <span style={{ marginLeft: 8, fontSize: 12, color: "var(--rs-on-surface-variant)" }}>
               Queue must have 3 tasks to refine.
             </span>
           )}
