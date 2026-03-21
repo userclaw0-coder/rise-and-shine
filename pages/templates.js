@@ -9,8 +9,11 @@ import {
   addTemplateItem,
   removeTemplateItem,
   createTask,
+  updateTask,
+  setTaskTags,
 } from "../lib/db";
 import DashboardLayout from "../components/DashboardLayout";
+import Modal from "../components/Modal";
 import { useAuth } from "../hooks/useAuth";
 
 import {
@@ -27,7 +30,7 @@ import {
 
 import { CSS } from "@dnd-kit/utilities";
 
-function SortableRow({ item, onRemove }) {
+function SortableRow({ item, onEdit, onRemove }) {
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({ id: item.id });
 
@@ -54,23 +57,42 @@ function SortableRow({ item, onRemove }) {
           <span style={{ color: "#666" }}>({item.task?.priority})</span>
         </div>
       </div>
-      {onRemove && (
-        <button
-          type="button"
-          onClick={() => onRemove(item.id)}
-          style={{
-            padding: "4px 8px",
-            fontSize: 12,
-            borderRadius: 6,
-            border: "1px solid #fecaca",
-            background: "#fef2f2",
-            color: "#b91c1c",
-            cursor: "pointer",
-          }}
-        >
-          Remove
-        </button>
-      )}
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {onEdit && (
+          <button
+            type="button"
+            onClick={() => onEdit(item)}
+            style={{
+              padding: "4px 8px",
+              fontSize: 12,
+              borderRadius: 6,
+              border: "1px solid #e5e7eb",
+              background: "#ffffff",
+              color: "#111827",
+              cursor: "pointer",
+            }}
+          >
+            Edit
+          </button>
+        )}
+        {onRemove && (
+          <button
+            type="button"
+            onClick={() => onRemove(item.id)}
+            style={{
+              padding: "4px 8px",
+              fontSize: 12,
+              borderRadius: 6,
+              border: "1px solid #fecaca",
+              background: "#fef2f2",
+              color: "#b91c1c",
+              cursor: "pointer",
+            }}
+          >
+            Remove
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -83,6 +105,34 @@ export default function TemplatesPage() {
   const [addableTasks, setAddableTasks] = useState([]);
   const [newEntryTitle, setNewEntryTitle] = useState("");
   const [msg, setMsg] = useState("");
+  const [editOpen, setEditOpen] = useState(false);
+  const [editingTaskId, setEditingTaskId] = useState(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editPriority, setEditPriority] = useState("Medium");
+  const [editStatus, setEditStatus] = useState("todo");
+  const [editDueDate, setEditDueDate] = useState("");
+  const [editEffortHours, setEditEffortHours] = useState("");
+  const [editTagsText, setEditTagsText] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  function extractTagNames(task) {
+    if (!task || !task.tags) return [];
+    const result = [];
+    for (const t of task.tags) {
+      if (!t) continue;
+      if (typeof t === "string") result.push(t);
+      else if (t.tag && t.tag.name) result.push(t.tag.name);
+      else if (t.name) result.push(t.name);
+    }
+    return result;
+  }
+
+  function parseTagText(text) {
+    return (text || "")
+      .split(",")
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0);
+  }
 
   async function load() {
     setMsg("Loading...");
@@ -164,6 +214,57 @@ export default function TemplatesPage() {
         setAddableTasks(aRes.data || []);
       }
       setMsg("");
+    }
+  }
+
+  function openEditItem(item) {
+    const task = item?.task || {};
+    setEditingTaskId(task?.id || null);
+    setEditTitle(task?.title || "");
+    setEditPriority(task?.priority || "Medium");
+    setEditStatus(task?.status || "todo");
+    setEditDueDate(task?.due_date ? String(task.due_date).slice(0, 10) : "");
+    setEditEffortHours(task?.effort_hours != null ? String(task.effort_hours) : "");
+    setEditTagsText(extractTagNames(task).join(", "));
+    setEditOpen(true);
+  }
+
+  async function handleSaveEdit() {
+    if (!user || !editingTaskId || !String(editTitle || "").trim()) return;
+    setSavingEdit(true);
+    setMsg("Saving…");
+    try {
+      const upd = await updateTask(user.id, editingTaskId, {
+        title: String(editTitle || "").trim(),
+        priority: editPriority || "Medium",
+        due_date: editDueDate || null,
+        effort_hours: editEffortHours === "" ? null : Number(editEffortHours),
+      });
+      if (upd.error) {
+        setMsg(upd.error.message || "Could not update item.");
+        return;
+      }
+      const st = await updateTask(user.id, editingTaskId, {
+        status: editStatus || "todo",
+      });
+      if (st.error) {
+        setMsg(st.error.message || "Could not update status.");
+        return;
+      }
+      const tagsRes = await setTaskTags(user.id, editingTaskId, parseTagText(editTagsText));
+      if (tagsRes.error) {
+        setMsg(tagsRes.error.message || "Could not update tags.");
+        return;
+      }
+      if (activeTemplateId) {
+        const iRes = await getTemplateItems(activeTemplateId);
+        if (!iRes.error) setItems(iRes.data || []);
+      }
+      setEditOpen(false);
+      setEditingTaskId(null);
+      setMsg("");
+    } finally {
+      setSavingEdit(false);
     }
   }
 
@@ -327,11 +428,127 @@ export default function TemplatesPage() {
         <DndContext collisionDetection={closestCenter} onDragEnd={onDragEnd}>
           <SortableContext items={ids} strategy={verticalListSortingStrategy}>
             {items.map((item) => (
-              <SortableRow key={item.id} item={item} onRemove={handleRemoveItem} />
+              <SortableRow
+                key={item.id}
+                item={item}
+                onEdit={openEditItem}
+                onRemove={handleRemoveItem}
+              />
             ))}
           </SortableContext>
         </DndContext>
       </div>
+      <Modal
+        title="Edit Daily Hit"
+        open={editOpen}
+        onClose={() => !savingEdit && setEditOpen(false)}
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
+            Title
+            <input
+              type="text"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 13 }}
+            />
+          </label>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
+              Priority
+              <select
+                value={editPriority}
+                onChange={(e) => setEditPriority(e.target.value)}
+                style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 13, background: "#fff" }}
+              >
+                <option value="Critical">Critical</option>
+                <option value="High">High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
+              </select>
+            </label>
+            <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
+              Status
+              <select
+                value={editStatus}
+                onChange={(e) => setEditStatus(e.target.value)}
+                style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 13, background: "#fff" }}
+              >
+                <option value="todo">todo</option>
+                <option value="doing">doing</option>
+                <option value="done">done</option>
+                <option value="archived">archived</option>
+              </select>
+            </label>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
+              Due date
+              <input
+                type="date"
+                value={editDueDate}
+                onChange={(e) => setEditDueDate(e.target.value)}
+                style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 13 }}
+              />
+            </label>
+            <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
+              Effort hours
+              <input
+                type="number"
+                step="0.25"
+                value={editEffortHours}
+                onChange={(e) => setEditEffortHours(e.target.value)}
+                style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 13 }}
+              />
+            </label>
+          </div>
+          <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
+            Tags (comma separated)
+            <input
+              type="text"
+              value={editTagsText}
+              onChange={(e) => setEditTagsText(e.target.value)}
+              placeholder="e.g. quick-win, urgent"
+              style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 13 }}
+            />
+          </label>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
+            <button
+              type="button"
+              onClick={() => setEditOpen(false)}
+              disabled={savingEdit}
+              style={{
+                padding: "8px 12px",
+                borderRadius: 999,
+                border: "1px solid #e5e7eb",
+                background: "#ffffff",
+                cursor: savingEdit ? "not-allowed" : "pointer",
+                color: "#111827",
+                fontSize: 13,
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveEdit}
+              disabled={savingEdit || !String(editTitle || "").trim()}
+              style={{
+                padding: "8px 12px",
+                borderRadius: 999,
+                border: "1px solid #111827",
+                background: "#111827",
+                cursor: savingEdit || !String(editTitle || "").trim() ? "not-allowed" : "pointer",
+                color: "#ffffff",
+                fontSize: 13,
+                opacity: savingEdit || !String(editTitle || "").trim() ? 0.8 : 1,
+              }}
+            >
+              {savingEdit ? "Saving…" : "Save"}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </DashboardLayout>
   );
 }

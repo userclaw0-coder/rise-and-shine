@@ -136,6 +136,11 @@ export default function BacklogPage() {
   const [modalTitle, setModalTitle] = useState("");
   const [modalCategoryId, setModalCategoryId] = useState("");
   const [modalSubcategoryText, setModalSubcategoryText] = useState("");
+  const [modalPriority, setModalPriority] = useState("Medium");
+  const [modalStatus, setModalStatus] = useState("todo");
+  const [modalDueDate, setModalDueDate] = useState("");
+  const [modalEffortHours, setModalEffortHours] = useState("");
+  const [modalMoveToTop, setModalMoveToTop] = useState(false);
   const [modalTagsText, setModalTagsText] = useState("");
   const [addingTask, setAddingTask] = useState(false);
 
@@ -644,6 +649,11 @@ export default function BacklogPage() {
     setModalTitle("");
     setModalCategoryId(categoryFilter || (categories[0]?.id ?? ""));
     setModalSubcategoryText("");
+    setModalPriority("Medium");
+    setModalStatus("todo");
+    setModalDueDate("");
+    setModalEffortHours("");
+    setModalMoveToTop(false);
     setModalTagsText("");
     setError("");
     setAddTaskOpen(true);
@@ -677,9 +687,17 @@ export default function BacklogPage() {
         if (subRes.data?.id) subcategoryId = subRes.data.id;
       }
     }
+    const parsedTags = parseTagText(modalTagsText);
+    const finalTags = modalMoveToTop
+      ? Array.from(new Set(["fire-fighting", ...parsedTags]))
+      : parsedTags;
+    const finalStatus = modalMoveToTop ? "todo" : (modalStatus || "todo");
     const res = await createTask(user.id, {
       title: modalTitle.trim(),
-      status: "todo",
+      status: finalStatus,
+      priority: modalMoveToTop ? "Critical" : (modalPriority || "Medium"),
+      effort_hours: modalEffortHours === "" ? null : Number(modalEffortHours),
+      due_date: modalDueDate || null,
       category_id: categoryId,
       subcategory_id: subcategoryId,
     });
@@ -690,13 +708,13 @@ export default function BacklogPage() {
     }
     const created = {
       ...res.data,
-      _tagsText: modalTagsText,
+      _tagsText: finalTags.join(", "),
       _subcategoryText: subName || (res.data?.subcategory?.name ?? ""),
     };
-    if (parseTagText(modalTagsText).length > 0) {
-      const tagRes = await setTaskTags(user.id, res.data.id, parseTagText(modalTagsText));
+    if (finalTags.length > 0) {
+      const tagRes = await setTaskTags(user.id, res.data.id, finalTags);
       if (!tagRes.error) {
-        created.tags = parseTagText(modalTagsText).map((name) => ({ name }));
+        created.tags = finalTags.map((name) => ({ name }));
       }
     }
     setTasks((prev) => [created, ...prev]);
@@ -2358,6 +2376,81 @@ export default function BacklogPage() {
                 </datalist>
               )}
             </label>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <span style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}>Priority</span>
+                <select
+                  value={modalPriority}
+                  onChange={(e) => setModalPriority(e.target.value)}
+                  disabled={modalMoveToTop}
+                  style={{
+                    fontSize: 14,
+                    padding: "10px 12px",
+                    borderRadius: 8,
+                    border: "1px solid #e5e7eb",
+                    background: modalMoveToTop ? "#f3f4f6" : "#ffffff",
+                  }}
+                >
+                  <option value="Critical">Critical</option>
+                  <option value="High">High</option>
+                  <option value="Medium">Medium</option>
+                  <option value="Low">Low</option>
+                </select>
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <span style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}>Status</span>
+                <select
+                  value={modalStatus}
+                  onChange={(e) => setModalStatus(e.target.value)}
+                  style={{
+                    fontSize: 14,
+                    padding: "10px 12px",
+                    borderRadius: 8,
+                    border: "1px solid #e5e7eb",
+                    background: "#ffffff",
+                  }}
+                >
+                  <option value="todo">todo</option>
+                  <option value="doing">doing</option>
+                  <option value="done">done</option>
+                  <option value="archived">archived</option>
+                </select>
+              </label>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <span style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}>Due date</span>
+                <input
+                  type="date"
+                  value={modalDueDate}
+                  onChange={(e) => setModalDueDate(e.target.value)}
+                  style={{
+                    fontSize: 14,
+                    padding: "10px 12px",
+                    borderRadius: 8,
+                    border: "1px solid #e5e7eb",
+                    background: "#ffffff",
+                  }}
+                />
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <span style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}>Effort hours</span>
+                <input
+                  type="number"
+                  step="0.25"
+                  min="0"
+                  value={modalEffortHours}
+                  onChange={(e) => setModalEffortHours(e.target.value)}
+                  style={{
+                    fontSize: 14,
+                    padding: "10px 12px",
+                    borderRadius: 8,
+                    border: "1px solid #e5e7eb",
+                    background: "#ffffff",
+                  }}
+                />
+              </label>
+            </div>
             <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <span style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}>Tags (optional, comma-separated)</span>
               <input
@@ -2373,6 +2466,31 @@ export default function BacklogPage() {
                   background: "#ffffff",
                 }}
               />
+            </label>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 10,
+                fontSize: 13,
+                color: "#374151",
+                padding: "10px 12px",
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+                background: modalMoveToTop ? "#fef2f2" : "#f9fafb",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={modalMoveToTop}
+                onChange={(e) => setModalMoveToTop(e.target.checked)}
+                style={{ marginTop: 2 }}
+              />
+              <span>
+                <strong>Move to top</strong> — marks this as urgent today, auto-adds
+                <code style={{ marginLeft: 4 }}>fire-fighting</code>, and forces
+                <code style={{ marginLeft: 4 }}>Critical</code> priority.
+              </span>
             </label>
             {error && (
               <p style={{ fontSize: 13, color: "#dc2626", margin: 0 }}>{error}</p>
