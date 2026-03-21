@@ -10,6 +10,15 @@ import {
 } from "../lib/db";
 import { supabase } from "../lib/supabaseClient";
 
+const MANIFESTATION_TAGS = [
+  "High priority manifestation",
+  "Strategic anchor",
+  "Psychological freedom",
+  "Legacy milestone",
+  "Freedom marker",
+  "Peak signal",
+];
+
 function AutoHeightTextarea({ value, onChange, rows = 2, placeholder, style, className, id, ...props }) {
   const ref = useRef(null);
   useEffect(() => {
@@ -193,6 +202,47 @@ export default function VisionPage() {
     fieldImages,
     loadedOnce,
   ]);
+
+  const DOMAIN_ROWS = useMemo(
+    () => [
+      { key: "business", label: "Business", icon: "lightbulb" },
+      { key: "finances", label: "Finances", icon: "payments" },
+      { key: "health", label: "Health", icon: "fitness_center" },
+      { key: "relationships", label: "Relationships", icon: "favorite" },
+      { key: "lifestyle", label: "Lifestyle", icon: "weekend" },
+      { key: "growth", label: "Growth", icon: "auto_awesome" },
+    ],
+    []
+  );
+
+  const outcomeLines = useMemo(
+    () => desiredOutcomes.split("\n").map((s) => s.trim()).filter(Boolean),
+    [desiredOutcomes]
+  );
+
+  const thriveLines = useMemo(
+    () => goalsToThrive.split("\n").map((s) => s.trim()).filter(Boolean),
+    [goalsToThrive]
+  );
+
+  const identityParts = useMemo(() => {
+    const clauses = identityAttributes.split(",").map((s) => s.trim()).filter(Boolean);
+    if (!clauses.length) {
+      return { lead: "", beforeGold: "", gold: "", isEmpty: true };
+    }
+    const last = clauses[clauses.length - 1];
+    const beforeClauses = clauses.slice(0, -1);
+    const words = last.split(/\s+/).filter(Boolean);
+    const goldRaw = words.length ? words[words.length - 1] : "";
+    const gold = goldRaw.replace(/[.,;:!?]+$/, "");
+    const beforeGold = words.length > 1 ? `${words.slice(0, -1).join(" ")}\u00a0` : "";
+    const lead = beforeClauses.length
+      ? `${beforeClauses.join(" · ")}${beforeGold || gold ? " · " : ""}`
+      : "";
+    return { lead, beforeGold, gold, isEmpty: false };
+  }, [identityAttributes]);
+
+  const heroBgUrl = fieldImages.identity || photoUrl || visionBoardImageUrl || null;
 
   if (isCheckingAuth || !user || loading) {
     return (
@@ -428,56 +478,6 @@ export default function VisionPage() {
       setGeneratingBoard(false);
     }
   }
-
-  const DOMAIN_ROWS = useMemo(
-    () => [
-      { key: "business", label: "Business", icon: "lightbulb" },
-      { key: "finances", label: "Finances", icon: "payments" },
-      { key: "health", label: "Health", icon: "fitness_center" },
-      { key: "relationships", label: "Relationships", icon: "favorite" },
-      { key: "lifestyle", label: "Lifestyle", icon: "weekend" },
-      { key: "growth", label: "Growth", icon: "auto_awesome" },
-    ],
-    []
-  );
-
-  const MANIFESTATION_TAGS = [
-    "High priority manifestation",
-    "Strategic anchor",
-    "Psychological freedom",
-    "Legacy milestone",
-    "Freedom marker",
-    "Peak signal",
-  ];
-
-  const outcomeLines = useMemo(
-    () => desiredOutcomes.split("\n").map((s) => s.trim()).filter(Boolean),
-    [desiredOutcomes]
-  );
-
-  const thriveLines = useMemo(
-    () => goalsToThrive.split("\n").map((s) => s.trim()).filter(Boolean),
-    [goalsToThrive]
-  );
-
-  const identityParts = useMemo(() => {
-    const clauses = identityAttributes.split(",").map((s) => s.trim()).filter(Boolean);
-    if (!clauses.length) {
-      return { lead: "", beforeGold: "", gold: "", isEmpty: true };
-    }
-    const last = clauses[clauses.length - 1];
-    const beforeClauses = clauses.slice(0, -1);
-    const words = last.split(/\s+/).filter(Boolean);
-    const goldRaw = words.length ? words[words.length - 1] : "";
-    const gold = goldRaw.replace(/[.,;:!?]+$/, "");
-    const beforeGold = words.length > 1 ? `${words.slice(0, -1).join(" ")}\u00a0` : "";
-    const lead = beforeClauses.length
-      ? `${beforeClauses.join(" · ")}${beforeGold || gold ? " · " : ""}`
-      : "";
-    return { lead, beforeGold, gold, isEmpty: false };
-  }, [identityAttributes]);
-
-  const heroBgUrl = fieldImages.identity || photoUrl || visionBoardImageUrl || null;
 
   return (
     <DashboardLayout>
