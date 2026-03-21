@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import AiPlannerGuidance from "../components/AiPlannerGuidance";
 import DashboardLayout from "../components/DashboardLayout";
 import PageHeader from "../components/PageHeader";
@@ -32,6 +33,7 @@ import {
   getWorkoutPlanForDate,
   getEffectiveCategoryWeights,
 } from "../lib/scoring";
+import { OCCAM_CADENCE_SHORT } from "../lib/occam";
 import {
   buildQueueCandidates,
   buildQueueFromChosen,
@@ -1240,35 +1242,81 @@ export default function TodayPage() {
 
           {workoutPlan && (
             <SectionCard
-              title="Workout"
+              title="Occam workout"
               subtitle={
                 workoutTaskId
-                  ? `Cycle: ${workoutPlan.phase}`
+                  ? `${workoutPlan.phase}${workoutPlan.occamLabel ? ` · ${workoutPlan.occamLabel}` : ""}`
                   : "Workout tracking unavailable. Add a Daily Repeat category (e.g. in Backlog) to enable."
               }
             >
               {workoutTaskId ? (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={!!completionMap[workoutPlan.id]}
-                    onChange={() => toggleTaskCompletion(workoutPlan.id)}
-                  />
-                  <div>
-                    <div style={{ fontSize: 14 }}>{workoutPlan.title}</div>
-                    <div style={{ fontSize: 12, color: "#9ca3af" }}>
-                      Tap when you complete today&apos;s workout.
-                    </div>
+                <div>
+                  <p
+                    style={{
+                      fontSize: 12,
+                      color: "var(--rs-on-surface-variant)",
+                      margin: "0 0 10px",
+                      lineHeight: 1.45,
+                    }}
+                  >
+                    {OCCAM_CADENCE_SHORT}. Log working weights on the Occam Workout page.
+                  </p>
+                  {workoutPlan.exercises?.length > 0 && (
+                    <ul
+                      style={{
+                        margin: "0 0 12px",
+                        paddingLeft: 18,
+                        fontSize: 13,
+                        color: "var(--rs-on-surface)",
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      {workoutPlan.exercises.map((ex) => (
+                        <li key={ex.key} style={{ marginBottom: 6 }}>
+                          <strong>{ex.name}</strong> — target {ex.targetReps} ({ex.detail})
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <label
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        cursor: "pointer",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={!!completionMap[workoutPlan.id]}
+                        onChange={() => toggleTaskCompletion(workoutPlan.id)}
+                        style={{
+                          width: 20,
+                          height: 20,
+                          accentColor: "var(--rs-accent-gold)",
+                        }}
+                      />
+                      <span style={{ fontSize: 14, fontWeight: 600 }}>Mark today complete</span>
+                    </label>
+                    <Link
+                      href="/health"
+                      className="rs-btn-ghost"
+                      style={{ textDecoration: "none", fontSize: 13 }}
+                    >
+                      Open Occam Workout →
+                    </Link>
                   </div>
                 </div>
               ) : (
-                <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
+                <p style={{ fontSize: 13, color: "var(--rs-on-surface-variant)", margin: 0 }}>
                   {workoutPlan.title}
                 </p>
               )}
