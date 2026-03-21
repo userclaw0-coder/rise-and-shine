@@ -2,6 +2,8 @@
 
 This app implements a **minimal two-workout rotation** inspired by Occam’s Protocol (slow cadence, few exercises, infrequent sessions, progressive overload). It is **not** a medical prescription—adjust with a coach or physician as needed.
 
+The default template is **home free-weight** (barbell + EZ bar, no machines). See `lib/occam.js` for exercise names and logging hints.
+
 ## Schedule engine (shared with Today)
 
 **Completion-based rotation** (`lib/occamSchedule.js`), not a fixed calendar:
@@ -14,29 +16,31 @@ This app implements a **minimal two-workout rotation** inspired by Occam’s Pro
 
 Legacy **fixed calendar** cycle still exists in `lib/scoring.js` (`WORKOUT_CYCLE_START` / `getWorkoutPhaseForDate`) for callers that omit schedule context. **Today** and **Health** pass `preferences` + `lifting_sets` data into `getWorkoutPlanForDate(date, ctx)` so they use the engine above.
 
-## Workout A
+## Workout A (home)
 
-- Close-grip supinated pull-down (or equivalent pull)
-- Shoulder press  
+- **Yates row with EZ bar** (log as “Yates Row” or include those words)
+- **Shoulder-width barbell press** (log as “Barbell Press” or similar)
+
 Target **7+ reps** on the top set after warm-ups; **5 sec up / 5 sec down** on working reps.
 
-## Workout B
+## Workout B (home)
 
-- Incline or decline bench press
-- Leg press (counts toward the **2× bodyweight “squat-side”** goal in-app)
-- Kettlebell swings (**75+** total in a session when following the template)
+- **Slight incline shoulder-width bench press** (log as “Incline Bench” or include incline + bench)
+- **Squat** (back or front)
+
+Target **7+** on bench; squat toward **7+** with strict form (adjust if you prefer a fixed 8–10 cap).
 
 ## Logging & goals
 
 - **Bench goal:** working weight vs **1×** latest logged body weight (bench / incline / decline patterns in `lib/occam.js`).
-- **Squat-side goal:** **2×** body weight vs best **squat or leg press** logged.
+- **Squat-side goal:** **2×** body weight vs best **squat** logged.
 - **Measurements:** `user_profile.profile.preferences.occam_measurements` (chest, waist, hips, shoulders, neck + `measured_at`).
 - **Progression hints:** `suggestOccamWeight` in `lib/occamSchedule.js` — add load when reps exceed target, repeat when at the edge, per Occam-style rules.
 
 ## UI
 
-- **Health (`/health`):** month calendar (logged exercises per day, today + next-eligible highlights), Stitch-style engine (tabs A/B, exercise cards, cadence pill), sidebar rings, morphology, recovery vector, celebrations.
-- **Today:** same plan via `getWorkoutPlanForDate` + context; recovery copy when applicable.
+- **Health (`/health`):** month calendar, Occam engine tabs, exercise cards, goals, morphology, recovery.
+- **Today:** progress + Occam side-by-side on wide screens.
 
 ## Similar tools
 

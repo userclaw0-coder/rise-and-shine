@@ -244,12 +244,6 @@ export default function TodayPage() {
     });
   }, [todayStr]);
 
-  const dailyMomentumPct = useMemo(() => {
-    const n = items?.length ?? 0;
-    if (n <= 0) return 0;
-    return Math.round((dailyHitsCompleted / n) * 100);
-  }, [items, dailyHitsCompleted]);
-
   const dailyTemplateTaskIds = useMemo(() => {
     const ids = [];
     for (const it of items || []) {
@@ -1142,22 +1136,7 @@ export default function TodayPage() {
             </button>
           </div>
         }
-      >
-        <div className="rs-momentum" aria-label="Daily hits progress">
-          <div className="rs-momentum__row">
-            <span className="rs-momentum__label">Daily momentum</span>
-            <span className="rs-momentum__pct">{dailyMomentumPct}%</span>
-          </div>
-          <div className="rs-momentum__track" role="progressbar" aria-valuenow={dailyMomentumPct} aria-valuemin={0} aria-valuemax={100}>
-            <div className="rs-momentum__fill" style={{ width: `${dailyMomentumPct}%` }} />
-          </div>
-          <p className="rs-momentum__meta">
-            {(items?.length ?? 0) === 0
-              ? "Add rituals on Daily Hits to track morning consistency."
-              : `${dailyHitsCompleted} of ${items.length} daily hits complete.`}
-          </p>
-        </div>
-      </PageHeader>
+      />
 
       {showOnboardingCompleteBanner && (
         <div
@@ -1204,53 +1183,19 @@ export default function TodayPage() {
         </p>
       )}
 
-      <ProgressToOutcome
-        queueEntries={queueEntries}
-        completionMap={completionMap}
-        dailyHitsTotal={items?.length ?? 0}
-        dailyHitsCompleted={dailyHitsCompleted}
-        otherCompletedToday={otherCompletedToday}
-      />
+      <div
+        className={`rs-today-progress-occam${!workoutPlan ? " rs-today-progress-occam--solo" : ""}`}
+      >
+        <ProgressToOutcome
+          queueEntries={queueEntries}
+          completionMap={completionMap}
+          dailyHitsTotal={items?.length ?? 0}
+          dailyHitsCompleted={dailyHitsCompleted}
+          otherCompletedToday={otherCompletedToday}
+        />
 
-      <QueueBehaviorHelper />
-
-      <div className="today-two-col">
-        <div>
-          <SectionCard
-            title="Daily Hits"
-            subtitle={
-              activeTemplate
-                ? activeTemplate.name
-                : "No default daily template found."
-            }
-          >
-            {(!items || items.length === 0) && (
-              <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
-                No daily items yet. Configure them on the Daily Hits page.
-              </p>
-            )}
-            <ul className="rs-daily-hit-list">
-              {items.map((it) => (
-                <li key={it.id} className="rs-daily-hit-row">
-                  <input
-                    type="checkbox"
-                    checked={!!completionMap[it.task?.id]}
-                    onChange={() => toggleTaskCompletion(it.task?.id)}
-                  />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="rs-daily-hit-row__title">
-                      {it.task?.title || "Untitled task"}
-                    </div>
-                    <div className="rs-daily-hit-row__meta">
-                      {it.task?.priority || "Priority n/a"}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </SectionCard>
-
-          {workoutPlan && (
+        {workoutPlan && (
+          <aside className="rs-today-occam-aside" aria-label="Occam workout">
             <SectionCard
               title="Occam workout"
               subtitle={
@@ -1259,6 +1204,23 @@ export default function TodayPage() {
                   : "Workout tracking unavailable. Add a Daily Repeat category (e.g. in Backlog) to enable."
               }
             >
+              <div className="rs-today-occam-aside__head">
+                <div className="rs-today-occam-aside__icon" aria-hidden>
+                  <span className="material-symbols-outlined">fitness_center</span>
+                </div>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: 12,
+                    color: "var(--rs-on-surface-variant)",
+                    lineHeight: 1.45,
+                    flex: 1,
+                    minWidth: 0,
+                  }}
+                >
+                  Barbell home template — two lifts per session.
+                </p>
+              </div>
               {workoutTaskId ? (
                 <div>
                   <p
@@ -1344,7 +1306,47 @@ export default function TodayPage() {
                 </p>
               )}
             </SectionCard>
-          )}
+          </aside>
+        )}
+      </div>
+
+      <QueueBehaviorHelper />
+
+      <div className="today-two-col">
+        <div>
+          <SectionCard
+            title="Daily Hits"
+            subtitle={
+              activeTemplate
+                ? activeTemplate.name
+                : "No default daily template found."
+            }
+          >
+            {(!items || items.length === 0) && (
+              <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
+                No daily items yet. Configure them on the Daily Hits page.
+              </p>
+            )}
+            <ul className="rs-daily-hit-list">
+              {items.map((it) => (
+                <li key={it.id} className="rs-daily-hit-row">
+                  <input
+                    type="checkbox"
+                    checked={!!completionMap[it.task?.id]}
+                    onChange={() => toggleTaskCompletion(it.task?.id)}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="rs-daily-hit-row__title">
+                      {it.task?.title || "Untitled task"}
+                    </div>
+                    <div className="rs-daily-hit-row__meta">
+                      {it.task?.priority || "Priority n/a"}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </SectionCard>
         </div>
         <div>
       <SectionCard

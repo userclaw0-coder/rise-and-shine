@@ -438,7 +438,7 @@ export default function HealthPage() {
         flashCelebrate({
           kind: "pr_squat",
           title: "Leg strength milestone",
-          body: `New top load: ${w} lb. Tracking toward 2× bodyweight (squat or leg press).`,
+          body: `New top load: ${w} lb. Tracking toward 2× bodyweight on squat.`,
         });
       }
     }
@@ -595,7 +595,7 @@ export default function HealthPage() {
               Tim Ferriss’s Occam’s Protocol — about{" "}
               <strong style={{ color: "var(--rs-on-surface)" }}>two brief heavy sessions</strong> per week,
               5/5 tempo, one top set. Pair with protein and sleep. Bench goal:{" "}
-              <strong>1× bodyweight</strong>. Squat / leg press anchor: <strong>2× bodyweight</strong> equivalent.
+              <strong>1× bodyweight</strong>. Squat anchor: <strong>2× bodyweight</strong> equivalent.
             </>
           }
         />
@@ -653,7 +653,7 @@ export default function HealthPage() {
                   {["Occam A", "Occam B"].map((key) => {
                     const active = workoutTab === key;
                     const short = key === "Occam A" ? "A" : "B";
-                    const sub = key === "Occam A" ? "Pull & press" : "Push, legs & swings";
+                    const sub = key === "Occam A" ? "Row & press" : "Bench & squat";
                     return (
                       <button
                         key={key}
@@ -821,11 +821,11 @@ export default function HealthPage() {
                   />
                   <OccamGoalRing
                     pct={pctSquatGoal}
-                    title="2× BW squat / leg"
+                    title="2× BW squat"
                     sub={
                       latestBodyWeightLb != null && bestSquatLb != null
                         ? `${Math.round(bestSquatLb)} / ${Math.round(2 * latestBodyWeightLb)} lb`
-                        : "Log squat or leg press"
+                        : "Log squat"
                     }
                     detail={pctSquatGoal != null ? `${pctSquatGoal}% of goal` : null}
                   />
@@ -1056,7 +1056,7 @@ export default function HealthPage() {
                     <div className="rs-health-session__body">
                       <p style={{ fontSize: 12, color: "var(--rs-on-surface-variant)", margin: "0 0 10px" }}>
                         Pick an exercise (or type a custom name). Bench / incline / decline count toward the bench goal;
-                        squat and leg press count toward the 2× goal.
+                        squats count toward the 2× goal.
                       </p>
                       <div className="rs-health-set-form">
                         <select

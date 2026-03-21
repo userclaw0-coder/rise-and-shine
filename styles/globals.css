@@ -669,6 +669,300 @@ body {
   color: var(--rs-on-surface-variant);
 }
 
+/* Today: progress + Occam row */
+.rs-today-progress-occam {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--rs-space-4);
+  margin-bottom: var(--rs-space-5);
+  align-items: stretch;
+}
+
+@media (min-width: 960px) {
+  .rs-today-progress-occam:not(.rs-today-progress-occam--solo) {
+    grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.95fr);
+  }
+}
+
+.rs-today-progress-panel {
+  min-width: 0;
+}
+
+.rs-today-occam-aside {
+  min-width: 0;
+}
+
+.rs-today-occam-aside .rs-section-card {
+  height: 100%;
+}
+
+.rs-progress-section-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 4px;
+}
+
+.rs-progress-section-head__mark {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--rs-radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(
+    145deg,
+    rgba(245, 206, 83, 0.35) 0%,
+    rgba(212, 175, 55, 0.12) 100%
+  );
+  border: 1px solid rgba(212, 175, 55, 0.35);
+  color: var(--rs-primary-strong);
+}
+
+.rs-progress-section-head__mark .material-symbols-outlined {
+  font-size: 26px;
+}
+
+.rs-progress-section-head__text {
+  min-width: 0;
+}
+
+.rs-progress-metrics-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+@media (min-width: 720px) {
+  .rs-progress-metrics-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.rs-progress-metric-card {
+  position: relative;
+  border-radius: var(--rs-radius-lg);
+  padding: 14px 14px 16px;
+  background: var(--rs-surface-low);
+  border: 1px solid rgba(186, 177, 159, 0.18);
+  overflow: hidden;
+  min-width: 0;
+}
+
+.rs-progress-metric-card__accent {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    var(--rs-primary-strong) 0%,
+    var(--rs-accent-gold) 100%
+  );
+  opacity: 0.9;
+}
+
+.rs-progress-metric-card__accent--olive {
+  background: linear-gradient(90deg, var(--rs-olive) 0%, #6b7530 100%);
+}
+
+.rs-progress-metric-card__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.rs-progress-metric-card__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--rs-radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(245, 206, 83, 0.15);
+  color: var(--rs-primary-strong);
+  flex-shrink: 0;
+}
+
+.rs-progress-metric-card__icon .material-symbols-outlined {
+  font-size: 22px;
+}
+
+.rs-progress-metric-card__icon--olive {
+  background: rgba(85, 93, 30, 0.12);
+  color: var(--rs-olive);
+}
+
+.rs-progress-metric-card__titles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rs-progress-metric-card__label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--rs-on-surface-variant);
+}
+
+.rs-progress-metric-card__stat {
+  font-family: var(--rs-font-display);
+  font-weight: 700;
+  font-size: 1.35rem;
+  color: var(--rs-on-surface);
+  font-variant-numeric: tabular-nums;
+}
+
+.rs-progress-metric-card__stat-dim {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--rs-on-surface-variant);
+  opacity: 0.85;
+}
+
+.rs-progress-metric-card__ring-wrap {
+  position: relative;
+  width: 88px;
+  height: 88px;
+  margin: 0 auto 10px;
+}
+
+.rs-progress-metric-card__ring {
+  width: 100%;
+  height: 100%;
+  color: var(--rs-accent-gold);
+}
+
+.rs-progress-metric-card__ring-bg {
+  stroke: rgba(186, 177, 159, 0.22);
+}
+
+.rs-progress-metric-card__ring-fill {
+  stroke: currentColor;
+}
+
+.rs-progress-metric-card__ring-pct {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--rs-font-display);
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: var(--rs-on-surface);
+}
+
+.rs-progress-metric-card__caption {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--rs-on-surface-variant);
+  text-align: center;
+}
+
+.rs-progress-metric-card__bar {
+  margin-top: auto;
+}
+
+.rs-progress-metric-card__overflow {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--rs-accent-gold);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.rs-progress-metric-card__actions-track {
+  position: relative;
+  height: 12px;
+  border-radius: var(--rs-radius-full);
+  background: rgba(186, 177, 159, 0.2);
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.rs-progress-queue-foot {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 10px 12px;
+  border-radius: var(--rs-radius-md);
+  background: rgba(85, 93, 30, 0.06);
+  border: 1px solid rgba(85, 93, 30, 0.12);
+  font-size: 12px;
+  color: var(--rs-on-surface-variant);
+}
+
+.rs-progress-queue-foot .material-symbols-outlined {
+  font-size: 18px;
+  color: var(--rs-olive);
+}
+
+.rs-progress-queue-foot strong {
+  color: var(--rs-on-surface);
+  font-variant-numeric: tabular-nums;
+}
+
+.rs-progress-outcome-row {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(186, 177, 159, 0.15);
+}
+
+.rs-progress-outcome-row__label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--rs-on-surface-variant);
+  margin-bottom: 10px;
+}
+
+.rs-progress-outcome-row__label .material-symbols-outlined {
+  font-size: 16px;
+  opacity: 0.85;
+}
+
+.rs-today-occam-aside__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.rs-today-occam-aside__icon {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--rs-radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(85, 93, 30, 0.1);
+  border: 1px solid rgba(85, 93, 30, 0.2);
+  color: var(--rs-olive);
+}
+
+.rs-today-occam-aside__icon .material-symbols-outlined {
+  font-size: 24px;
+}
+
 /* Stat / KPI tiles (Analytics) */
 .rs-stat-grid {
   display: grid;
