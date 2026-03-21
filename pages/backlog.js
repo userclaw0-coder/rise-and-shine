@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
+import BacklogStrategicTaskCard from "../components/BacklogStrategicTaskCard";
 import DashboardLayout from "../components/DashboardLayout";
 import Modal from "../components/Modal";
+import PageHeader from "../components/PageHeader";
 import { useAuth } from "../hooks/useAuth";
 import {
   getBacklogTasks,
@@ -41,6 +43,19 @@ const STANDARD_TAGS = [
 
 const COMFORTABLE_GRID_COLUMNS =
   "minmax(200px, 3fr) minmax(140px, 1.5fr) 86px minmax(120px, 1.1fr) 90px 130px minmax(120px, 1fr) minmax(100px, 0.9fr) minmax(100px, 1fr)";
+
+/** Sort controls shared by strategic card view (+ legacy comfortable row for nested tasks in compact mode) */
+const BACKLOG_SORT_KEYS = [
+  { key: "title", label: "Title" },
+  { key: "category", label: "Category" },
+  { key: "score", label: "Score" },
+  { key: "priority", label: "Priority" },
+  { key: "due", label: "Due" },
+  { key: "status", label: "Status" },
+  { key: "outcome", label: "Outcome" },
+  { key: "domain", label: "Domain" },
+  { key: "tags", label: "Tags" },
+];
 
 const LIFE_DOMAIN_KEYS = ["business", "finances", "health", "relationships", "lifestyle", "growth"];
 function lifeDomainLabel(key, profile) {
@@ -509,6 +524,10 @@ export default function BacklogPage() {
   }, [filteredRootTasks, comfortableSortKey, comfortableSortDir, categories]);
 
   const [collapsedParents, setCollapsedParents] = useState({});
+  /** Strategic view: expand all subtasks on a parent card */
+  const [expandedSubtasksByParent, setExpandedSubtasksByParent] = useState({});
+  const [expandedTagPillsByTask, setExpandedTagPillsByTask] = useState({});
+  const [quickCapture, setQuickCapture] = useState("");
   const [isCompact, setIsCompact] = useState(false);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [compactListMode, setCompactListMode] = useState(false);
@@ -518,7 +537,13 @@ export default function BacklogPage() {
     try {
       const key = window.localStorage.getItem("backlog-comfortable-sort-key");
       const dir = window.localStorage.getItem("backlog-comfortable-sort-dir");
-      if (key && ["score", "title", "category", "priority", "due", "status", "tags"].includes(key)) setComfortableSortKey(key);
+      if (
+        key &&
+        ["score", "title", "category", "priority", "due", "status", "tags", "outcome", "domain"].includes(
+          key
+        )
+      )
+        setComfortableSortKey(key);
       if (dir === "asc" || dir === "desc") setComfortableSortDir(dir);
     } catch (_) {}
     return undefined;
@@ -645,19 +670,33 @@ export default function BacklogPage() {
     });
   }
 
-  function openAddTaskModal() {
-    setModalTitle("");
-    setModalCategoryId(categoryFilter || (categories[0]?.id ?? ""));
-    setModalSubcategoryText("");
-    setModalPriority("Medium");
-    setModalStatus("todo");
-    setModalDueDate("");
-    setModalEffortHours("");
-    setModalMoveToTop(false);
-    setModalTagsText("");
-    setError("");
-    setAddTaskOpen(true);
-  }
+  const openAddTaskModal = useCallback(
+    (prefillTitle) => {
+      setModalTitle(typeof prefillTitle === "string" ? prefillTitle : "");
+      setModalCategoryId(categoryFilter || (categories[0]?.id ?? ""));
+      setModalSubcategoryText("");
+      setModalPriority("Medium");
+      setModalStatus("todo");
+      setModalDueDate("");
+      setModalEffortHours("");
+      setModalMoveToTop(false);
+      setModalTagsText("");
+      setError("");
+      setAddTaskOpen(true);
+    },
+    [categoryFilter, categories]
+  );
+
+  useEffect(() => {
+    function onKeyDown(e) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        openAddTaskModal();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [openAddTaskModal]);
 
   async function handleAddTaskFromModal() {
     if (!user || !modalTitle.trim()) return;
@@ -1639,7 +1678,7 @@ export default function BacklogPage() {
   if (!user || loading) {
     return (
       <DashboardLayout>
-        <p style={{ fontSize: 14, color: "#6b7280" }}>Loading...</p>
+        <p style={{ fontSize: 14, color: "var(--rs-on-surface-variant)" }}>Loading…</p>
       </DashboardLayout>
     );
   }
@@ -1647,53 +1686,21 @@ export default function BacklogPage() {
   return (
     <DashboardLayout>
       <div>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "baseline",
-            gap: 12,
-            marginBottom: 12,
-          }}
-        >
-          <div>
-            <h1
-              style={{
-                fontSize: 22,
-                fontWeight: 600,
-                margin: 0,
-                letterSpacing: "-0.02em",
-              }}
-            >
-              Action Items
-            </h1>
-            <p
-              style={{
-                margin: "4px 0 0",
-                fontSize: 13,
-                color: "#6b7280",
-              }}
-            >
-              Manage non-daily tasks, tags, subtasks, and AI-scored priority order.
-            </p>
-          </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <PageHeader
+          eyebrow="Strategic productivity"
+          title="Action Items"
+          subtitle="Manage initiatives, subtasks, tags, and AI-scored priority — card view keeps the critical path visible."
+          right={
             <select
+              className="rs-select-compact"
               value=""
               onChange={(e) => {
                 const id = e.target.value;
                 if (!id) return;
                 router.push(`/category/${id}`);
               }}
-              style={{
-                fontSize: 13,
-                padding: "8px 10px",
-                borderRadius: 10,
-                border: "1px solid #e5e7eb",
-                background: "#ffffff",
-                cursor: "pointer",
-                minWidth: 220,
-              }}
+              aria-label="Open category page"
+              style={{ minWidth: 200 }}
             >
               <option value="">Category pages…</option>
               {categoryOptions.map((c) => (
@@ -1702,8 +1709,8 @@ export default function BacklogPage() {
                 </option>
               ))}
             </select>
-          </div>
-        </div>
+          }
+        />
 
         {error && (
           <p style={{ color: "#b91c1c", fontSize: 13, marginBottom: 8 }}>
@@ -1723,17 +1730,16 @@ export default function BacklogPage() {
         >
           <input
             type="text"
-            placeholder="Search tasks…"
+            placeholder="Search intent…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            className="rs-input"
             style={{
               flex: "1 1 200px",
               minWidth: 0,
               fontSize: 14,
               padding: "10px 14px",
-              borderRadius: 10,
-              border: "1px solid #e5e7eb",
-              background: "#ffffff",
+              borderRadius: "var(--rs-radius-md)",
             }}
           />
           {isCompact && (
@@ -1779,7 +1785,7 @@ export default function BacklogPage() {
                 boxShadow: !compactListMode ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
               }}
             >
-              Comfortable
+              Strategic
             </button>
             <button
               type="button"
@@ -1799,24 +1805,35 @@ export default function BacklogPage() {
               Compact list
             </button>
           </div>
-          <button
-            type="button"
-            onClick={openAddTaskModal}
-            style={{
-              fontSize: 14,
-              padding: "10px 18px",
-              minHeight: 44,
-              borderRadius: 10,
-              border: "1px solid #111827",
-              background: "#111827",
-              color: "#ffffff",
-              cursor: "pointer",
-              fontWeight: 500,
-            }}
-          >
+          <button type="button" onClick={() => openAddTaskModal()} className="rs-btn-primary" style={{ minHeight: 44 }}>
             + Add task
           </button>
         </div>
+
+        {!compactListMode && (
+          <form
+            className="rs-backlog-capture"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const v = quickCapture.trim();
+              if (v) {
+                openAddTaskModal(v);
+                setQuickCapture("");
+              }
+            }}
+          >
+            <span className="material-symbols-outlined" aria-hidden>
+              add
+            </span>
+            <input
+              value={quickCapture}
+              onChange={(e) => setQuickCapture(e.target.value)}
+              placeholder="Capture a new strategic task…"
+              aria-label="Quick capture task title"
+            />
+            <span className="rs-backlog-capture__hint">⌘K · Ctrl+K</span>
+          </form>
+        )}
 
         {/* Filter sections — hidden on mobile unless filters expanded */}
         {(!isCompact || filtersExpanded) && (
@@ -1836,48 +1853,21 @@ export default function BacklogPage() {
           <button
             type="button"
             onClick={() => setStatusFilter("todo_doing")}
-            style={{
-              fontSize: 12,
-              padding: "5px 10px",
-              borderRadius: 999,
-              border: "1px solid",
-              borderColor: statusFilter === "todo_doing" ? "#111827" : "#e5e7eb",
-              background: statusFilter === "todo_doing" ? "#111827" : "#ffffff",
-              color: statusFilter === "todo_doing" ? "#ffffff" : "#111827",
-              cursor: "pointer",
-            }}
+            className={`rs-filter-pill${statusFilter === "todo_doing" ? " rs-filter-pill--active" : ""}`}
           >
-            Todo & Doing
+            Todo &amp; Doing
           </button>
           <button
             type="button"
             onClick={() => setStatusFilter("done")}
-            style={{
-              fontSize: 12,
-              padding: "5px 10px",
-              borderRadius: 999,
-              border: "1px solid",
-              borderColor: statusFilter === "done" ? "#059669" : "#e5e7eb",
-              background: statusFilter === "done" ? "#059669" : "#ffffff",
-              color: statusFilter === "done" ? "#ffffff" : "#059669",
-              cursor: "pointer",
-            }}
+            className={`rs-filter-pill${statusFilter === "done" ? " rs-filter-pill--active" : ""}`}
           >
             Completed
           </button>
           <button
             type="button"
             onClick={() => setStatusFilter("archived")}
-            style={{
-              fontSize: 12,
-              padding: "5px 10px",
-              borderRadius: 999,
-              border: "1px solid",
-              borderColor: statusFilter === "archived" ? "#6b7280" : "#e5e7eb",
-              background: statusFilter === "archived" ? "#6b7280" : "#ffffff",
-              color: statusFilter === "archived" ? "#ffffff" : "#6b7280",
-              cursor: "pointer",
-            }}
+            className={`rs-filter-pill${statusFilter === "archived" ? " rs-filter-pill--active" : ""}`}
           >
             Archived
           </button>
@@ -1901,18 +1891,9 @@ export default function BacklogPage() {
               setCategoryFilter("");
               setSubcategoryFilter("");
             }}
-            style={{
-              fontSize: 12,
-              padding: "5px 10px",
-              borderRadius: 999,
-              border: "1px solid",
-              borderColor: !categoryFilter ? "#111827" : "#e5e7eb",
-              background: !categoryFilter ? "#111827" : "#ffffff",
-              color: !categoryFilter ? "#ffffff" : "#111827",
-              cursor: "pointer",
-            }}
+            className={`rs-filter-pill${!categoryFilter ? " rs-filter-pill--active" : ""}`}
           >
-            All
+            All focus
           </button>
           {orderedCategories.map((c) => (
             <button
@@ -1936,16 +1917,7 @@ export default function BacklogPage() {
                 setCategoryFilter(c.id);
                 setSubcategoryFilter("");
               }}
-              style={{
-                fontSize: 12,
-                padding: "5px 10px",
-                borderRadius: 999,
-                border: "1px solid",
-                borderColor: categoryFilter === c.id ? "#111827" : "#e5e7eb",
-                background: categoryFilter === c.id ? "#111827" : "#ffffff",
-                color: categoryFilter === c.id ? "#ffffff" : "#111827",
-                cursor: "pointer",
-              }}
+              className={`rs-filter-pill${categoryFilter === c.id ? " rs-filter-pill--active" : ""}`}
               title="Drag to change category priority (left = highest)"
             >
               {c.name}
@@ -2634,106 +2606,79 @@ export default function BacklogPage() {
           </div>
         </Modal>
 
-        <div
-          style={{
-            marginTop: 6,
-            borderRadius: 16,
-            border: "1px solid #e5e7eb",
-            background: "#ffffff",
-            padding: isCompact ? 12 : "12px 14px",
-            overflowX: "auto",
-          }}
-        >
-            {compactListMode && (
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "minmax(0, 2fr) minmax(80px, 1fr) 70px 56px 70px 90px 70px 56px 90px minmax(60px, 1fr)",
-                  gap: 6,
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: "#6b7280",
-                  paddingBottom: 4,
-                  borderBottom: "1px solid #e5e7eb",
-                }}
-              >
-                <div>Title</div>
-                <div>Category</div>
-                <div>Priority</div>
-                <div>Hrs</div>
-                <div>Due</div>
-                <div>Status</div>
-                <div>Outcome</div>
-                <div>Domain</div>
-                <div>Actions</div>
-                <div>Tags</div>
-              </div>
-            )}
-            {!isCompact && !compactListMode && (
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: COMFORTABLE_GRID_COLUMNS,
-                  gap: 8,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: "#4b5563",
-                  paddingBottom: 8,
-                  borderBottom: "1px solid #e5e7eb",
-                  alignItems: "center",
-                }}
-              >
-                {[
-                  { key: "title", label: "Title" },
-                  { key: "category", label: "Category" },
-                  { key: "score", label: "Score" },
-                  { key: "priority", label: "Priority" },
-                  { key: "due", label: "Due" },
-                  { key: "status", label: "Status" },
-                  { key: "outcome", label: "Outcome" },
-                  { key: "domain", label: "Domain" },
-                  { key: "tags", label: "Tags" },
-                ].map(({ key, label }) => {
-                  const active = comfortableSortKey === key;
-                  const arrow = active ? (comfortableSortDir === "asc" ? " ↑" : " ↓") : "";
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => handleComfortableSort(key)}
-                      style={{
-                        padding: "6px 8px",
-                        textAlign: "left",
-                        border: "none",
-                        background: "transparent",
-                        cursor: "pointer",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: active ? "#111827" : "#4b5563",
-                      }}
-                      title={`Sort by ${label} (${active && comfortableSortDir === "asc" ? "desc" : "asc"})`}
-                    >
-                      {label}{arrow}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* One datalist per category so subcategory inputs get a dropdown of existing subcategories (single id per category) */}
-            {categories.map((c) => (
-              <datalist key={c.id} id={`subcategory-options-${c.id}`}>
-                {(c.subcategories || []).map((s) => (
-                  <option key={s.id} value={s.name} />
-                ))}
-              </datalist>
+        {/* One datalist per category — used by strategic cards + compact table */}
+        {categories.map((c) => (
+          <datalist key={c.id} id={`subcategory-options-${c.id}`}>
+            {(c.subcategories || []).map((s) => (
+              <option key={s.id} value={s.name} />
             ))}
+          </datalist>
+        ))}
+
+        {!compactListMode && (
+          <div className="rs-backlog-sort-bar">
+            <span className="rs-backlog-sort-bar__label">Sort initiatives</span>
+            {BACKLOG_SORT_KEYS.map(({ key, label }) => {
+              const active = comfortableSortKey === key;
+              const arrow = active ? (comfortableSortDir === "asc" ? " ↑" : " ↓") : "";
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  className={`rs-backlog-sort-btn${active ? " rs-backlog-sort-btn--active" : ""}`}
+                  onClick={() => handleComfortableSort(key)}
+                  title={`Sort by ${label} (${active && comfortableSortDir === "asc" ? "desc" : "asc"})`}
+                >
+                  {label}
+                  {arrow}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {compactListMode ? (
+          <div
+            className="backlog-table-wrap"
+            style={{
+              marginTop: 6,
+              borderRadius: "var(--rs-radius-lg)",
+              border: "1px solid rgba(186, 177, 159, 0.18)",
+              background: "var(--rs-surface-raised)",
+              padding: isCompact ? 12 : "12px 14px",
+              overflowX: "auto",
+              boxShadow: "var(--rs-shadow-soft)",
+            }}
+          >
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "minmax(0, 2fr) minmax(80px, 1fr) 70px 56px 70px 90px 70px 56px 90px minmax(60px, 1fr)",
+                gap: 6,
+                fontSize: 11,
+                fontWeight: 600,
+                color: "var(--rs-on-surface-variant)",
+                paddingBottom: 4,
+                borderBottom: "1px solid rgba(186, 177, 159, 0.15)",
+              }}
+            >
+              <div>Title</div>
+              <div>Category</div>
+              <div>Priority</div>
+              <div>Hrs</div>
+              <div>Due</div>
+              <div>Status</div>
+              <div>Outcome</div>
+              <div>Domain</div>
+              <div>Actions</div>
+              <div>Tags</div>
+            </div>
             <div>
               {sortedRootTasks.length === 0 ? (
                 <p
                   style={{
                     fontSize: 14,
-                    color: "#6b7280",
+                    color: "var(--rs-on-surface-variant)",
                     margin: isCompact ? "20px 0" : "12px 0 4px",
                     textAlign: "center",
                   }}
@@ -2745,7 +2690,65 @@ export default function BacklogPage() {
               )}
             </div>
           </div>
+        ) : (
+          <div className="rs-backlog-card-list">
+            {sortedRootTasks.length === 0 ? (
+              <p
+                style={{
+                  fontSize: 14,
+                  color: "var(--rs-on-surface-variant)",
+                  margin: "24px 0",
+                  textAlign: "center",
+                }}
+              >
+                No tasks match your filters.
+              </p>
+            ) : (
+              sortedRootTasks.map((t) => {
+                const kids = (childrenByParent.get(t.id) || []).slice().sort((a, b) =>
+                  String(a.title || "").localeCompare(String(b.title || ""), undefined, {
+                    sensitivity: "base",
+                  })
+                );
+                return (
+                  <BacklogStrategicTaskCard
+                    key={t.id}
+                    task={t}
+                    sortedChildren={kids}
+                    categories={categories}
+                    profile={profile}
+                    lifeDomainLabel={lifeDomainLabel}
+                    LIFE_DOMAIN_KEYS={LIFE_DOMAIN_KEYS}
+                    expandedSubtasks={!!expandedSubtasksByParent[t.id]}
+                    onToggleSubtasksExpanded={() =>
+                      setExpandedSubtasksByParent((p) => ({ ...p, [t.id]: !p[t.id] }))
+                    }
+                    expandedTagPills={!!expandedTagPillsByTask[t.id]}
+                    onToggleTagPills={() =>
+                      setExpandedTagPillsByTask((p) => ({ ...p, [t.id]: !p[t.id] }))
+                    }
+                    updateTaskLocal={updateTaskLocal}
+                    handleInlineSave={handleInlineSave}
+                    handleStatusChange={handleStatusChange}
+                    handleSubcategorySave={handleSubcategorySave}
+                    handleTagsSave={handleTagsSave}
+                    handleAddSubtask={handleAddSubtask}
+                    tagText={t._tagsText ?? makeTagText(t)}
+                  />
+                );
+              })
+            )}
+          </div>
+        )}
       </div>
+      <button
+        type="button"
+        className="rs-backlog-fab"
+        onClick={() => openAddTaskModal()}
+        aria-label="Add task"
+      >
+        <span className="material-symbols-outlined">add</span>
+      </button>
     </DashboardLayout>
   );
 }

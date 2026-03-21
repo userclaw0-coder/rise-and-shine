@@ -25,3 +25,10 @@ Subfolders:
 | **Olive / gold** | `--rs-olive` / `--rs-accent-gold` for CTAs, charts, and dark insight panels. |
 
 Individual pages still use many inline styles; over time, prefer `var(--rs-*)` or shared classes for new UI.
+
+## Action Items (backlog) — strategic cards
+
+- **Default (“Strategic”)**: `components/BacklogStrategicTaskCard.js` — metadata row (category pill, due, status), serif title, **strategic score** (gold emphasis when ≥ 65), subtasks with **+ N more** / show fewer, tag pills with **+ n more**, full field grid preserved (category, subcategory, priority, effort, due, status, outcome, domain, tag editor).
+- **Compact list**: previous dense grid for power users; toggle next to search.
+- **Quick capture** bar + **⌘K / Ctrl+K** open add-task modal; **FAB** mirrors add.
+- Styles: `styles/globals.css` (`.rs-backlog-*`).
