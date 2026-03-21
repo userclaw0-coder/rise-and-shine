@@ -1540,3 +1540,472 @@ body {
 .rs-health-table__num {
   text-align: right;
 }
+
+/* Occam dashboard (health) */
+.rs-health-dashboard {
+  margin-bottom: var(--rs-space-5);
+}
+
+.rs-health-dashboard__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (min-width: 1024px) {
+  .rs-health-dashboard__grid {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+    gap: 24px;
+  }
+}
+
+.rs-health-dashboard__main {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+.rs-health-dashboard__aside {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.rs-occam-cal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.rs-occam-cal__nav {
+  border: none;
+  background: var(--rs-surface-low);
+  border-radius: var(--rs-radius-md);
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--rs-on-surface);
+}
+
+.rs-occam-cal__nav:hover {
+  background: rgba(212, 175, 55, 0.12);
+}
+
+.rs-occam-cal__dow {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.rs-occam-cal__dow-cell {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--rs-on-surface-variant);
+  text-align: center;
+}
+
+.rs-occam-cal__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.rs-occam-cal__cell {
+  min-height: 64px;
+  border-radius: var(--rs-radius-sm);
+  border: 1px solid rgba(186, 177, 159, 0.15);
+  background: var(--rs-surface-low);
+  padding: 6px 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rs-occam-cal__cell--empty {
+  border: none;
+  background: transparent;
+  min-height: 0;
+}
+
+.rs-occam-cal__cell--today {
+  box-shadow: 0 0 0 2px var(--rs-accent-gold);
+  border-color: rgba(212, 175, 55, 0.35);
+}
+
+.rs-occam-cal__cell--next {
+  box-shadow: 0 0 0 2px rgba(85, 93, 30, 0.45);
+}
+
+.rs-occam-cal__daynum {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--rs-on-surface);
+}
+
+.rs-occam-cal__log {
+  font-size: 9px;
+  line-height: 1.25;
+  color: var(--rs-on-surface-variant);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.rs-occam-cal__log--muted {
+  opacity: 0.45;
+}
+
+.rs-occam-engine__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.rs-occam-cadence-pill {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 6px 12px;
+  border-radius: var(--rs-radius-full);
+  background: rgba(174, 64, 37, 0.12);
+  color: #7a3d2c;
+  border: 1px solid rgba(174, 64, 37, 0.2);
+}
+
+.rs-occam-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.rs-occam-tab {
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: var(--rs-radius-md);
+  border: 1px solid rgba(186, 177, 159, 0.22);
+  background: var(--rs-surface-low);
+  cursor: pointer;
+  font-family: var(--rs-font-body);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.rs-occam-tab--active {
+  border-color: rgba(212, 175, 55, 0.45);
+  box-shadow: 0 8px 24px rgba(85, 93, 30, 0.08);
+  background: linear-gradient(165deg, rgba(245, 206, 83, 0.1) 0%, var(--rs-surface-raised) 100%);
+}
+
+.rs-occam-tab__title {
+  display: block;
+  font-weight: 800;
+  font-size: 14px;
+  color: var(--rs-on-surface);
+}
+
+.rs-occam-tab__sub {
+  display: block;
+  font-size: 11px;
+  color: var(--rs-on-surface-variant);
+  margin-top: 2px;
+}
+
+.rs-occam-session-status {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--rs-on-surface-variant);
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: var(--rs-radius-md);
+  background: rgba(90, 118, 142, 0.08);
+  border: 1px solid rgba(90, 118, 142, 0.15);
+}
+
+.rs-occam-ex-card {
+  border-radius: var(--rs-radius-md);
+  border: 1px solid rgba(186, 177, 159, 0.18);
+  background: var(--rs-surface-low);
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+
+.rs-occam-ex-card--due {
+  border-color: rgba(212, 175, 55, 0.35);
+  box-shadow: 0 6px 20px rgba(107, 85, 0, 0.06);
+}
+
+.rs-occam-ex-card__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.rs-occam-ex-card__name {
+  margin: 0;
+  font-size: 1rem;
+  font-family: var(--rs-font-display);
+  font-weight: 700;
+  color: var(--rs-on-surface);
+}
+
+.rs-occam-ex-card__focus {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--rs-on-surface-variant);
+}
+
+.rs-occam-ex-card__badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 4px 10px;
+  border-radius: var(--rs-radius-full);
+  background: rgba(212, 175, 55, 0.2);
+  color: #5c4800;
+  flex-shrink: 0;
+}
+
+.rs-occam-ex-card__last {
+  font-size: 12px;
+  color: var(--rs-on-surface-variant);
+  margin: 0 0 8px;
+}
+
+.rs-occam-ex-card__suggest {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--rs-on-surface);
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border-radius: var(--rs-radius-sm);
+  background: rgba(85, 93, 30, 0.06);
+  border: 1px solid rgba(85, 93, 30, 0.12);
+}
+
+.rs-occam-ex-tip {
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 10px 12px;
+  border-radius: var(--rs-radius-sm);
+  margin-bottom: 10px;
+}
+
+.rs-occam-ex-tip--cadence {
+  background: rgba(245, 206, 83, 0.15);
+  border: 1px solid rgba(212, 175, 55, 0.25);
+  color: #4a3d00;
+}
+
+.rs-occam-ex-tip--range {
+  background: rgba(186, 177, 159, 0.12);
+  border: 1px solid rgba(186, 177, 159, 0.2);
+  color: var(--rs-on-surface);
+}
+
+.rs-occam-ex-tip--volume {
+  background: rgba(127, 92, 83, 0.1);
+  border: 1px solid rgba(127, 92, 83, 0.18);
+  color: #5c4038;
+}
+
+.rs-occam-ex-card__meta {
+  margin: 0;
+  font-size: 12px;
+  color: var(--rs-on-surface-variant);
+}
+
+.rs-occam-engine__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.rs-occam-aside-card {
+  padding: 16px 18px !important;
+}
+
+.rs-occam-aside-card__title {
+  font-family: var(--rs-font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0 0 8px;
+  color: var(--rs-on-surface);
+}
+
+.rs-occam-aside-card__body {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--rs-on-surface-variant);
+  margin: 0;
+}
+
+.rs-occam-rings-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  justify-content: space-around;
+  margin-bottom: 12px;
+}
+
+.rs-occam-ring {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 140px;
+}
+
+.rs-occam-ring__svg-wrap {
+  position: relative;
+  width: 112px;
+  height: 112px;
+}
+
+.rs-occam-ring__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  pointer-events: none;
+  padding: 12px;
+}
+
+.rs-occam-ring__pct {
+  font-size: 1.25rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--rs-on-surface);
+  line-height: 1.1;
+}
+
+.rs-occam-ring__lbl {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--rs-on-surface-variant);
+  margin-top: 2px;
+  line-height: 1.2;
+}
+
+.rs-occam-ring__sub {
+  font-size: 11px;
+  text-align: center;
+  color: var(--rs-on-surface-variant);
+  line-height: 1.35;
+}
+
+.rs-occam-ring__detail {
+  font-size: 10px;
+  text-align: center;
+  color: var(--rs-accent-gold);
+  font-weight: 600;
+}
+
+.rs-occam-bw-inline {
+  font-size: 12px;
+  color: var(--rs-on-surface-variant);
+  margin: 0;
+  text-align: center;
+}
+
+.rs-occam-morph-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.rs-occam-morph-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.rs-occam-morph-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--rs-on-surface-variant);
+}
+
+.rs-occam-morph-field .rs-input {
+  font-size: 13px;
+}
+
+.rs-occam-golden {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  background: linear-gradient(145deg, rgba(245, 206, 83, 0.08) 0%, var(--rs-surface-low) 100%);
+  border-color: rgba(212, 175, 55, 0.22) !important;
+}
+
+.rs-occam-golden__icon {
+  font-size: 32px !important;
+  color: var(--rs-olive);
+  opacity: 0.85;
+}
+
+.rs-occam-golden__ratio {
+  font-family: var(--rs-font-display);
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--rs-primary-strong);
+  margin: 0 0 6px;
+}
+
+.rs-occam-recovery-vector__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.rs-occam-recovery-vector__head .material-symbols-outlined {
+  font-size: 22px;
+  color: var(--rs-on-surface-variant);
+}
+
+.rs-occam-recovery-bar {
+  height: 8px;
+  border-radius: var(--rs-radius-full);
+  background: rgba(186, 177, 159, 0.2);
+  overflow: hidden;
+}
+
+.rs-occam-recovery-bar__fill {
+  height: 100%;
+  border-radius: var(--rs-radius-full);
+  background: linear-gradient(90deg, var(--rs-olive) 0%, var(--rs-accent-gold) 100%);
+  transition: width 0.4s ease;
+}

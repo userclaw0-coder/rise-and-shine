@@ -23,6 +23,7 @@ import {
   createTask,
   setTaskTags,
   getUserProfile,
+  getLiftingSetsWithSession,
   updateTask,
 } from "../lib/db";
 import {
@@ -342,7 +343,16 @@ export default function TodayPage() {
           setItems(loadedItems);
         }
 
-        const wp = getWorkoutPlanForDate(todayStr);
+        const [profRes, liftSetsRes] = await Promise.all([
+          getUserProfile(user.id),
+          getLiftingSetsWithSession(user.id, 500),
+        ]);
+        const profileForOccam = profRes.data?.profile;
+        const wp = getWorkoutPlanForDate(todayStr, {
+          preferences: profileForOccam?.preferences,
+          setsWithSession: liftSetsRes.data || [],
+          now: new Date(),
+        });
         setWorkoutPlan(wp);
 
         const itemTaskIds = loadedItems
@@ -1259,6 +1269,19 @@ export default function TodayPage() {
                       lineHeight: 1.45,
                     }}
                   >
+                    {workoutPlan.scheduleMode === "recovery" && workoutPlan.recoveryEndsAt ? (
+                      <>
+                        <strong>Recovery</strong> until{" "}
+                        {workoutPlan.recoveryEndsAt.toLocaleString(undefined, {
+                          weekday: "short",
+                          month: "short",
+                          day: "numeric",
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
+                        . Next heavy: <strong>{workoutPlan.nextWorkoutAfterRecovery}</strong>.{" "}
+                      </>
+                    ) : null}
                     {OCCAM_CADENCE_SHORT}. Log working weights on the Occam Workout page.
                   </p>
                   {workoutPlan.exercises?.length > 0 && (

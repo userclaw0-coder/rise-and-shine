@@ -1,10 +1,18 @@
 # Occam Protocol (Tim Ferriss–style) in Rise & Shine
 
-This app implements a **minimal two-workout rotation** inspired by the Occam’s Protocol (slow cadence, few exercises, infrequent sessions, progressive overload). It is **not** a medical prescription—adjust with a coach or physician as needed.
+This app implements a **minimal two-workout rotation** inspired by Occam’s Protocol (slow cadence, few exercises, infrequent sessions, progressive overload). It is **not** a medical prescription—adjust with a coach or physician as needed.
 
-## Cycle (shared with Today)
+## Schedule engine (shared with Today)
 
-Phases repeat in order: **Occam A → Recovery → Occam B → Recovery**, anchored to a fixed cycle start in `lib/scoring.js`. **Today** shows the phase, exercise list, cadence reminder, checkbox to mark the daily workout task complete, and a link to **`/health`** for logging.
+**Completion-based rotation** (`lib/occamSchedule.js`), not a fixed calendar:
+
+1. **First heavy session** defaults to **Occam A** if you have no logged history.
+2. After a session is recognized as a **complete** Occam A or B (every main lift for that template logged on a `lifting_sessions` date), the app records `preferences.occam_schedule.last_completion` (synced on Health load when lifts imply a newer completion than stored).
+3. **48-hour minimum recovery** (`MIN_RECOVERY_HOURS`): until that window ends, **Today** and **Health** show **Recovery** (mobility / light day). The **next** workout (A ↔ B) is shown as upcoming.
+4. After recovery, the **next** workout stays **due** until you log it—**missed calendar days do not skip** the assignment.
+5. Completing that workout starts another **48h** recovery before the following heavy day.
+
+Legacy **fixed calendar** cycle still exists in `lib/scoring.js` (`WORKOUT_CYCLE_START` / `getWorkoutPhaseForDate`) for callers that omit schedule context. **Today** and **Health** pass `preferences` + `lifting_sets` data into `getWorkoutPlanForDate(date, ctx)` so they use the engine above.
 
 ## Workout A
 
@@ -20,10 +28,16 @@ Target **7+ reps** on the top set after warm-ups; **5 sec up / 5 sec down** on w
 
 ## Logging & goals
 
-- **Bench goal:** working weight vs **1×** latest logged body weight (flat/incline/decline bench and similar patterns match in `lib/occam.js`).
-- **Squat-side goal:** **2×** body weight vs best **squat or leg press** logged (Occam often uses leg press instead of barbell squat).
-- **Measurements:** stored under `user_profile.profile.preferences.occam_measurements` (chest, waist, hips, shoulders, neck + `measured_at`).
+- **Bench goal:** working weight vs **1×** latest logged body weight (bench / incline / decline patterns in `lib/occam.js`).
+- **Squat-side goal:** **2×** body weight vs best **squat or leg press** logged.
+- **Measurements:** `user_profile.profile.preferences.occam_measurements` (chest, waist, hips, shoulders, neck + `measured_at`).
+- **Progression hints:** `suggestOccamWeight` in `lib/occamSchedule.js` — add load when reps exceed target, repeat when at the edge, per Occam-style rules.
+
+## UI
+
+- **Health (`/health`):** month calendar (logged exercises per day, today + next-eligible highlights), Stitch-style engine (tabs A/B, exercise cards, cadence pill), sidebar rings, morphology, recovery vector, celebrations.
+- **Today:** same plan via `getWorkoutPlanForDate` + context; recovery copy when applicable.
 
 ## Similar tools
 
-Apps like **Strong**, **Hevy**, and **Jefit** excel at set/rep logging; this page keeps Occam-specific copy, goals, and Today alignment in one place.
+Apps like **Strong**, **Hevy**, and **Jefit** excel at set/rep logging; this page keeps Occam-specific structure, recovery spacing, and Today alignment in one place.
