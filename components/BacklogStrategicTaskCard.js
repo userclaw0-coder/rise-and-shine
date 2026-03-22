@@ -91,7 +91,8 @@ export default function BacklogStrategicTaskCard({
   const scoreHot = scoreNum != null && scoreNum >= 65;
   const tagNames = extractTagNames(task);
   const visibleTags = expandedTagPills ? tagNames : tagNames.slice(0, TAG_PILL_PREVIEW);
-  const hiddenTagCount = tagNames.length - TAG_PILL_PREVIEW;
+  /** Tags not in the collapsed preview — same as how many re-hide on collapse (not “currently hidden” when expanded). */
+  const tagsBeyondPreview = Math.max(0, tagNames.length - TAG_PILL_PREVIEW);
 
   const showAllSubs = expandedSubtasks || sortedChildren.length <= SUBTASK_PREVIEW;
   const visibleChildren = showAllSubs
@@ -414,19 +415,31 @@ export default function BacklogStrategicTaskCard({
       <div className="rs-backlog-card__tags-section">
         {tagNames.length > 0 && (
           <div className="rs-backlog-card__tag-pills">
-            {visibleTags.map((name) => (
-              <span key={name} className="rs-backlog-card__tag-pill">
+            {visibleTags.map((name, idx) => (
+              <span key={`${name}-${idx}`} className="rs-backlog-card__tag-pill">
                 {name}
               </span>
             ))}
-            {!expandedTagPills && hiddenTagCount > 0 && (
-              <button type="button" className="rs-backlog-card__more-tags" onClick={onToggleTagPills}>
-                + {hiddenTagCount} more
+            {!expandedTagPills && tagsBeyondPreview > 0 && (
+              <button
+                type="button"
+                className="rs-backlog-card__more-tags"
+                onClick={onToggleTagPills}
+                aria-expanded={false}
+                aria-label={`Show ${tagsBeyondPreview} more tag${tagsBeyondPreview === 1 ? "" : "s"}`}
+              >
+                + {tagsBeyondPreview} more
               </button>
             )}
-            {expandedTagPills && hiddenTagCount > 0 && (
-              <button type="button" className="rs-backlog-card__more-tags" onClick={onToggleTagPills}>
-                Show fewer
+            {expandedTagPills && tagsBeyondPreview > 0 && (
+              <button
+                type="button"
+                className="rs-backlog-card__more-tags"
+                onClick={onToggleTagPills}
+                aria-expanded
+                aria-label={`Hide ${tagsBeyondPreview} tag${tagsBeyondPreview === 1 ? "" : "s"} beyond the first ${TAG_PILL_PREVIEW}`}
+              >
+                {tagsBeyondPreview === 1 ? "Hide 1 tag" : `Hide ${tagsBeyondPreview} tags`}
               </button>
             )}
           </div>
