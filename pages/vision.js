@@ -601,65 +601,142 @@ export default function VisionPage() {
                 {savedMsg && <span className="rs-vision-hero__status-ok">{savedMsg}</span>}
               </div>
             </div>
-            <p className="rs-vision-hero__eyebrow">Identity statement</p>
-            <h1 className="rs-vision-hero__mantra">
-              {identityParts.isEmpty ? (
-                <span className="rs-vision-hero__mantra--placeholder">
-                  Name who you are becoming — calm, capable, unstoppable. Separate traits with commas; the final word glows
-                  gold as your anchor.
-                </span>
-              ) : (
-                <>
-                  {identityParts.lead}
-                  {identityParts.beforeGold}
-                  <span className="rs-vision-hero__gold">{identityParts.gold}</span>
-                </>
-              )}
-            </h1>
-            <p className="rs-vision-hero__tagline">The mindful curator of a legendary life.</p>
-            <div className="rs-vision-hero__identity-tools">
-              <label className="rs-vision-sr-only" htmlFor="vision-identity-input">
-                Identity attributes (comma-separated)
-              </label>
-              <AutoHeightTextarea
-                id="vision-identity-input"
-                value={identityAttributes}
-                onChange={setIdentityAttributes}
-                rows={2}
-                placeholder="e.g. calm, confident, strong entrepreneur"
-                className="rs-vision-hero__identity-input"
-                style={{}}
-              />
-              <div className="rs-vision-hero__identity-visual">
-                {fieldImages.identity ? (
-                  <>
+            <div className={`rs-vision-hero__split${isMobile ? " rs-vision-hero__split--stack" : ""}`}>
+              <div className="rs-vision-hero__primary">
+                <p className="rs-vision-hero__eyebrow">Identity statement</p>
+                <h1 className="rs-vision-hero__mantra">
+                  {identityParts.isEmpty ? (
+                    <span className="rs-vision-hero__mantra--placeholder">
+                      Name who you are becoming — calm, capable, unstoppable. Separate traits with commas; the final word
+                      glows gold as your anchor.
+                    </span>
+                  ) : (
+                    <>
+                      {identityParts.lead}
+                      {identityParts.beforeGold}
+                      <span className="rs-vision-hero__gold">{identityParts.gold}</span>
+                    </>
+                  )}
+                </h1>
+                <p className="rs-vision-hero__tagline">The mindful curator of a legendary life.</p>
+                <div className="rs-vision-hero__identity-tools">
+                  <label className="rs-vision-sr-only" htmlFor="vision-identity-input">
+                    Identity attributes (comma-separated)
+                  </label>
+                  <AutoHeightTextarea
+                    id="vision-identity-input"
+                    value={identityAttributes}
+                    onChange={setIdentityAttributes}
+                    rows={2}
+                    placeholder="e.g. calm, confident, strong entrepreneur"
+                    className="rs-vision-hero__identity-input"
+                    style={{}}
+                  />
+                  <div className="rs-vision-hero__identity-visual">
+                    {fieldImages.identity ? (
+                      <>
+                        <button
+                          type="button"
+                          className="rs-vision-thumb-btn"
+                          onClick={() => openImageViewer(fieldImages.identity)}
+                        >
+                          <img src={fieldImages.identity} alt="" className="rs-vision-thumb-img" />
+                        </button>
+                        <button
+                          type="button"
+                          className="rs-vision-mini-btn"
+                          onClick={() => handleRemoveFieldImage("identity")}
+                        >
+                          Remove
+                        </button>
+                      </>
+                    ) : (
+                      <div className="rs-vision-thumb-placeholder">Visual anchor</div>
+                    )}
                     <button
                       type="button"
-                      className="rs-vision-thumb-btn"
-                      onClick={() => openImageViewer(fieldImages.identity)}
+                      className="rs-vision-mini-btn rs-vision-mini-btn--gold"
+                      onClick={() => handleFieldImageClick("identity")}
+                      disabled={uploadingFieldKey !== null}
                     >
-                      <img src={fieldImages.identity} alt="" className="rs-vision-thumb-img" />
+                      {uploadingFieldKey === "identity" ? "…" : "Upload"}
                     </button>
-                    <button
-                      type="button"
-                      className="rs-vision-mini-btn"
-                      onClick={() => handleRemoveFieldImage("identity")}
-                    >
-                      Remove
-                    </button>
-                  </>
-                ) : (
-                  <div className="rs-vision-thumb-placeholder">Visual anchor</div>
-                )}
-                <button
-                  type="button"
-                  className="rs-vision-mini-btn rs-vision-mini-btn--gold"
-                  onClick={() => handleFieldImageClick("identity")}
-                  disabled={uploadingFieldKey !== null}
-                >
-                  {uploadingFieldKey === "identity" ? "…" : "Upload"}
-                </button>
+                  </div>
+                </div>
               </div>
+
+              <aside className="rs-vision-thrive-card rs-vision-thrive-card--hero" aria-label="Goals to thrive">
+                <div className="rs-vision-thrive-card__head">
+                  <span className="material-symbols-outlined" aria-hidden>
+                    verified
+                  </span>
+                  <div>
+                    <h2 className="rs-vision-thrive-card__title">Non-negotiable thrive goals</h2>
+                    <p className="rs-vision-thrive-card__sub">Baseline standards your future self insists on.</p>
+                  </div>
+                </div>
+                <ol className="rs-vision-thrive-list">
+                  {[0, 1, 2].map((slot) => {
+                    const line = thriveLines[slot];
+                    return (
+                      <li key={slot} className="rs-vision-thrive-list__item">
+                        <span className="rs-vision-thrive-list__num">{slot + 1}</span>
+                        <p
+                          className={
+                            line
+                              ? "rs-vision-thrive-list__text"
+                              : "rs-vision-thrive-list__text rs-vision-thrive-list__text--muted"
+                          }
+                        >
+                          {line || "Define a non-negotiable — movement, depth, recovery…"}
+                        </p>
+                      </li>
+                    );
+                  })}
+                </ol>
+                <label className="rs-vision-sr-only" htmlFor="vision-thrive-area">
+                  Edit thrive goals
+                </label>
+                <AutoHeightTextarea
+                  id="vision-thrive-area"
+                  value={goalsToThrive}
+                  onChange={setGoalsToThrive}
+                  rows={3}
+                  placeholder={"One goal per line (up to three)\n…"}
+                  className="rs-vision-thrive-card__textarea"
+                  style={{}}
+                />
+                <div className="rs-vision-thrive-card__visual rs-vision-thrive-card__visual--hero">
+                  {fieldImages.goals_to_thrive ? (
+                    <>
+                      <button
+                        type="button"
+                        className="rs-vision-thumb-btn"
+                        onClick={() => openImageViewer(fieldImages.goals_to_thrive)}
+                      >
+                        <img src={fieldImages.goals_to_thrive} alt="" className="rs-vision-side-visual__img" />
+                      </button>
+                      <button
+                        type="button"
+                        className="rs-vision-mini-btn rs-vision-mini-btn--light"
+                        onClick={() => handleRemoveFieldImage("goals_to_thrive")}
+                      >
+                        Remove
+                      </button>
+                    </>
+                  ) : (
+                    <div className="rs-vision-thumb-placeholder rs-vision-thumb-placeholder--dark">Anchor image</div>
+                  )}
+                  <button
+                    type="button"
+                    className="rs-vision-mini-btn rs-vision-mini-btn--light"
+                    onClick={() => handleFieldImageClick("goals_to_thrive")}
+                    disabled={uploadingFieldKey !== null}
+                  >
+                    {uploadingFieldKey === "goals_to_thrive" ? "…" : "Upload"}
+                  </button>
+                </div>
+              </aside>
             </div>
           </div>
         </section>
@@ -814,7 +891,7 @@ export default function VisionPage() {
                 Specific, measurable outcomes on an editorial timeline — not a dry checklist.
               </p>
             </header>
-            <div className="rs-vision-outcomes-scroller" role="region" aria-label="Desired outcomes">
+            <div className="rs-vision-outcomes-stack" role="region" aria-label="Desired outcomes">
               {outcomeLines.length === 0 ? (
                 <div className="rs-vision-outcomes-empty">
                   <span className="material-symbols-outlined" aria-hidden>
@@ -877,66 +954,7 @@ export default function VisionPage() {
             </div>
           </section>
 
-          <div className={`rs-vision-thrive-split${isMobile ? " rs-vision-thrive-split--stack" : ""}`}>
-            <aside className="rs-vision-thrive-card" aria-label="Goals to thrive">
-              <div className="rs-vision-thrive-card__head">
-                <span className="material-symbols-outlined" aria-hidden>
-                  verified
-                </span>
-                <div>
-                  <h2 className="rs-vision-thrive-card__title">Non-negotiable thrive goals</h2>
-                  <p className="rs-vision-thrive-card__sub">Baseline standards your future self insists on.</p>
-                </div>
-              </div>
-              <ol className="rs-vision-thrive-list">
-                {[0, 1, 2].map((slot) => {
-                  const line = thriveLines[slot];
-                  return (
-                    <li key={slot} className="rs-vision-thrive-list__item">
-                      <span className="rs-vision-thrive-list__num">{slot + 1}</span>
-                      <p className={line ? "rs-vision-thrive-list__text" : "rs-vision-thrive-list__text rs-vision-thrive-list__text--muted"}>
-                        {line || "Define a non-negotiable — movement, depth, recovery…"}
-                      </p>
-                    </li>
-                  );
-                })}
-              </ol>
-              <label className="rs-vision-sr-only" htmlFor="vision-thrive-area">
-                Edit thrive goals
-              </label>
-              <AutoHeightTextarea
-                id="vision-thrive-area"
-                value={goalsToThrive}
-                onChange={setGoalsToThrive}
-                rows={3}
-                placeholder={"One goal per line (up to three)\n…"}
-                className="rs-vision-thrive-card__textarea"
-                style={{}}
-              />
-              <div className="rs-vision-thrive-card__visual">
-                {fieldImages.goals_to_thrive ? (
-                  <>
-                    <button type="button" className="rs-vision-thumb-btn" onClick={() => openImageViewer(fieldImages.goals_to_thrive)}>
-                      <img src={fieldImages.goals_to_thrive} alt="" className="rs-vision-side-visual__img" />
-                    </button>
-                    <button type="button" className="rs-vision-mini-btn" onClick={() => handleRemoveFieldImage("goals_to_thrive")}>
-                      Remove
-                    </button>
-                  </>
-                ) : (
-                  <div className="rs-vision-thumb-placeholder rs-vision-thumb-placeholder--dark">Anchor image</div>
-                )}
-                <button
-                  type="button"
-                  className="rs-vision-mini-btn rs-vision-mini-btn--light"
-                  onClick={() => handleFieldImageClick("goals_to_thrive")}
-                  disabled={uploadingFieldKey !== null}
-                >
-                  {uploadingFieldKey === "goals_to_thrive" ? "…" : "Upload"}
-                </button>
-              </div>
-            </aside>
-
+          <div className="rs-vision-systems-wrap">
             <div className="rs-vision-systems">
               <figure className="rs-vision-quote">
                 <blockquote>
