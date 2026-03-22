@@ -62,6 +62,16 @@ export default function DashboardLayout({ children }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [sidebarOpen, closeSidebar]);
 
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (sidebarOpen) {
+      document.body.classList.add("rs-drawer-open");
+    } else {
+      document.body.classList.remove("rs-drawer-open");
+    }
+    return () => document.body.classList.remove("rs-drawer-open");
+  }, [sidebarOpen]);
+
   async function handleSignOut() {
     await supabase.auth.signOut();
     window.location.href = "/login";

@@ -37,16 +37,7 @@ export default function Login() {
   }
 
   return (
-    <div
-      className="rs-shell"
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 20,
-      }}
-    >
+    <div className="rs-shell rs-auth-shell">
       <div
         className="rs-section-card"
         style={{ maxWidth: 420, width: "100%", marginBottom: 0 }}

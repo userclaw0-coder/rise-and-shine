@@ -173,6 +173,7 @@ export default function WeeklyReviewPage() {
           alignItems: "baseline",
           marginBottom: 16,
           gap: 12,
+          flexWrap: "wrap",
         }}
       >
         <div>
@@ -198,17 +199,7 @@ export default function WeeklyReviewPage() {
         </div>
       </div>
 
-      <section
-        style={{
-          padding: 16,
-          borderRadius: 16,
-          border: "1px solid #e5e7eb",
-          background: "#ffffff",
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 3fr) minmax(0, 1.5fr)",
-          gap: 16,
-        }}
-      >
+      <section className="rs-weekly-review-layout">
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           {loadError && (
             <p style={{ fontSize: 13, color: "#b91c1c", margin: 0 }}>{loadError}</p>
@@ -275,14 +266,7 @@ export default function WeeklyReviewPage() {
             <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 6px" }}>
               Re-rate each need. Then describe one healthy action to raise your lowest-scoring need by 1 point next week.
             </p>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-                gap: 8,
-                marginBottom: 8,
-              }}
-            >
+            <div className="rs-weekly-needs-grid">
               {Object.keys(needs).map((key) => (
                 <label
                   key={key}
@@ -404,13 +388,7 @@ export default function WeeklyReviewPage() {
             )}
           </div>
         </form>
-        <div
-          style={{
-            borderLeft: "1px solid #f3f4f6",
-            paddingLeft: 12,
-            fontSize: 13,
-          }}
-        >
+        <div className="rs-weekly-review-aside">
           <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 8px" }}>
             Past reviews
           </h2>

@@ -2358,7 +2358,7 @@ export default function BacklogPage() {
                 </datalist>
               )}
             </label>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div className="rs-form-grid-2">
               <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 <span style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}>Priority</span>
                 <select
@@ -2399,7 +2399,7 @@ export default function BacklogPage() {
                 </select>
               </label>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div className="rs-form-grid-2">
               <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 <span style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}>Due date</span>
                 <input
