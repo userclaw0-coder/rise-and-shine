@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../hooks/useAuth";
 import { BrandMarkIcon, BrandMarkLockup } from "./BrandMark";
+import OccamNotificationManager from "./OccamNotificationManager";
 
 function useLocalDateTime() {
   const [dateTime, setDateTime] = useState("");
@@ -190,6 +191,7 @@ export default function DashboardLayout({ children }) {
       <div className="rs-main-wrap">
         <main className="main-content rs-main-inner">{children}</main>
       </div>
+      <OccamNotificationManager />
     </div>
   );
 }

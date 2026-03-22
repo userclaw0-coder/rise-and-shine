@@ -12,3 +12,7 @@ The app is tuned for small screens and touch:
 - **Landing / weekly review:** Responsive grids via `.rs-landing-*` and `.rs-weekly-*` classes.
 
 When adding new pages, prefer **single-column** layouts under ~640px, **min-width: 0** on flex children, and avoid fixed widths wider than the viewport.
+
+## Occam workout reminders
+
+On **Occam Workout** (`/health`), users can turn on **browser notifications** when a heavy session is due and not fully logged today. Implemented via `components/OccamNotificationManager.js` (polls while the app is open), `lib/occamNotifications.js` (same rules as `occamSchedule`), and `components/OccamNotifySettings.js`. Requires **HTTPS** (or localhost) and notification permission; Android Chrome and desktop browsers work best; iOS needs the app **added to Home Screen** (16.4+).

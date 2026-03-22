@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useId } from "react"
 import Link from "next/link";
 import DashboardLayout from "../components/DashboardLayout";
 import OccamMonthCalendar from "../components/OccamMonthCalendar";
+import OccamNotifySettings from "../components/OccamNotifySettings";
 import PageHeader from "../components/PageHeader";
 import { useAuth } from "../hooks/useAuth";
 import {
@@ -603,6 +604,8 @@ export default function HealthPage() {
         {error && (
           <p style={{ color: "var(--rs-error)", fontSize: 13, marginBottom: 12 }}>{error}</p>
         )}
+
+        <OccamNotifySettings />
 
         <div className="rs-health-dashboard">
           <div className="rs-health-dashboard__grid">
