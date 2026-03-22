@@ -212,8 +212,9 @@ export default function TodayPage() {
 
   const [showConfetti, setShowConfetti] = useState(false);
   const confettiSeedRef = useRef(0);
-  const dailyHitsConfettiTriggeredRef = useRef(false);
-  const prevQueueLenRef = useRef(0);
+  /** null = not yet synced (skip confetti on first paint / after load) */
+  const prevDailyHitsAllDoneRef = useRef(null);
+  const prevNext3AllDoneRef = useRef(null);
 
   function triggerConfetti() {
     confettiSeedRef.current += 1;
@@ -272,33 +273,34 @@ export default function TodayPage() {
     });
   }, [user, mode]);
 
-  // Confetti when all Daily Hits are completed
+  // Confetti only when transitioning into “all Daily Hits done” (not on every refresh if already done)
   useEffect(() => {
     const total = items?.length ?? 0;
-    if (total <= 0) {
-      dailyHitsConfettiTriggeredRef.current = false;
+    const allDone = total > 0 && dailyHitsCompleted === total;
+    if (prevDailyHitsAllDoneRef.current === null) {
+      prevDailyHitsAllDoneRef.current = allDone;
       return;
     }
-    if (
-      dailyHitsCompleted === total &&
-      !dailyHitsConfettiTriggeredRef.current
-    ) {
-      dailyHitsConfettiTriggeredRef.current = true;
+    if (allDone && !prevDailyHitsAllDoneRef.current) {
       triggerConfetti();
-    } else if (dailyHitsCompleted < total) {
-      dailyHitsConfettiTriggeredRef.current = false;
     }
+    prevDailyHitsAllDoneRef.current = allDone;
   }, [dailyHitsCompleted, items]);
 
-  // Confetti when Today's 3 Actions queue first reaches 3 tasks
+  // Confetti when all three “Next 3” slots are completed (not when the queue merely fills to 3)
   useEffect(() => {
-    const prev = prevQueueLenRef.current;
-    const current = Array.isArray(queueEntries) ? queueEntries.length : 0;
-    if (prev !== 3 && current === 3) {
+    const q = Array.isArray(queueEntries) ? queueEntries : [];
+    const allDone =
+      q.length === 3 && q.every((e) => e?.task?.id && !!completionMap[e.task.id]);
+    if (prevNext3AllDoneRef.current === null) {
+      prevNext3AllDoneRef.current = allDone;
+      return;
+    }
+    if (allDone && !prevNext3AllDoneRef.current) {
       triggerConfetti();
     }
-    prevQueueLenRef.current = current;
-  }, [queueEntries]);
+    prevNext3AllDoneRef.current = allDone;
+  }, [queueEntries, completionMap]);
 
   useEffect(() => {
     if (!user) return;

@@ -277,14 +277,6 @@ export default function BacklogPage() {
     return [...inOrder, ...remaining];
   }, [categories, categoryOrder]);
 
-  const categoryOptions = useMemo(() => {
-    const list = orderedCategories || [];
-    return list
-      .map((c) => ({ id: c.id, name: c.name }))
-      .filter((c) => c.id && c.name)
-      .sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { sensitivity: "base" }));
-  }, [orderedCategories]);
-
   async function persistCategoryOrderToServer(order) {
     if (!user || !order?.length) return;
     try {
@@ -859,6 +851,8 @@ export default function BacklogPage() {
 
     const tagText = task._tagsText ?? makeTagText(task);
 
+    const compactTableChrome = compactListMode && !isCompact;
+
     const titleInput = (
       <input
         type="text"
@@ -872,10 +866,10 @@ export default function BacklogPage() {
         style={{
           width: "100%",
           minWidth: 0,
-          fontSize: compactListMode ? 12 : isCompact ? 15 : 14,
+          fontSize: compactTableChrome ? 12 : isCompact ? 15 : 14,
           lineHeight: 1.4,
-          padding: compactListMode ? "4px 6px" : isCompact ? "10px 12px" : "8px 10px",
-          borderRadius: compactListMode ? 4 : 8,
+          padding: compactTableChrome ? "4px 6px" : isCompact ? "10px 12px" : "8px 10px",
+          borderRadius: compactTableChrome ? 4 : 8,
           border: "1px solid #e5e7eb",
           background: "#ffffff",
           textDecoration: isDone ? "line-through" : "none",
@@ -891,8 +885,8 @@ export default function BacklogPage() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          minWidth: compactListMode ? 20 : isCompact ? 44 : 24,
-          minHeight: compactListMode ? 20 : isCompact ? 44 : 24,
+          minWidth: compactTableChrome ? 20 : isCompact ? 44 : 24,
+          minHeight: compactTableChrome ? 20 : isCompact ? 44 : 24,
           cursor: "pointer",
           flexShrink: 0,
         }}
@@ -903,21 +897,25 @@ export default function BacklogPage() {
           checked={isDone}
           onChange={(e) => handleStatusChange(task, e.target.checked ? "done" : "todo")}
           style={{
-            width: compactListMode ? 14 : isCompact ? 22 : 18,
-            height: compactListMode ? 14 : isCompact ? 22 : 18,
+            width: compactTableChrome ? 14 : isCompact ? 22 : 18,
+            height: compactTableChrome ? 14 : isCompact ? 22 : 18,
             cursor: "pointer",
           }}
         />
       </label>
     );
 
-    if (compactListMode) {
+    // Wide compact table is unusable on narrow viewports (title column minmax(0,*) collapses).
+    // Mobile uses the same card row as "Strategic" compact mode.
+    if (compactListMode && !isCompact) {
       return (
         <div key={task.id}>
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "minmax(0, 2fr) minmax(80px, 1fr) 70px 56px 70px 90px 70px 56px minmax(60px, 1fr)",
+              // 10 tracks = title + category + pri + hrs + due + status + outcome + domain + actions + tags
+              gridTemplateColumns:
+                "minmax(160px, 2fr) minmax(100px, 1fr) 72px 52px 78px 92px 72px 56px 88px minmax(100px, 1.1fr)",
               gap: 6,
               alignItems: "center",
               padding: "4px 0",
@@ -1035,7 +1033,7 @@ export default function BacklogPage() {
                 <option key={key} value={key}>{key.slice(0, 6)}</option>
               ))}
             </select>
-            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap", minWidth: 0 }}>
               <button type="button" onClick={() => handleAddSubtask(task)} style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, border: "1px solid #e5e7eb", background: "#f9fafb", cursor: "pointer" }}>+Sub</button>
               {task.status === "archived" ? (
                 <button type="button" onClick={() => handleStatusChange(task, "todo")} style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, border: "1px solid #86efac", background: "#ecfdf5", cursor: "pointer" }}>Restore</button>
@@ -1049,7 +1047,7 @@ export default function BacklogPage() {
               onChange={(e) => updateTaskLocal(task.id, { _tagsText: e.target.value })}
               onBlur={(e) => handleTagsSave(task.id, e.target.value)}
               placeholder="tags"
-              style={{ width: "100%", fontSize: 11, padding: "3px 6px", borderRadius: 4, border: "1px solid #e5e7eb", background: "#fff" }}
+              style={{ width: "100%", minWidth: 0, fontSize: 11, padding: "3px 6px", borderRadius: 4, border: "1px solid #e5e7eb", background: "#fff" }}
             />
           </div>
           {!isCollapsed && children.map((child) => renderTaskRow(child, depth + 1))}
@@ -1291,6 +1289,78 @@ export default function BacklogPage() {
                 </button>
               )}
             </div>
+            {compactListMode && (
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 8,
+                  marginLeft: depth * 16 + 56,
+                  marginTop: 8,
+                  alignItems: "center",
+                }}
+              >
+                <select
+                  value={(Array.isArray(task.outcome_ids) && task.outcome_ids[0]) || ""}
+                  onChange={(e) => {
+                    const v = e.target.value || null;
+                    const outcome_ids = v ? [v] : [];
+                    updateTaskLocal(task.id, { outcome_ids });
+                    handleInlineSave(task.id, {
+                      outcome_ids,
+                      primary_life_domain: task.primary_life_domain || undefined,
+                      alignment_source: "user",
+                    });
+                  }}
+                  style={{
+                    fontSize: 13,
+                    padding: "8px 10px",
+                    borderRadius: 8,
+                    border: "1px solid #e5e7eb",
+                    background: "#ffffff",
+                    minHeight: 44,
+                    flex: "1 1 160px",
+                    minWidth: 0,
+                  }}
+                >
+                  <option value="">Outcome…</option>
+                  {(profile?.desired_outcomes || []).map((o) => (
+                    <option key={o.id || o.title} value={o.id || o.title}>
+                      {(o.title || o.id || "").slice(0, 48)}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={task.primary_life_domain || ""}
+                  onChange={(e) => {
+                    const v = e.target.value || null;
+                    updateTaskLocal(task.id, { primary_life_domain: v });
+                    handleInlineSave(task.id, {
+                      outcome_ids: task.outcome_ids,
+                      primary_life_domain: v || null,
+                      alignment_source: "user",
+                    });
+                  }}
+                  style={{
+                    fontSize: 13,
+                    padding: "8px 10px",
+                    borderRadius: 8,
+                    border: "1px solid #e5e7eb",
+                    background: "#ffffff",
+                    minHeight: 44,
+                    flex: "1 1 140px",
+                    minWidth: 0,
+                  }}
+                >
+                  <option value="">Life domain…</option>
+                  {LIFE_DOMAIN_KEYS.map((key) => (
+                    <option key={key} value={key}>
+                      {lifeDomainLabel(key, profile) || key}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div style={{ marginLeft: depth * 16 + 56, marginTop: 8 }}>
               <input
                 type="text"
@@ -1690,27 +1760,7 @@ export default function BacklogPage() {
         <PageHeader
           eyebrow="Strategic productivity"
           title="Action Items"
-          subtitle="Manage initiatives, subtasks, tags, and AI-scored priority — card view keeps the critical path visible."
-          right={
-            <select
-              className="rs-select-compact"
-              value=""
-              onChange={(e) => {
-                const id = e.target.value;
-                if (!id) return;
-                router.push(`/category/${id}`);
-              }}
-              aria-label="Open category page"
-              style={{ minWidth: 200 }}
-            >
-              <option value="">Project workspaces…</option>
-              {categoryOptions.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          }
+          subtitle="Manage initiatives, subtasks, tags, and AI-scored priority — card view keeps the critical path visible. Open each project workspace from Projects in the sidebar."
         />
 
         {error && (
@@ -2026,6 +2076,7 @@ export default function BacklogPage() {
         </div>
 
         <div
+          id="rs-backlog-add-category"
           style={{
             display: "flex",
             flexWrap: "wrap",
@@ -2660,10 +2711,12 @@ export default function BacklogPage() {
               boxShadow: "var(--rs-shadow-soft)",
             }}
           >
+            {!isCompact && (
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "minmax(0, 2fr) minmax(80px, 1fr) 70px 56px 70px 90px 70px 56px 90px minmax(60px, 1fr)",
+                gridTemplateColumns:
+                  "minmax(160px, 2fr) minmax(100px, 1fr) 72px 52px 78px 92px 72px 56px 88px minmax(100px, 1.1fr)",
                 gap: 6,
                 fontSize: 11,
                 fontWeight: 600,
@@ -2683,6 +2736,21 @@ export default function BacklogPage() {
               <div>Actions</div>
               <div>Tags</div>
             </div>
+            )}
+            {isCompact && (
+              <p
+                className="rs-backlog-compact-mobile-hint"
+                style={{
+                  fontSize: 12,
+                  color: "var(--rs-on-surface-variant)",
+                  margin: "0 0 10px",
+                  lineHeight: 1.45,
+                }}
+              >
+                On small screens, compact list shows as <strong>cards</strong> so task titles stay readable. Use{" "}
+                <strong>Strategic</strong> for the full initiative cards.
+              </p>
+            )}
             <div>
               {sortedRootTasks.length === 0 ? (
                 <p
