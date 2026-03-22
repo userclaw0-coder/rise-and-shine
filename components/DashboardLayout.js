@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../hooks/useAuth";
 import { BrandMarkIcon, BrandMarkLockup } from "./BrandMark";
+import OccamNotificationManager from "./OccamNotificationManager";
 
 function useLocalDateTime() {
   const [dateTime, setDateTime] = useState("");
@@ -29,6 +30,7 @@ function useLocalDateTime() {
 const NAV_LINKS = [
   { href: "/today", label: "Today", icon: "wb_sunny" },
   { href: "/backlog", label: "Action Items", icon: "assignment" },
+  { href: "/projects", label: "Projects", icon: "view_kanban" },
   { href: "/templates", label: "Daily Hits", icon: "checklist" },
   { href: "/analytics", label: "Analytics", icon: "bar_chart" },
   { href: "/notes", label: "Notes", icon: "sticky_note_2" },
@@ -123,7 +125,10 @@ export default function DashboardLayout({ children }) {
 
         <nav className="rs-sidebar-nav" aria-label="Sections">
           {NAV_LINKS.map((link) => {
-            const isActive = path === link.href;
+            const isActive =
+              link.href === "/projects"
+                ? path === "/projects" || path.startsWith("/category/")
+                : path === link.href;
             return (
               <button
                 key={link.href}
@@ -190,6 +195,7 @@ export default function DashboardLayout({ children }) {
       <div className="rs-main-wrap">
         <main className="main-content rs-main-inner">{children}</main>
       </div>
+      <OccamNotificationManager />
     </div>
   );
 }
