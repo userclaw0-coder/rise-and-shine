@@ -4,7 +4,8 @@
 
 | File | Use |
 |------|-----|
-| `brand/rise-shine-logo-full.png` | Source wordmark (512×512). Used in-app via `components/BrandMark.js`. |
+| `brand/rise-shine-logo-full.png` | Full lockup (trimmed tight to artwork). `BrandMarkLockup` + OG source. |
+| `brand/logo-mark.png` | Sun + landscape only (no wordmark). `BrandMarkIcon`, favicons, PWA icons. |
 | `brand/favicon-32.png` | Small PNG favicon. |
 | `favicon.ico` | Classic browser tab icon. |
 | `brand/apple-touch-icon.png` | 180×180, iOS home screen. |

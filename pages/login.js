@@ -52,7 +52,7 @@ export default function Login() {
         style={{ maxWidth: 420, width: "100%", marginBottom: 0 }}
       >
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
-          <BrandMarkLockup maxHeight={100} />
+          <BrandMarkLockup maxHeight={112} />
         </div>
         <h1
           className="rs-section-card__title"

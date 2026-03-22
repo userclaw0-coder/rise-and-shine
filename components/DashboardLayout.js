@@ -81,7 +81,7 @@ export default function DashboardLayout({ children }) {
           <span className="material-symbols-outlined">menu</span>
         </button>
         <div className="rs-mobile-brand">
-          <BrandMarkIcon size={36} title="" />
+          <BrandMarkIcon size={40} alt="" />
           <div className="rs-sidebar-brand__text" style={{ minWidth: 0 }}>
             <div className="rs-brand-title" style={{ fontSize: "1rem" }}>
               Rise &amp; Shine
@@ -105,7 +105,7 @@ export default function DashboardLayout({ children }) {
         aria-label="Main navigation"
       >
         <div className="rs-sidebar-brand rs-sidebar-brand--lockup">
-          <BrandMarkLockup maxHeight={76} />
+          <BrandMarkLockup maxHeight={88} />
           <p className="rs-sidebar-tagline" style={{ margin: 0 }}>
             The mindful curator
           </p>

@@ -39,7 +39,7 @@ export default function Landing() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <BrandMarkIcon size={34} alt="" />
+          <BrandMarkIcon size={40} alt="" />
           <span style={{ fontWeight: 600, letterSpacing: "-0.03em" }}>Rise &amp; Shine</span>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
