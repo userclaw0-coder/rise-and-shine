@@ -3229,14 +3229,23 @@ body {
 }
 
 .rs-vision-outcomes-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
   margin-bottom: 8px;
   padding: 2px 0 4px;
+  align-items: stretch;
+}
+
+@media (min-width: 640px) {
+  .rs-vision-outcomes-stack {
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 14px;
+  }
 }
 
 .rs-vision-outcomes-empty {
+  grid-column: 1 / -1;
   width: 100%;
   min-height: 140px;
   display: flex;
@@ -3261,45 +3270,51 @@ body {
 .rs-vision-outcome-card {
   width: 100%;
   max-width: none;
-  flex: none;
-  padding: 18px 18px 20px;
-  border-radius: var(--rs-radius-lg);
+  min-width: 0;
+  padding: 12px 12px 14px;
+  border-radius: var(--rs-radius-md);
   background: linear-gradient(160deg, #fdfbf7 0%, #f0ebe3 100%);
   border: 1px solid rgba(186, 177, 159, 0.25);
-  box-shadow: 0 16px 36px rgba(55, 50, 42, 0.08);
+  box-shadow: 0 8px 20px rgba(55, 50, 42, 0.06);
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .rs-vision-outcome-card__eyebrow {
-  margin: 0 0 8px;
-  font-size: 10px;
+  margin: 0 0 6px;
+  font-size: 9px;
   font-weight: 700;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--rs-on-surface-variant);
 }
 
 .rs-vision-outcome-card__title {
-  margin: 0 0 14px;
+  margin: 0 0 10px;
+  flex: 1;
   font-family: var(--rs-font-display);
-  font-size: 1.05rem;
+  font-size: 0.9rem;
   font-weight: 700;
-  line-height: 1.45;
+  line-height: 1.4;
   color: var(--rs-on-surface);
   word-break: break-word;
 }
 
 .rs-vision-outcome-card__pill {
   display: inline-block;
-  font-size: 9px;
+  align-self: flex-start;
+  font-size: 8px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  padding: 6px 12px;
+  padding: 4px 10px;
   border-radius: var(--rs-radius-full);
   background: linear-gradient(90deg, rgba(212, 175, 55, 0.25) 0%, rgba(107, 85, 0, 0.12) 100%);
   color: var(--rs-primary-strong);
   border: 1px solid rgba(212, 175, 55, 0.4);
+  margin-top: auto;
 }
 
 .rs-vision-edit-deck {
