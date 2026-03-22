@@ -860,7 +860,7 @@ export default function StrategicProjectWorkspacePage() {
               onChange={(e) => setTaskTitle(e.target.value)}
             />
           </label>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div className="rs-form-grid-2">
             <label className="rs-project-field-label">
               Priority
               <select
@@ -884,7 +884,7 @@ export default function StrategicProjectWorkspacePage() {
               </select>
             </label>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div className="rs-form-grid-2">
             <label className="rs-project-field-label">
               Due
               <input type="date" className="rs-input" value={taskDueDate} onChange={(e) => setTaskDueDate(e.target.value)} />

@@ -21,38 +21,31 @@ export default function Landing() {
 
   return (
     <div
+      className="rs-landing-root"
       style={{
-        minHeight: "100vh",
         fontFamily: "system-ui",
         background: "radial-gradient(circle at top, #eff6ff 0, #f9fafb 55%, #ffffff 100%)",
         color: "#111827",
       }}
     >
-      <header
-        style={{
-          maxWidth: 1040,
-          margin: "0 auto",
-          padding: "20px 16px 8px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <header className="rs-landing-header">
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
           <BrandMarkIcon size={40} alt="" />
           <span style={{ fontWeight: 600, letterSpacing: "-0.03em" }}>Rise &amp; Shine</span>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div className="rs-landing-header__actions">
           {user && (
             <button
               type="button"
               onClick={handleGoToApp}
               style={{
                 fontSize: 13,
-                padding: "6px 12px",
+                padding: "10px 14px",
+                minHeight: 44,
                 borderRadius: 999,
                 border: "1px solid #e5e7eb",
                 background: "#ffffff",
+                touchAction: "manipulation",
               }}
             >
               Go to app
@@ -63,11 +56,13 @@ export default function Landing() {
             onClick={handlePrimaryCta}
             style={{
               fontSize: 13,
-              padding: "6px 14px",
+              padding: "10px 16px",
+              minHeight: 44,
               borderRadius: 999,
               border: "1px solid #111827",
               background: "#111827",
               color: "#ffffff",
+              touchAction: "manipulation",
             }}
           >
             Sign in
@@ -75,24 +70,10 @@ export default function Landing() {
         </div>
       </header>
 
-      <main style={{ maxWidth: 1040, margin: "0 auto", padding: "32px 16px 60px" }}>
-        <section
-          style={{
-            display: "grid",
-            gridTemplateColumns: "minmax(0, 3fr) minmax(0, 2.4fr)",
-            gap: 32,
-            alignItems: "center",
-          }}
-        >
+      <main className="rs-landing-main">
+        <section className="rs-landing-hero">
           <div>
-            <h1
-              style={{
-                fontSize: 34,
-                lineHeight: 1.1,
-                letterSpacing: "-0.04em",
-                margin: 0,
-              }}
-            >
+            <h1>
               Your next 3 actions,
               <br />
               chosen for today.
@@ -108,7 +89,7 @@ export default function Landing() {
               Rise &amp; Shine turns your life vision, backlog, and daily tasks into a clear Next&nbsp;3 you can act on
               right now — with AI that explains why each task matters.
             </p>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 10 }}>
+            <div className="rs-landing-cta-row">
               <button
                 type="button"
                 onClick={handlePrimaryCta}
@@ -144,6 +125,7 @@ export default function Landing() {
           </div>
 
           <div
+            className="rs-landing-hooks"
             style={{
               borderRadius: 20,
               border: "1px solid #e5e7eb",
