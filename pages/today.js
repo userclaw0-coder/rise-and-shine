@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import AiPlannerGuidance from "../components/AiPlannerGuidance";
 import DashboardLayout from "../components/DashboardLayout";
+import PageHeader from "../components/PageHeader";
 import ProgressToOutcome from "../components/ProgressToOutcome";
 import QueueBehaviorHelper from "../components/QueueBehaviorHelper";
 import SectionCard from "../components/SectionCard";
@@ -21,6 +23,7 @@ import {
   createTask,
   setTaskTags,
   getUserProfile,
+  getLiftingSetsWithSession,
   updateTask,
 } from "../lib/db";
 import {
@@ -31,6 +34,7 @@ import {
   getWorkoutPlanForDate,
   getEffectiveCategoryWeights,
 } from "../lib/scoring";
+import { OCCAM_CADENCE_SHORT } from "../lib/occam";
 import {
   buildQueueCandidates,
   buildQueueFromChosen,
@@ -92,9 +96,21 @@ function getNextActionHint(taskId, queueEntries, completionMap) {
 }
 
 const HINT_STYLES = {
-  action: { color: "#1d4ed8", background: "#eff6ff", border: "#bfdbfe" },
-  done: { color: "#6b7280", background: "#f9fafb", border: "#e5e7eb" },
-  success: { color: "#059669", background: "#ecfdf5", border: "#86efac" },
+  action: {
+    color: "var(--rs-primary-strong)",
+    background: "rgba(245, 206, 83, 0.18)",
+    border: "rgba(212, 175, 55, 0.45)",
+  },
+  done: {
+    color: "var(--rs-on-surface-variant)",
+    background: "var(--rs-surface-low)",
+    border: "rgba(186, 177, 159, 0.25)",
+  },
+  success: {
+    color: "var(--rs-olive)",
+    background: "rgba(85, 93, 30, 0.1)",
+    border: "rgba(85, 93, 30, 0.28)",
+  },
 };
 
 function ConfettiOverlay({ seed }) {
@@ -218,6 +234,16 @@ export default function TodayPage() {
 
   const todayStr = useMemo(() => getTodayDateStr(), []);
 
+  const dateLabel = useMemo(() => {
+    const d = new Date(`${todayStr}T12:00:00`);
+    return d.toLocaleDateString(undefined, {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+  }, [todayStr]);
+
   const dailyTemplateTaskIds = useMemo(() => {
     const ids = [];
     for (const it of items || []) {
@@ -311,7 +337,16 @@ export default function TodayPage() {
           setItems(loadedItems);
         }
 
-        const wp = getWorkoutPlanForDate(todayStr);
+        const [profRes, liftSetsRes] = await Promise.all([
+          getUserProfile(user.id),
+          getLiftingSetsWithSession(user.id, 500),
+        ]);
+        const profileForOccam = profRes.data?.profile;
+        const wp = getWorkoutPlanForDate(todayStr, {
+          preferences: profileForOccam?.preferences,
+          setsWithSession: liftSetsRes.data || [],
+          now: new Date(),
+        });
         setWorkoutPlan(wp);
 
         const itemTaskIds = loadedItems
@@ -1053,7 +1088,7 @@ export default function TodayPage() {
     return (
       <DashboardLayout>
         {showConfetti && <ConfettiOverlay seed={confettiSeedRef.current} />}
-        <p style={{ fontSize: 14, color: "#6b7280" }}>Loading...</p>
+        <p style={{ fontSize: 14, color: "var(--rs-on-surface-variant)" }}>Loading…</p>
       </DashboardLayout>
     );
   }
@@ -1061,90 +1096,47 @@ export default function TodayPage() {
   return (
     <DashboardLayout>
       {showConfetti && <ConfettiOverlay seed={confettiSeedRef.current} />}
-      <div
-        className="today-header"
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "baseline",
-          marginBottom: 16,
-          gap: 12,
-        }}
-      >
-        <div>
-          <h1
-            style={{
-              fontSize: 22,
-              fontWeight: 600,
-              margin: 0,
-              letterSpacing: "-0.02em",
-            }}
-          >
-            Today
-          </h1>
-          <p
-            style={{
-              margin: "4px 0 0",
-              fontSize: 13,
-              color: "#6b7280",
-            }}
-          >
-            {todayStr}
-          </p>
-        </div>
-        <div
-          className="today-header-controls"
-          style={{
-            display: "flex",
-            gap: 8,
-            alignItems: "center",
-            flexWrap: "wrap",
-          }}
-        >
-          <label
-            style={{
-              fontSize: 13,
-              color: "#4b5563",
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-          >
-            Mode
-            <select
-              value={mode}
-              onChange={(e) => setMode(e.target.value)}
+      <PageHeader
+        eyebrow="Morning intentions"
+        title="Today"
+        subtitle={dateLabel}
+        right={
+          <div className="today-header-controls rs-toolbar">
+            <label
               style={{
                 fontSize: 13,
-                padding: "4px 8px",
-                borderRadius: 999,
-                border: "1px solid #d1d5db",
-                background: "#ffffff",
+                color: "var(--rs-on-surface-variant)",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                fontWeight: 600,
               }}
             >
-              {MODES.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            onClick={handleRefreshQueue}
-            disabled={isRefilling}
-            style={{
-              fontSize: 13,
-              padding: "4px 10px",
-              borderRadius: 999,
-              border: "1px solid #d1d5db",
-              background: "#ffffff",
-              cursor: isRefilling ? "wait" : "pointer",
-            }}
-          >
-            {isRefilling ? "Refilling…" : "Refresh queue"}
-          </button>
-        </div>
-      </div>
+              Mode
+              <select
+                className="rs-select-compact"
+                value={mode}
+                onChange={(e) => setMode(e.target.value)}
+              >
+                {MODES.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="rs-btn-ghost"
+              onClick={handleRefreshQueue}
+              disabled={isRefilling}
+              style={{ cursor: isRefilling ? "wait" : "pointer", opacity: isRefilling ? 0.65 : 1 }}
+            >
+              {isRefilling ? "Refilling…" : "Refresh queue"}
+            </button>
+          </div>
+        }
+      />
 
       {showOnboardingCompleteBanner && (
         <div
@@ -1191,13 +1183,132 @@ export default function TodayPage() {
         </p>
       )}
 
-      <ProgressToOutcome
-        queueEntries={queueEntries}
-        completionMap={completionMap}
-        dailyHitsTotal={items?.length ?? 0}
-        dailyHitsCompleted={dailyHitsCompleted}
-        otherCompletedToday={otherCompletedToday}
-      />
+      <div
+        className={`rs-today-progress-occam${!workoutPlan ? " rs-today-progress-occam--solo" : ""}`}
+      >
+        <ProgressToOutcome
+          queueEntries={queueEntries}
+          completionMap={completionMap}
+          dailyHitsTotal={items?.length ?? 0}
+          dailyHitsCompleted={dailyHitsCompleted}
+          otherCompletedToday={otherCompletedToday}
+        />
+
+        {workoutPlan && (
+          <aside className="rs-today-occam-aside" aria-label="Occam workout">
+            <SectionCard
+              title="Occam workout"
+              subtitle={
+                workoutTaskId
+                  ? `${workoutPlan.phase}${workoutPlan.occamLabel ? ` · ${workoutPlan.occamLabel}` : ""}`
+                  : "Workout tracking unavailable. Add a Daily Repeat category (e.g. in Backlog) to enable."
+              }
+            >
+              <div className="rs-today-occam-aside__head">
+                <div className="rs-today-occam-aside__icon" aria-hidden>
+                  <span className="material-symbols-outlined">fitness_center</span>
+                </div>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: 12,
+                    color: "var(--rs-on-surface-variant)",
+                    lineHeight: 1.45,
+                    flex: 1,
+                    minWidth: 0,
+                  }}
+                >
+                  Barbell home template — two lifts per session.
+                </p>
+              </div>
+              {workoutTaskId ? (
+                <div>
+                  <p
+                    style={{
+                      fontSize: 12,
+                      color: "var(--rs-on-surface-variant)",
+                      margin: "0 0 10px",
+                      lineHeight: 1.45,
+                    }}
+                  >
+                    {workoutPlan.scheduleMode === "recovery" && workoutPlan.recoveryEndsAt ? (
+                      <>
+                        <strong>Recovery</strong> until{" "}
+                        {workoutPlan.recoveryEndsAt.toLocaleString(undefined, {
+                          weekday: "short",
+                          month: "short",
+                          day: "numeric",
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
+                        . Next heavy: <strong>{workoutPlan.nextWorkoutAfterRecovery}</strong>.{" "}
+                      </>
+                    ) : null}
+                    {OCCAM_CADENCE_SHORT}. Log working weights on the Occam Workout page.
+                  </p>
+                  {workoutPlan.exercises?.length > 0 && (
+                    <ul
+                      style={{
+                        margin: "0 0 12px",
+                        paddingLeft: 18,
+                        fontSize: 13,
+                        color: "var(--rs-on-surface)",
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      {workoutPlan.exercises.map((ex) => (
+                        <li key={ex.key} style={{ marginBottom: 6 }}>
+                          <strong>{ex.name}</strong> — target {ex.targetReps} ({ex.detail})
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <label
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        cursor: "pointer",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={!!completionMap[workoutPlan.id]}
+                        onChange={() => toggleTaskCompletion(workoutPlan.id)}
+                        style={{
+                          width: 20,
+                          height: 20,
+                          accentColor: "var(--rs-accent-gold)",
+                        }}
+                      />
+                      <span style={{ fontSize: 14, fontWeight: 600 }}>Mark today complete</span>
+                    </label>
+                    <Link
+                      href="/health"
+                      className="rs-btn-ghost"
+                      style={{ textDecoration: "none", fontSize: 13 }}
+                    >
+                      Open Occam Workout →
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                <p style={{ fontSize: 13, color: "var(--rs-on-surface-variant)", margin: 0 }}>
+                  {workoutPlan.title}
+                </p>
+              )}
+            </SectionCard>
+          </aside>
+        )}
+      </div>
 
       <QueueBehaviorHelper />
 
@@ -1216,28 +1327,19 @@ export default function TodayPage() {
                 No daily items yet. Configure them on the Daily Hits page.
               </p>
             )}
-            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+            <ul className="rs-daily-hit-list">
               {items.map((it) => (
-                <li
-                  key={it.id}
-                  style={{
-                    padding: "6px 0",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    borderBottom: "1px solid #f3f4f6",
-                  }}
-                >
+                <li key={it.id} className="rs-daily-hit-row">
                   <input
                     type="checkbox"
                     checked={!!completionMap[it.task?.id]}
                     onChange={() => toggleTaskCompletion(it.task?.id)}
                   />
-                  <div>
-                    <div style={{ fontSize: 14 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="rs-daily-hit-row__title">
                       {it.task?.title || "Untitled task"}
                     </div>
-                    <div style={{ fontSize: 12, color: "#9ca3af" }}>
+                    <div className="rs-daily-hit-row__meta">
                       {it.task?.priority || "Priority n/a"}
                     </div>
                   </div>
@@ -1245,43 +1347,6 @@ export default function TodayPage() {
               ))}
             </ul>
           </SectionCard>
-
-          {workoutPlan && (
-            <SectionCard
-              title="Workout"
-              subtitle={
-                workoutTaskId
-                  ? `Cycle: ${workoutPlan.phase}`
-                  : "Workout tracking unavailable. Add a Daily Repeat category (e.g. in Backlog) to enable."
-              }
-            >
-              {workoutTaskId ? (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={!!completionMap[workoutPlan.id]}
-                    onChange={() => toggleTaskCompletion(workoutPlan.id)}
-                  />
-                  <div>
-                    <div style={{ fontSize: 14 }}>{workoutPlan.title}</div>
-                    <div style={{ fontSize: 12, color: "#9ca3af" }}>
-                      Tap when you complete today&apos;s workout.
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
-                  {workoutPlan.title}
-                </p>
-              )}
-            </SectionCard>
-          )}
         </div>
         <div>
       <SectionCard
@@ -1346,16 +1411,16 @@ export default function TodayPage() {
                       <div
                         style={{
                           fontSize: 12,
-                          color: "#4b5563",
+                          color: "var(--rs-on-surface)",
                           marginTop: 4,
-                          padding: "3px 8px",
-                          background: "#f0fdf4",
-                          borderRadius: 6,
-                          borderLeft: "3px solid #86efac",
-                          lineHeight: 1.4,
+                          padding: "8px 10px",
+                          background: "rgba(245, 206, 83, 0.12)",
+                          borderRadius: "var(--rs-radius-sm)",
+                          borderLeft: "3px solid var(--rs-accent-gold)",
+                          lineHeight: 1.45,
                         }}
                       >
-                        <span style={{ fontWeight: 600, color: "#059669" }}>
+                        <span style={{ fontWeight: 700, color: "var(--rs-primary-strong)" }}>
                           Why now:
                         </span>{" "}
                         {displayReasonByTaskId.get(entry.task.id) || "Top-scored task for your current focus"}
@@ -1421,23 +1486,18 @@ export default function TodayPage() {
         <div style={{ marginBottom: 12 }}>
           <button
             type="button"
+            className="rs-btn-primary"
             onClick={handleRefineWithAi}
             disabled={aiLoading || queueEntries.length !== 3}
             style={{
               fontSize: 13,
-              padding: "8px 14px",
-              borderRadius: 999,
-              border: "1px solid #111827",
-              background: "#111827",
-              color: "#fff",
               cursor: aiLoading || queueEntries.length !== 3 ? "not-allowed" : "pointer",
-              opacity: aiLoading || queueEntries.length !== 3 ? 0.7 : 1,
             }}
           >
             {aiLoading ? "Refining…" : "Refine these 3 with AI"}
           </button>
           {queueEntries.length !== 3 && (
-            <span style={{ marginLeft: 8, fontSize: 12, color: "#6b7280" }}>
+            <span style={{ marginLeft: 8, fontSize: 12, color: "var(--rs-on-surface-variant)" }}>
               Queue must have 3 tasks to refine.
             </span>
           )}

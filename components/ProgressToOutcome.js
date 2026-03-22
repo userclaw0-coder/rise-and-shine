@@ -4,10 +4,10 @@ const EXPECTED_ACTIONS = 3;
 const MAX_SCALE = 10;
 
 /**
- * Bar 1: Daily Hits (template tasks) — grey background, fill = completed.
- * Bar 2: Today's 3 Actions (all other completions today) — expected 3, blue fill then gold overflow.
+ * Two metric cards: Daily Hits + Today's actions (side-by-side on wide screens).
+ * Gold / olive gradients aligned with site theme.
  */
-function DualProgressBars({
+function ProgressMetricsGrid({
   dailyHitsTotal,
   dailyHitsCompleted,
   otherCompletedToday,
@@ -16,6 +16,8 @@ function DualProgressBars({
 }) {
   const dailyHitsPct =
     dailyHitsTotal > 0 ? (dailyHitsCompleted / dailyHitsTotal) * 100 : 0;
+  const dailyMomentumPct =
+    dailyHitsTotal > 0 ? Math.round((dailyHitsCompleted / dailyHitsTotal) * 100) : 0;
 
   const actionsScale = Math.min(
     MAX_SCALE,
@@ -23,86 +25,109 @@ function DualProgressBars({
   );
   const actionsFillPct =
     actionsScale > 0 ? (otherCompletedToday / actionsScale) * 100 : 0;
-  const actionsBluePct =
+  const actionsOlivePct =
     actionsScale > 0
       ? (Math.min(EXPECTED_ACTIONS, otherCompletedToday) / actionsScale) * 100
       : 0;
-  const actionsGoldPct = actionsFillPct - actionsBluePct;
+  const actionsGoldPct = actionsFillPct - actionsOlivePct;
 
   const queueTotal = queueEntries?.length ?? 0;
   const queueCompleted =
     queueEntries?.filter((e) => !!completionMap[e.task?.id]).length ?? 0;
 
+  const hitsComplete =
+    dailyHitsTotal > 0 && dailyHitsCompleted === dailyHitsTotal;
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "baseline",
-            marginBottom: 4,
-          }}
-        >
-          <span style={{ fontSize: 12, fontWeight: 500, color: "#374151" }}>
-            Daily Hits
+    <div className="rs-progress-metrics-grid">
+      <div className="rs-progress-metric-card">
+        <div className="rs-progress-metric-card__accent" aria-hidden />
+        <div className="rs-progress-metric-card__head">
+          <span className="rs-progress-metric-card__icon" aria-hidden>
+            <span className="material-symbols-outlined">checklist</span>
           </span>
-          <span style={{ fontSize: 12, color: "#6b7280" }}>
-            {dailyHitsCompleted} of {dailyHitsTotal} completed
-          </span>
+          <div className="rs-progress-metric-card__titles">
+            <span className="rs-progress-metric-card__label">Daily Hits</span>
+            <span className="rs-progress-metric-card__stat">
+              {dailyHitsCompleted}
+              <span className="rs-progress-metric-card__stat-dim">/{dailyHitsTotal || "—"}</span>
+            </span>
+          </div>
         </div>
-        <div
-          style={{
-            height: 10,
-            borderRadius: 999,
-            background: "#e5e7eb",
-            overflow: "hidden",
-          }}
-        >
+        <div className="rs-progress-metric-card__ring-wrap" aria-hidden>
+          <svg className="rs-progress-metric-card__ring" viewBox="0 0 72 72">
+            <circle
+              className="rs-progress-metric-card__ring-bg"
+              cx="36"
+              cy="36"
+              r="30"
+              fill="none"
+              strokeWidth="6"
+            />
+            <circle
+              className="rs-progress-metric-card__ring-fill"
+              cx="36"
+              cy="36"
+              r="30"
+              fill="none"
+              strokeWidth="6"
+              strokeLinecap="round"
+              strokeDasharray={`${(dailyMomentumPct / 100) * 188.5} 188.5`}
+              transform="rotate(-90 36 36)"
+            />
+          </svg>
+          <span className="rs-progress-metric-card__ring-pct">{dailyMomentumPct}%</span>
+        </div>
+        <p className="rs-progress-metric-card__caption">
+          {(dailyHitsTotal ?? 0) === 0
+            ? "Add rituals on Daily Hits to track consistency."
+            : hitsComplete
+              ? "Morning rhythm locked in."
+              : "Rituals complete today."}
+        </p>
+        <div className="rs-momentum__track rs-progress-metric-card__bar" style={{ height: 8 }}>
           <div
             style={{
               height: "100%",
               width: `${dailyHitsPct}%`,
-              borderRadius: 999,
-              background:
-                dailyHitsCompleted === dailyHitsTotal && dailyHitsTotal > 0
-                  ? "#059669"
-                  : "#3b82f6",
+              borderRadius: "var(--rs-radius-full)",
+              background: hitsComplete
+                ? "linear-gradient(90deg, var(--rs-olive) 0%, #6b7530 100%)"
+                : "linear-gradient(90deg, var(--rs-primary-strong) 0%, var(--rs-accent-gold) 55%, var(--rs-primary-glow) 100%)",
               transition: "width 0.3s ease",
             }}
           />
         </div>
       </div>
 
-      <div>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "baseline",
-            marginBottom: 4,
-          }}
-        >
-          <span style={{ fontSize: 12, fontWeight: 500, color: "#374151" }}>
-            Today&apos;s 3 Actions
+      <div className="rs-progress-metric-card rs-progress-metric-card--actions">
+        <div className="rs-progress-metric-card__accent rs-progress-metric-card__accent--olive" aria-hidden />
+        <div className="rs-progress-metric-card__head">
+          <span className="rs-progress-metric-card__icon rs-progress-metric-card__icon--olive" aria-hidden>
+            <span className="material-symbols-outlined">bolt</span>
           </span>
-          <span style={{ fontSize: 12, color: "#6b7280" }}>
-            {otherCompletedToday} of {EXPECTED_ACTIONS}+
-            {otherCompletedToday > EXPECTED_ACTIONS && (
-              <span style={{ color: "#b45309", marginLeft: 4 }}>
-                · exceeding goal
-              </span>
-            )}
-          </span>
+          <div className="rs-progress-metric-card__titles">
+            <span className="rs-progress-metric-card__label">Today&apos;s actions</span>
+            <span className="rs-progress-metric-card__stat">
+              {otherCompletedToday}
+              <span className="rs-progress-metric-card__stat-dim">/{EXPECTED_ACTIONS}+</span>
+            </span>
+          </div>
         </div>
+        {otherCompletedToday > EXPECTED_ACTIONS && (
+          <p className="rs-progress-metric-card__overflow">
+            <span className="material-symbols-outlined" aria-hidden style={{ fontSize: 16, verticalAlign: "middle" }}>
+              trending_up
+            </span>{" "}
+            Exceeding goal — gold shows overflow
+          </p>
+        )}
         <div
-          style={{
-            height: 10,
-            borderRadius: 999,
-            background: "#e5e7eb",
-            overflow: "hidden",
-            position: "relative",
-          }}
+          className="rs-progress-metric-card__actions-track"
+          role="progressbar"
+          aria-valuenow={otherCompletedToday}
+          aria-valuemin={0}
+          aria-valuemax={actionsScale}
         >
           <div
             style={{
@@ -110,29 +135,38 @@ function DualProgressBars({
               left: 0,
               top: 0,
               bottom: 0,
-              width: `${actionsBluePct}%`,
-              borderRadius: "999px 0 0 999px",
-              background: "#3b82f6",
+              width: `${actionsOlivePct}%`,
+              borderRadius: "var(--rs-radius-full) 0 0 var(--rs-radius-full)",
+              background: "linear-gradient(90deg, var(--rs-olive) 0%, #6b7530 100%)",
               transition: "width 0.3s ease",
             }}
           />
           <div
             style={{
               position: "absolute",
-              left: `${actionsBluePct}%`,
+              left: `${actionsOlivePct}%`,
               top: 0,
               bottom: 0,
               width: `${actionsGoldPct}%`,
-              background: "#b45309",
+              background:
+                "linear-gradient(90deg, var(--rs-primary-strong) 0%, var(--rs-primary-glow) 100%)",
               transition: "width 0.3s ease",
             }}
           />
         </div>
+        <p className="rs-progress-metric-card__caption">
+          Olive = first three completions · Gold = momentum beyond
+        </p>
       </div>
 
       {queueTotal > 0 && (
-        <div style={{ fontSize: 12, color: "#9ca3af", marginTop: -4 }}>
-          Current queue: {queueCompleted} of {queueTotal} completed
+        <div className="rs-progress-queue-foot">
+          <span className="material-symbols-outlined" aria-hidden>
+            deployed_code
+          </span>
+          <span>
+            Current queue: <strong>{queueCompleted}</strong> of {queueTotal} completed
+          </span>
         </div>
       )}
     </div>
@@ -147,24 +181,24 @@ function OutcomePill({ category, outcomeLabel, done, total }) {
         display: "inline-flex",
         alignItems: "center",
         gap: 6,
-        padding: "4px 10px",
-        borderRadius: 999,
-        border: `1px solid ${allDone ? "#86efac" : "#e5e7eb"}`,
-        background: allDone ? "#f0fdf4" : "#f9fafb",
+        padding: "6px 12px",
+        borderRadius: "var(--rs-radius-full)",
+        border: `1px solid ${
+          allDone ? "rgba(85, 93, 30, 0.35)" : "rgba(186, 177, 159, 0.22)"
+        }`,
+        background: allDone ? "rgba(85, 93, 30, 0.08)" : "var(--rs-surface-low)",
         fontSize: 12,
-        color: allDone ? "#059669" : "#374151",
+        color: allDone ? "var(--rs-olive)" : "var(--rs-on-surface)",
         lineHeight: 1.4,
       }}
     >
-      <span style={{ fontWeight: 500 }}>{category}</span>
-      <span style={{ color: "#9ca3af" }}>·</span>
-      <span style={{ color: allDone ? "#059669" : "#6b7280" }}>
-        {outcomeLabel}
-      </span>
+      <span style={{ fontWeight: 600 }}>{category}</span>
+      <span style={{ color: "var(--rs-on-surface-variant)", opacity: 0.7 }}>·</span>
+      <span style={{ color: "var(--rs-on-surface-variant)" }}>{outcomeLabel}</span>
       <span
         style={{
           fontSize: 11,
-          color: allDone ? "#059669" : "#9ca3af",
+          color: allDone ? "var(--rs-olive)" : "var(--rs-on-surface-variant)",
           fontVariantNumeric: "tabular-nums",
         }}
       >
@@ -190,37 +224,30 @@ export default function ProgressToOutcome({
 
   return (
     <section
+      className="rs-section-card rs-today-progress-panel"
       style={{
-        marginBottom: 20,
-        padding: 16,
-        background: "#ffffff",
-        borderRadius: 16,
-        border: `1px solid ${allQueueDone ? "#86efac" : "#e5e7eb"}`,
+        marginBottom: 0,
+        borderColor: allQueueDone ? "rgba(85, 93, 30, 0.22)" : undefined,
+        boxShadow: allQueueDone ? "0 12px 32px rgba(85, 93, 30, 0.08)" : undefined,
       }}
     >
-      <h2
-        style={{
-          fontSize: 16,
-          fontWeight: 600,
-          letterSpacing: "-0.01em",
-          margin: "0 0 4px",
-        }}
-      >
-        {allQueueDone ? "All actions complete" : "Today's Progress"}
-      </h2>
-      <p
-        style={{
-          margin: "0 0 12px",
-          fontSize: 13,
-          color: "#6b7280",
-        }}
-      >
-        {allQueueDone
-          ? 'Great work! Hit "Refresh queue" below to get your next 3 actions.'
-          : "Daily Hits (template) and today's actions from your queue or Action Items. Beyond 3 actions turns gold."}
-      </p>
+      <div className="rs-progress-section-head">
+        <div className="rs-progress-section-head__mark" aria-hidden>
+          <span className="material-symbols-outlined">wb_sunny</span>
+        </div>
+        <div className="rs-progress-section-head__text">
+          <h2 className="rs-section-card__title" style={{ marginBottom: 4 }}>
+            {allQueueDone ? "All actions complete" : "Today's progress"}
+          </h2>
+          <p className="rs-section-card__subtitle" style={{ marginBottom: 0 }}>
+            {allQueueDone
+              ? 'Great work! Tap "Refresh queue" to load your next three actions.'
+              : "Daily Hits and everything else you finish today — momentum shows in gold."}
+          </p>
+        </div>
+      </div>
 
-      <DualProgressBars
+      <ProgressMetricsGrid
         dailyHitsTotal={dailyHitsTotal}
         dailyHitsCompleted={dailyHitsCompleted}
         otherCompletedToday={otherCompletedToday}
@@ -243,21 +270,29 @@ export default function ProgressToOutcome({
         }
         if (categories.size > 0) {
           return (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
-              {Array.from(categories.entries()).map(([cat, counts]) => (
-                <OutcomePill
-                  key={cat}
-                  category={cat}
-                  outcomeLabel={getOutcomeLabel(cat)}
-                  done={counts.done}
-                  total={counts.total}
-                />
-              ))}
+            <div className="rs-progress-outcome-row">
+              <span className="rs-progress-outcome-row__label">
+                <span className="material-symbols-outlined" aria-hidden>
+                  track_changes
+                </span>
+                Queue by outcome
+              </span>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {Array.from(categories.entries()).map(([cat, counts]) => (
+                  <OutcomePill
+                    key={cat}
+                    category={cat}
+                    outcomeLabel={getOutcomeLabel(cat)}
+                    done={counts.done}
+                    total={counts.total}
+                  />
+                ))}
+              </div>
             </div>
           );
         }
         return (
-          <p style={{ fontSize: 12, color: "#9ca3af", margin: "12px 0 0" }}>
+          <p style={{ fontSize: 12, color: "var(--rs-on-surface-variant)", margin: "14px 0 0" }}>
             Assign categories to your tasks to see which outcomes they advance.
           </p>
         );

@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import DashboardLayout from "../components/DashboardLayout";
 import { useAuth } from "../hooks/useAuth";
 import {
@@ -10,7 +10,16 @@ import {
 } from "../lib/db";
 import { supabase } from "../lib/supabaseClient";
 
-function AutoHeightTextarea({ value, onChange, rows = 2, placeholder, style, ...props }) {
+const MANIFESTATION_TAGS = [
+  "High priority manifestation",
+  "Strategic anchor",
+  "Psychological freedom",
+  "Legacy milestone",
+  "Freedom marker",
+  "Peak signal",
+];
+
+function AutoHeightTextarea({ value, onChange, rows = 2, placeholder, style, className, id, ...props }) {
   const ref = useRef(null);
   useEffect(() => {
     const el = ref.current;
@@ -21,6 +30,8 @@ function AutoHeightTextarea({ value, onChange, rows = 2, placeholder, style, ...
   return (
     <textarea
       ref={ref}
+      id={id}
+      className={className}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
@@ -191,6 +202,47 @@ export default function VisionPage() {
     fieldImages,
     loadedOnce,
   ]);
+
+  const DOMAIN_ROWS = useMemo(
+    () => [
+      { key: "business", label: "Business", icon: "lightbulb" },
+      { key: "finances", label: "Finances", icon: "payments" },
+      { key: "health", label: "Health", icon: "fitness_center" },
+      { key: "relationships", label: "Relationships", icon: "favorite" },
+      { key: "lifestyle", label: "Lifestyle", icon: "weekend" },
+      { key: "growth", label: "Growth", icon: "auto_awesome" },
+    ],
+    []
+  );
+
+  const outcomeLines = useMemo(
+    () => desiredOutcomes.split("\n").map((s) => s.trim()).filter(Boolean),
+    [desiredOutcomes]
+  );
+
+  const thriveLines = useMemo(
+    () => goalsToThrive.split("\n").map((s) => s.trim()).filter(Boolean),
+    [goalsToThrive]
+  );
+
+  const identityParts = useMemo(() => {
+    const clauses = identityAttributes.split(",").map((s) => s.trim()).filter(Boolean);
+    if (!clauses.length) {
+      return { lead: "", beforeGold: "", gold: "", isEmpty: true };
+    }
+    const last = clauses[clauses.length - 1];
+    const beforeClauses = clauses.slice(0, -1);
+    const words = last.split(/\s+/).filter(Boolean);
+    const goldRaw = words.length ? words[words.length - 1] : "";
+    const gold = goldRaw.replace(/[.,;:!?]+$/, "");
+    const beforeGold = words.length > 1 ? `${words.slice(0, -1).join(" ")}\u00a0` : "";
+    const lead = beforeClauses.length
+      ? `${beforeClauses.join(" · ")}${beforeGold || gold ? " · " : ""}`
+      : "";
+    return { lead, beforeGold, gold, isEmpty: false };
+  }, [identityAttributes]);
+
+  const heroBgUrl = fieldImages.identity || photoUrl || visionBoardImageUrl || null;
 
   if (isCheckingAuth || !user || loading) {
     return (
@@ -427,20 +479,6 @@ export default function VisionPage() {
     }
   }
 
-  const contentPadding = isMobile ? 12 : 0;
-  const fieldRowLayout = isMobile
-    ? { flexDirection: "column", alignItems: "stretch" }
-    : { flexDirection: "row", gap: 12, alignItems: "flex-start" };
-  const fieldImageWrapper = isMobile
-    ? { width: "100%", maxWidth: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }
-    : { flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 };
-  const fieldImageStyle = isMobile
-    ? { width: "100%", maxWidth: "100%", height: "auto", minHeight: 120, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }
-    : { width: 144, height: 144, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" };
-  const placeholderImageStyle = isMobile
-    ? { width: "100%", maxWidth: "100%", minHeight: 120, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" }
-    : { width: 144, height: 144, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9ca3af" };
-
   return (
     <DashboardLayout>
       {imageViewerUrl && (
@@ -540,606 +578,594 @@ export default function VisionPage() {
           </div>
         </div>
       )}
-      <div style={{ maxWidth: 720, margin: "0 auto", padding: contentPadding ? `0 ${contentPadding}px` : 0 }}>
-      <div
-        style={{
-          display: "flex",
-          flexDirection: isMobile ? "column" : "row",
-          justifyContent: "space-between",
-          alignItems: isMobile ? "flex-start" : "baseline",
-          marginBottom: 16,
-          gap: 12,
-        }}
-      >
-          <div style={{ flex: 1, minWidth: 0 }}>
-          <h1
-            style={{
-              fontSize: isMobile ? 20 : 22,
-              fontWeight: 600,
-              margin: 0,
-              letterSpacing: "-0.02em",
-            }}
-          >
-            Vision
-          </h1>
-          <p
-            style={{
-              margin: "4px 0 0",
-              fontSize: 13,
-              color: "#6b7280",
-              wordBreak: "break-word",
-            }}
-          >
-            Edit your identity, domains, outcomes, and strategic focus. Your Vision board can be edited and modified at any time.
-          </p>
-        </div>
-        <div style={{ fontSize: 12, flexShrink: 0 }}>
-          {autoSaving && (
-            <span style={{ color: "#6b7280" }}>Autosaving… </span>
-          )}
-          {savedMsg && (
-            <span style={{ color: "#059669" }}>{savedMsg}</span>
-          )}
-        </div>
-      </div>
-      <section
-        style={{
-          marginBottom: 20,
-          padding: isMobile ? 12 : 16,
-          borderRadius: 16,
-          border: "1px solid #e5e7eb",
-          background: "#fafbfc",
-        }}
-      >
-        <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
-          Your photo & Vision Board
-        </h2>
-        <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 12px", wordBreak: "break-word" }}>
-          Upload a photo of yourself. We use it with your vision text to generate an AI Vision Board that integrates your likeness.
-        </p>
-        <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", flexWrap: "wrap", gap: 24, alignItems: "flex-start" }}>
-          <div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handlePhotoChange}
-              style={{ display: "none" }}
-            />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploadingPhoto}
-              style={{
-                fontSize: 13,
-                padding: "8px 14px",
-                borderRadius: 999,
-                border: "1px solid #0d9488",
-                background: "#ccfbf1",
-                color: "#0f766e",
-                cursor: uploadingPhoto ? "wait" : "pointer",
-              }}
-            >
-              {uploadingPhoto ? "Uploading…" : "Upload photo"}
-            </button>
-            {photoUrl && (
-              <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6, width: isMobile ? "100%" : undefined }}>
-                <button
-                  type="button"
-                  onClick={() => openImageViewer(photoUrl)}
-                  style={{
-                    padding: 0,
-                    border: "none",
-                    background: "none",
-                    cursor: "pointer",
-                    display: "block",
-                    width: isMobile ? "100%" : undefined,
-                  }}
-                >
-                  <img
-                    src={photoUrl}
-                    alt="You"
-                    style={{
-                      width: isMobile ? "100%" : 120,
-                      height: isMobile ? "auto" : 120,
-                      minHeight: isMobile ? 120 : undefined,
-                      objectFit: "cover",
-                      borderRadius: 12,
-                      border: "1px solid #e5e7eb",
-                    }}
-                  />
-                </button>
-                <button
-                  type="button"
-                  onClick={handleRemovePhoto}
-                  style={{
-                    alignSelf: "flex-start",
-                    fontSize: 11,
-                    padding: "3px 8px",
-                    borderRadius: 999,
-                    border: "1px solid #e5e7eb",
-                    background: "#ffffff",
-                    color: "#6b7280",
-                    cursor: "pointer",
-                  }}
-                >
-                  Remove photo
-                </button>
+      <div className="rs-vision-page">
+        <section
+          className="rs-vision-hero"
+          style={
+            heroBgUrl
+              ? { backgroundImage: `linear-gradient(105deg, rgba(26, 26, 26, 0.88) 0%, rgba(26, 26, 26, 0.55) 45%, rgba(74, 61, 0, 0.4) 100%), url(${heroBgUrl})` }
+              : undefined
+          }
+        >
+          <div className="rs-vision-hero__grain" aria-hidden />
+          <div className="rs-vision-hero__inner">
+            <div className="rs-vision-hero__topbar">
+              <p className="rs-vision-hero__brand-pill">
+                <span className="material-symbols-outlined" aria-hidden>
+                  visibility
+                </span>
+                Strategic vision
+              </p>
+              <div className="rs-vision-hero__status">
+                {autoSaving && <span className="rs-vision-hero__status-dot">Autosaving…</span>}
+                {savedMsg && <span className="rs-vision-hero__status-ok">{savedMsg}</span>}
               </div>
-            )}
-          </div>
-          <div>
-            <button
-              type="button"
-              onClick={handleGenerateVisionBoard}
-              disabled={!photoUrl || generatingBoard}
-              style={{
-                fontSize: 13,
-                padding: "8px 14px",
-                borderRadius: 999,
-                border: "1px solid #111827",
-                background: "#111827",
-                color: "#fff",
-                cursor: photoUrl && !generatingBoard ? "pointer" : "not-allowed",
-              }}
-            >
-              {generatingBoard ? "Generating…" : "Generate Vision Board"}
-            </button>
-            {visionBoardImageUrl && (
-              <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6, width: isMobile ? "100%" : undefined }}>
-                <button
-                  type="button"
-                  onClick={() => openImageViewer(visionBoardImageUrl)}
-                  style={{
-                    padding: 0,
-                    border: "none",
-                    background: "none",
-                    cursor: "pointer",
-                    display: "block",
-                    width: isMobile ? "100%" : undefined,
-                  }}
-                >
-                  <img
-                    src={visionBoardImageUrl}
-                    alt="Vision Board"
-                    style={{
-                      maxWidth: isMobile ? "100%" : 280,
-                      width: isMobile ? "100%" : undefined,
-                      maxHeight: 200,
-                      objectFit: "contain",
-                      borderRadius: 12,
-                      border: "1px solid #e5e7eb",
-                    }}
-                  />
-                </button>
-                <button
-                  type="button"
-                  onClick={handleRemoveVisionBoard}
-                  style={{
-                    alignSelf: "flex-start",
-                    fontSize: 11,
-                    padding: "3px 8px",
-                    borderRadius: 999,
-                    border: "1px solid #e5e7eb",
-                    background: "#ffffff",
-                    color: "#6b7280",
-                    cursor: "pointer",
-                  }}
-                >
-                  Remove board
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
-
-      <input
-        type="file"
-        ref={fieldFileInputRef}
-        accept="image/*"
-        onChange={handleFieldImageChange}
-        style={{ display: "none" }}
-      />
-      <section
-        style={{
-          padding: isMobile ? 12 : 16,
-          borderRadius: 16,
-          border: "1px solid #e5e7eb",
-          background: "#ffffff",
-          display: "flex",
-          flexDirection: "column",
-          gap: 16,
-        }}
-      >
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {error && (
-            <p style={{ fontSize: 13, color: "#b91c1c", margin: 0 }}>{error}</p>
-          )}
-          <div style={{ display: "flex", ...fieldRowLayout }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-          <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 6px" }}>
-            Identity & vision
-          </h2>
-          <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 6px", wordBreak: "break-word" }}>
-            Short identity phrases that describe who you are becoming.
-          </p>
-          <AutoHeightTextarea
-            value={identityAttributes}
-            onChange={setIdentityAttributes}
-            rows={3}
-            style={{
-              fontSize: 13,
-              padding: 8,
-              borderRadius: 8,
-              border: "1px solid #e5e7eb",
-              width: "100%",
-              boxSizing: "border-box",
-            }}
-          />
             </div>
-            <div style={fieldImageWrapper}>
-              {fieldImages.identity ? (
-                <>
-                  <button type="button" onClick={() => openImageViewer(fieldImages.identity)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block", width: isMobile ? "100%" : undefined }}>
-                    <img src={fieldImages.identity} alt="" style={fieldImageStyle} />
-                  </button>
-                  <button type="button" onClick={() => handleRemoveFieldImage("identity")} style={{ fontSize: 10, padding: "2px 6px", borderRadius: 999, border: "1px solid #e5e7eb", background: "#ffffff", color: "#6b7280", cursor: "pointer" }}>
-                    Remove
-                  </button>
-                </>
+            <p className="rs-vision-hero__eyebrow">Identity statement</p>
+            <h1 className="rs-vision-hero__mantra">
+              {identityParts.isEmpty ? (
+                <span className="rs-vision-hero__mantra--placeholder">
+                  Name who you are becoming — calm, capable, unstoppable. Separate traits with commas; the final word glows
+                  gold as your anchor.
+                </span>
               ) : (
-                <div style={placeholderImageStyle}>Image</div>
+                <>
+                  {identityParts.lead}
+                  {identityParts.beforeGold}
+                  <span className="rs-vision-hero__gold">{identityParts.gold}</span>
+                </>
               )}
-              <button type="button" onClick={() => handleFieldImageClick("identity")} disabled={uploadingFieldKey !== null} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: uploadingFieldKey ? "wait" : "pointer" }}>{uploadingFieldKey === "identity" ? "…" : "Upload"}</button>
+            </h1>
+            <p className="rs-vision-hero__tagline">The mindful curator of a legendary life.</p>
+            <div className="rs-vision-hero__identity-tools">
+              <label className="rs-vision-sr-only" htmlFor="vision-identity-input">
+                Identity attributes (comma-separated)
+              </label>
+              <AutoHeightTextarea
+                id="vision-identity-input"
+                value={identityAttributes}
+                onChange={setIdentityAttributes}
+                rows={2}
+                placeholder="e.g. calm, confident, strong entrepreneur"
+                className="rs-vision-hero__identity-input"
+                style={{}}
+              />
+              <div className="rs-vision-hero__identity-visual">
+                {fieldImages.identity ? (
+                  <>
+                    <button
+                      type="button"
+                      className="rs-vision-thumb-btn"
+                      onClick={() => openImageViewer(fieldImages.identity)}
+                    >
+                      <img src={fieldImages.identity} alt="" className="rs-vision-thumb-img" />
+                    </button>
+                    <button
+                      type="button"
+                      className="rs-vision-mini-btn"
+                      onClick={() => handleRemoveFieldImage("identity")}
+                    >
+                      Remove
+                    </button>
+                  </>
+                ) : (
+                  <div className="rs-vision-thumb-placeholder">Visual anchor</div>
+                )}
+                <button
+                  type="button"
+                  className="rs-vision-mini-btn rs-vision-mini-btn--gold"
+                  onClick={() => handleFieldImageClick("identity")}
+                  disabled={uploadingFieldKey !== null}
+                >
+                  {uploadingFieldKey === "identity" ? "…" : "Upload"}
+                </button>
+              </div>
             </div>
           </div>
-          <div>
-          <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 6px" }}>
-            Life domains
-          </h2>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
-              gap: isMobile ? 12 : 8,
-            }}
-          >
-            {Object.entries(lifeDomains).map(([key, value]) => {
-              const fieldKey = `life_domain_${key}`;
-              return (
-                <div key={key} style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 8, alignItems: isMobile ? "stretch" : "flex-start" }}>
-                  <label style={{ flex: 1, minWidth: 0, fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
-                    <span style={{ textTransform: "capitalize" }}>{key}</span>
-                    <AutoHeightTextarea
-                      value={value}
-                      onChange={(v) => setLifeDomains((prev) => ({ ...prev, [key]: v }))}
-                      rows={2}
-                      style={{ fontSize: 13, padding: 6, borderRadius: 6, border: "1px solid #e5e7eb", width: "100%", boxSizing: "border-box" }}
+        </section>
+
+        <details className="rs-vision-studio">
+          <summary className="rs-vision-studio__summary">
+            <span className="material-symbols-outlined" aria-hidden>
+              auto_awesome
+            </span>
+            Vision studio — photo &amp; AI board
+          </summary>
+          <div className="rs-vision-studio__body">
+            <p className="rs-vision-studio__lead">
+              Upload your photo for likeness-aware generation. Your text fuels the board.
+            </p>
+            <div className={`rs-vision-studio__row${isMobile ? " rs-vision-studio__row--stack" : ""}`}>
+              <div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePhotoChange}
+                  style={{ display: "none" }}
+                />
+                <button
+                  type="button"
+                  className="rs-btn-secondary"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingPhoto}
+                >
+                  {uploadingPhoto ? "Uploading…" : "Upload photo"}
+                </button>
+                {photoUrl && (
+                  <div className="rs-vision-studio__preview">
+                    <button type="button" className="rs-vision-thumb-btn" onClick={() => openImageViewer(photoUrl)}>
+                      <img src={photoUrl} alt="You" className="rs-vision-studio__photo" />
+                    </button>
+                    <button type="button" className="rs-vision-mini-btn" onClick={handleRemovePhoto}>
+                      Remove photo
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div>
+                <button
+                  type="button"
+                  className="rs-btn-primary"
+                  onClick={handleGenerateVisionBoard}
+                  disabled={!photoUrl || generatingBoard}
+                >
+                  {generatingBoard ? "Generating…" : "Generate vision board"}
+                </button>
+                {visionBoardImageUrl && (
+                  <div className="rs-vision-studio__preview">
+                    <button
+                      type="button"
+                      className="rs-vision-thumb-btn"
+                      onClick={() => openImageViewer(visionBoardImageUrl)}
+                    >
+                      <img src={visionBoardImageUrl} alt="Vision board" className="rs-vision-studio__board" />
+                    </button>
+                    <button type="button" className="rs-vision-mini-btn" onClick={handleRemoveVisionBoard}>
+                      Remove board
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <input
+          type="file"
+          ref={fieldFileInputRef}
+          accept="image/*"
+          onChange={handleFieldImageChange}
+          style={{ display: "none" }}
+        />
+
+        <div className="rs-vision-body">
+          {error && <p className="rs-vision-error">{error}</p>}
+
+          <section className="rs-vision-section">
+            <header className="rs-vision-section__head">
+              <h2 className="rs-vision-section__title">Life domains</h2>
+              <p className="rs-vision-section__sub">
+                Truth statements for each arena — what your subconscious should rehearse daily.
+              </p>
+            </header>
+            <div className={`rs-vision-domain-grid${isMobile ? " rs-vision-domain-grid--1" : ""}`}>
+              {DOMAIN_ROWS.map(({ key, label, icon }) => {
+                const fieldKey = `life_domain_${key}`;
+                const img = fieldImages[fieldKey];
+                return (
+                  <div key={key} className="rs-vision-domain-card">
+                    <div
+                      className="rs-vision-domain-card__bg"
+                      style={
+                        img
+                          ? { backgroundImage: `linear-gradient(180deg, rgba(26,26,26,0.2) 0%, rgba(26,26,26,0.92) 100%), url(${img})` }
+                          : undefined
+                      }
                     />
-                  </label>
-                  <div style={isMobile ? fieldImageWrapper : { flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-                    {fieldImages[fieldKey] ? (
-                      <>
-                        <button type="button" onClick={() => openImageViewer(fieldImages[fieldKey])} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block", width: isMobile ? "100%" : undefined }}>
-                          <img src={fieldImages[fieldKey]} alt="" style={isMobile ? { ...fieldImageStyle, minHeight: 80 } : { width: 112, height: 112, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                    <div className="rs-vision-domain-card__inner">
+                      <div className="rs-vision-domain-card__icon" aria-hidden>
+                        <span className="material-symbols-outlined">{icon}</span>
+                      </div>
+                      <span className="rs-vision-domain-card__label">{label}</span>
+                      <AutoHeightTextarea
+                        value={lifeDomains[key]}
+                        onChange={(v) => setLifeDomains((prev) => ({ ...prev, [key]: v }))}
+                        rows={2}
+                        placeholder="Your truth statement…"
+                        className="rs-vision-domain-card__input"
+                        style={{}}
+                      />
+                      <div className="rs-vision-domain-card__tools">
+                        {img ? (
+                          <>
+                            <button
+                              type="button"
+                              className="rs-vision-domain-card__img-hit"
+                              onClick={() => openImageViewer(img)}
+                            >
+                              Image
+                            </button>
+                            <button type="button" className="rs-vision-link-btn" onClick={() => handleRemoveFieldImage(fieldKey)}>
+                              Remove
+                            </button>
+                          </>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="rs-vision-link-btn"
+                          onClick={() => handleFieldImageClick(fieldKey)}
+                          disabled={uploadingFieldKey !== null}
+                        >
+                          {uploadingFieldKey === fieldKey ? "…" : img ? "Replace" : "Add image"}
                         </button>
-                        <button type="button" onClick={() => handleRemoveFieldImage(fieldKey)} style={{ fontSize: 9, padding: "2px 6px", borderRadius: 999, border: "1px solid #e5e7eb", background: "#ffffff", color: "#6b7280", cursor: "pointer" }}>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="rs-vision-section">
+            <header className="rs-vision-section__head">
+              <h2 className="rs-vision-section__title">12-month manifestations</h2>
+              <p className="rs-vision-section__sub">
+                Specific, measurable outcomes on an editorial timeline — not a dry checklist.
+              </p>
+            </header>
+            <div className="rs-vision-outcomes-scroller" role="region" aria-label="Desired outcomes">
+              {outcomeLines.length === 0 ? (
+                <div className="rs-vision-outcomes-empty">
+                  <span className="material-symbols-outlined" aria-hidden>
+                    timeline
+                  </span>
+                  <p>Add outcomes below — one per line — and they appear here as manifestation cards.</p>
+                </div>
+              ) : (
+                outcomeLines.map((title, i) => (
+                  <article key={`${i}-${title.slice(0, 24)}`} className="rs-vision-outcome-card">
+                    <p className="rs-vision-outcome-card__eyebrow">
+                      Wave · {String(i + 1).padStart(2, "0")}
+                    </p>
+                    <h3 className="rs-vision-outcome-card__title">{title}</h3>
+                    <span className="rs-vision-outcome-card__pill">{MANIFESTATION_TAGS[i % MANIFESTATION_TAGS.length]}</span>
+                  </article>
+                ))
+              )}
+            </div>
+            <div className="rs-vision-edit-deck">
+              <label className="rs-vision-field-label" htmlFor="vision-outcomes-area">
+                Refine your list (one outcome per line)
+              </label>
+              <div className={`rs-vision-field-row${isMobile ? " rs-vision-field-row--stack" : ""}`}>
+                <AutoHeightTextarea
+                  id="vision-outcomes-area"
+                  value={desiredOutcomes}
+                  onChange={setDesiredOutcomes}
+                  rows={4}
+                  className="rs-vision-textarea"
+                  style={{}}
+                />
+                <div className="rs-vision-side-visual">
+                  {fieldImages.desired_outcomes ? (
+                    <>
+                      <button
+                        type="button"
+                        className="rs-vision-thumb-btn"
+                        onClick={() => openImageViewer(fieldImages.desired_outcomes)}
+                      >
+                        <img src={fieldImages.desired_outcomes} alt="" className="rs-vision-side-visual__img" />
+                      </button>
+                      <button type="button" className="rs-vision-mini-btn" onClick={() => handleRemoveFieldImage("desired_outcomes")}>
+                        Remove
+                      </button>
+                    </>
+                  ) : (
+                    <div className="rs-vision-thumb-placeholder rs-vision-thumb-placeholder--light">Mood board</div>
+                  )}
+                  <button
+                    type="button"
+                    className="rs-vision-mini-btn"
+                    onClick={() => handleFieldImageClick("desired_outcomes")}
+                    disabled={uploadingFieldKey !== null}
+                  >
+                    {uploadingFieldKey === "desired_outcomes" ? "…" : "Upload"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <div className={`rs-vision-thrive-split${isMobile ? " rs-vision-thrive-split--stack" : ""}`}>
+            <aside className="rs-vision-thrive-card" aria-label="Goals to thrive">
+              <div className="rs-vision-thrive-card__head">
+                <span className="material-symbols-outlined" aria-hidden>
+                  verified
+                </span>
+                <div>
+                  <h2 className="rs-vision-thrive-card__title">Non-negotiable thrive goals</h2>
+                  <p className="rs-vision-thrive-card__sub">Baseline standards your future self insists on.</p>
+                </div>
+              </div>
+              <ol className="rs-vision-thrive-list">
+                {[0, 1, 2].map((slot) => {
+                  const line = thriveLines[slot];
+                  return (
+                    <li key={slot} className="rs-vision-thrive-list__item">
+                      <span className="rs-vision-thrive-list__num">{slot + 1}</span>
+                      <p className={line ? "rs-vision-thrive-list__text" : "rs-vision-thrive-list__text rs-vision-thrive-list__text--muted"}>
+                        {line || "Define a non-negotiable — movement, depth, recovery…"}
+                      </p>
+                    </li>
+                  );
+                })}
+              </ol>
+              <label className="rs-vision-sr-only" htmlFor="vision-thrive-area">
+                Edit thrive goals
+              </label>
+              <AutoHeightTextarea
+                id="vision-thrive-area"
+                value={goalsToThrive}
+                onChange={setGoalsToThrive}
+                rows={3}
+                placeholder={"One goal per line (up to three)\n…"}
+                className="rs-vision-thrive-card__textarea"
+                style={{}}
+              />
+              <div className="rs-vision-thrive-card__visual">
+                {fieldImages.goals_to_thrive ? (
+                  <>
+                    <button type="button" className="rs-vision-thumb-btn" onClick={() => openImageViewer(fieldImages.goals_to_thrive)}>
+                      <img src={fieldImages.goals_to_thrive} alt="" className="rs-vision-side-visual__img" />
+                    </button>
+                    <button type="button" className="rs-vision-mini-btn" onClick={() => handleRemoveFieldImage("goals_to_thrive")}>
+                      Remove
+                    </button>
+                  </>
+                ) : (
+                  <div className="rs-vision-thumb-placeholder rs-vision-thumb-placeholder--dark">Anchor image</div>
+                )}
+                <button
+                  type="button"
+                  className="rs-vision-mini-btn rs-vision-mini-btn--light"
+                  onClick={() => handleFieldImageClick("goals_to_thrive")}
+                  disabled={uploadingFieldKey !== null}
+                >
+                  {uploadingFieldKey === "goals_to_thrive" ? "…" : "Upload"}
+                </button>
+              </div>
+            </aside>
+
+            <div className="rs-vision-systems">
+              <figure className="rs-vision-quote">
+                <blockquote>
+                  You do not rise to the level of your goals. You fall to the level of your systems.
+                </blockquote>
+                <figcaption>— James Clear</figcaption>
+                <div className="rs-vision-quote__pills">
+                  <span>Identity-led</span>
+                  <span>Systems over goals</span>
+                  <span>Strategic clarity</span>
+                </div>
+              </figure>
+
+              <div className="rs-vision-systems__grid">
+                <div className="rs-vision-systems__mini">
+                  <span className="material-symbols-outlined" aria-hidden>
+                    routine
+                  </span>
+                  <h3>Morning priming</h3>
+                  <p>Re-read this page before you plan the day — let the identity statement land first.</p>
+                </div>
+                <div className="rs-vision-systems__mini">
+                  <span className="material-symbols-outlined" aria-hidden>
+                    emoji_events
+                  </span>
+                  <h3>Success markers</h3>
+                  <p>Celebrate evidence, not vibes. Tie wins back to these domains and manifestations.</p>
+                </div>
+              </div>
+
+              <div className="rs-vision-strategic-block">
+                <h3 className="rs-vision-strategic-block__title">Strategic focus</h3>
+                <div className={`rs-vision-field-row${isMobile ? " rs-vision-field-row--stack" : ""}`}>
+                  <label className="rs-vision-field-stack">
+                    <span className="rs-vision-field-label">Leverage areas (one per line)</span>
+                    <AutoHeightTextarea value={leverageFocus} onChange={setLeverageFocus} rows={3} className="rs-vision-textarea" style={{}} />
+                  </label>
+                  <div className="rs-vision-side-visual">
+                    {fieldImages.leverage_focus ? (
+                      <>
+                        <button type="button" className="rs-vision-thumb-btn" onClick={() => openImageViewer(fieldImages.leverage_focus)}>
+                          <img src={fieldImages.leverage_focus} alt="" className="rs-vision-side-visual__img" />
+                        </button>
+                        <button type="button" className="rs-vision-mini-btn" onClick={() => handleRemoveFieldImage("leverage_focus")}>
                           Remove
                         </button>
                       </>
                     ) : (
-                      <div style={isMobile ? { ...placeholderImageStyle, minHeight: 80 } : { width: 112, height: 112, borderRadius: 8, border: "1px dashed #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "#9ca3af" }}>Img</div>
+                      <div className="rs-vision-thumb-placeholder rs-vision-thumb-placeholder--light">Visual</div>
                     )}
-                    <button type="button" onClick={() => handleFieldImageClick(fieldKey)} disabled={uploadingFieldKey !== null} style={{ fontSize: 10, padding: "2px 6px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: uploadingFieldKey ? "wait" : "pointer" }}>{uploadingFieldKey === fieldKey ? "…" : "Upload"}</button>
+                    <button
+                      type="button"
+                      className="rs-vision-mini-btn"
+                      onClick={() => handleFieldImageClick("leverage_focus")}
+                      disabled={uploadingFieldKey !== null}
+                    >
+                      {uploadingFieldKey === "leverage_focus" ? "…" : "Upload"}
+                    </button>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-          </div>
-          <div style={{ display: "flex", ...fieldRowLayout }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-          <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 6px" }}>
-            Desired outcomes (12 months)
-          </h2>
-          <AutoHeightTextarea
-            value={desiredOutcomes}
-            onChange={setDesiredOutcomes}
-            rows={4}
-            style={{ fontSize: 13, padding: 8, borderRadius: 8, border: "1px solid #e5e7eb", width: "100%", boxSizing: "border-box" }}
-          />
-            </div>
-            <div style={fieldImageWrapper}>
-              {fieldImages.desired_outcomes ? (
-                <>
-                  <button type="button" onClick={() => openImageViewer(fieldImages.desired_outcomes)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block", width: isMobile ? "100%" : undefined }}>
-                    <img src={fieldImages.desired_outcomes} alt="" style={fieldImageStyle} />
-                  </button>
-                  <button type="button" onClick={() => handleRemoveFieldImage("desired_outcomes")} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 999, border: "1px solid #e5e7eb", background: "#ffffff", color: "#6b7280", cursor: "pointer" }}>
-                    Remove
-                  </button>
-                </>
-              ) : (
-                <div style={placeholderImageStyle}>Image</div>
-              )}
-              <button type="button" onClick={() => handleFieldImageClick("desired_outcomes")} disabled={uploadingFieldKey !== null} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: uploadingFieldKey ? "wait" : "pointer" }}>{uploadingFieldKey === "desired_outcomes" ? "…" : "Upload"}</button>
-            </div>
-          </div>
-          <div style={{ display: "flex", ...fieldRowLayout }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-          <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 6px" }}>
-            3 Goals to Thrive
-          </h2>
-          <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 6px", wordBreak: "break-word" }}>
-            Up to three goals that help you thrive (one per line). Included in your Vision Board.
-          </p>
-          <AutoHeightTextarea
-            value={goalsToThrive}
-            onChange={setGoalsToThrive}
-            rows={3}
-            placeholder="e.g. Daily movement&#10;Meaningful connections&#10;Learn one new skill"
-            style={{ fontSize: 13, padding: 8, borderRadius: 8, border: "1px solid #e5e7eb", width: "100%", boxSizing: "border-box" }}
-          />
-            </div>
-            <div style={fieldImageWrapper}>
-              {fieldImages.goals_to_thrive ? (
-                <>
-                  <button type="button" onClick={() => openImageViewer(fieldImages.goals_to_thrive)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block", width: isMobile ? "100%" : undefined }}>
-                    <img src={fieldImages.goals_to_thrive} alt="" style={fieldImageStyle} />
-                  </button>
-                  <button type="button" onClick={() => handleRemoveFieldImage("goals_to_thrive")} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 999, border: "1px solid #e5e7eb", background: "#ffffff", color: "#6b7280", cursor: "pointer" }}>
-                    Remove
-                  </button>
-                </>
-              ) : (
-                <div style={placeholderImageStyle}>Image</div>
-              )}
-              <button type="button" onClick={() => handleFieldImageClick("goals_to_thrive")} disabled={uploadingFieldKey !== null} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: uploadingFieldKey ? "wait" : "pointer" }}>{uploadingFieldKey === "goals_to_thrive" ? "…" : "Upload"}</button>
-            </div>
-          </div>
-          <div>
-          <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 6px" }}>
-            Strategic focus
-          </h2>
-          <div style={{ display: "flex", ...fieldRowLayout, marginBottom: 8 }}>
-            <label style={{ flex: 1, minWidth: 0, fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
-              Leverage areas (one per line)
-              <AutoHeightTextarea
-                value={leverageFocus}
-                onChange={setLeverageFocus}
-                rows={3}
-                style={{ fontSize: 13, padding: 8, borderRadius: 8, border: "1px solid #e5e7eb", width: "100%", boxSizing: "border-box" }}
-              />
-            </label>
-            <div style={fieldImageWrapper}>
-              {fieldImages.leverage_focus ? (
-                <>
-                  <button type="button" onClick={() => openImageViewer(fieldImages.leverage_focus)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block", width: isMobile ? "100%" : undefined }}>
-                    <img src={fieldImages.leverage_focus} alt="" style={fieldImageStyle} />
-                  </button>
-                  <button type="button" onClick={() => handleRemoveFieldImage("leverage_focus")} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 999, border: "1px solid #e5e7eb", background: "#ffffff", color: "#6b7280", cursor: "pointer" }}>
-                    Remove
-                  </button>
-                </>
-              ) : (
-                <div style={placeholderImageStyle}>Image</div>
-              )}
-              <button type="button" onClick={() => handleFieldImageClick("leverage_focus")} disabled={uploadingFieldKey !== null} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: uploadingFieldKey ? "wait" : "pointer" }}>{uploadingFieldKey === "leverage_focus" ? "…" : "Upload"}</button>
+                <div className={`rs-vision-field-row${isMobile ? " rs-vision-field-row--stack" : ""}`}>
+                  <label className="rs-vision-field-stack">
+                    <span className="rs-vision-field-label">Quarter focus (comma separated)</span>
+                    <input
+                      type="text"
+                      value={quarterFocus}
+                      onChange={(e) => setQuarterFocus(e.target.value)}
+                      className="rs-vision-input"
+                    />
+                  </label>
+                  <div className="rs-vision-side-visual">
+                    {fieldImages.quarter_focus ? (
+                      <>
+                        <button type="button" className="rs-vision-thumb-btn" onClick={() => openImageViewer(fieldImages.quarter_focus)}>
+                          <img src={fieldImages.quarter_focus} alt="" className="rs-vision-side-visual__img" />
+                        </button>
+                        <button type="button" className="rs-vision-mini-btn" onClick={() => handleRemoveFieldImage("quarter_focus")}>
+                          Remove
+                        </button>
+                      </>
+                    ) : (
+                      <div className="rs-vision-thumb-placeholder rs-vision-thumb-placeholder--light">Visual</div>
+                    )}
+                    <button
+                      type="button"
+                      className="rs-vision-mini-btn"
+                      onClick={() => handleFieldImageClick("quarter_focus")}
+                      disabled={uploadingFieldKey !== null}
+                    >
+                      {uploadingFieldKey === "quarter_focus" ? "…" : "Upload"}
+                    </button>
+                  </div>
+                </div>
+                <div className={`rs-vision-field-row${isMobile ? " rs-vision-field-row--stack" : ""}`}>
+                  <label className="rs-vision-field-stack">
+                    <span className="rs-vision-field-label">Immediate step</span>
+                    <AutoHeightTextarea value={immediateStep} onChange={setImmediateStep} rows={2} className="rs-vision-textarea" style={{}} />
+                  </label>
+                  <div className="rs-vision-side-visual">
+                    {fieldImages.immediate_step ? (
+                      <>
+                        <button type="button" className="rs-vision-thumb-btn" onClick={() => openImageViewer(fieldImages.immediate_step)}>
+                          <img src={fieldImages.immediate_step} alt="" className="rs-vision-side-visual__img" />
+                        </button>
+                        <button type="button" className="rs-vision-mini-btn" onClick={() => handleRemoveFieldImage("immediate_step")}>
+                          Remove
+                        </button>
+                      </>
+                    ) : (
+                      <div className="rs-vision-thumb-placeholder rs-vision-thumb-placeholder--light">Visual</div>
+                    )}
+                    <button
+                      type="button"
+                      className="rs-vision-mini-btn"
+                      onClick={() => handleFieldImageClick("immediate_step")}
+                      disabled={uploadingFieldKey !== null}
+                    >
+                      {uploadingFieldKey === "immediate_step" ? "…" : "Upload"}
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-          <div style={{ display: "flex", ...fieldRowLayout, marginBottom: 8 }}>
-            <label style={{ flex: 1, minWidth: 0, fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
-              Quarter focus (comma separated)
-              <input
-                type="text"
-                value={quarterFocus}
-                onChange={(e) => setQuarterFocus(e.target.value)}
-                style={{ fontSize: 13, padding: 6, borderRadius: 6, border: "1px solid #e5e7eb", width: "100%", boxSizing: "border-box" }}
-              />
-            </label>
-            <div style={fieldImageWrapper}>
-              {fieldImages.quarter_focus ? (
-                <button type="button" onClick={() => openImageViewer(fieldImages.quarter_focus)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block", width: isMobile ? "100%" : undefined }}>
-                  <img src={fieldImages.quarter_focus} alt="" style={fieldImageStyle} />
-                </button>
-              ) : (
-                <div style={placeholderImageStyle}>Image</div>
-              )}
-              <button type="button" onClick={() => handleFieldImageClick("quarter_focus")} disabled={uploadingFieldKey !== null} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: uploadingFieldKey ? "wait" : "pointer" }}>{uploadingFieldKey === "quarter_focus" ? "…" : "Upload"}</button>
-            </div>
-          </div>
-          <div style={{ display: "flex", ...fieldRowLayout }}>
-            <label style={{ flex: 1, minWidth: 0, fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
-              Immediate step
-              <AutoHeightTextarea
-                value={immediateStep}
-                onChange={setImmediateStep}
-                rows={2}
-                style={{ fontSize: 13, padding: 8, borderRadius: 8, border: "1px solid #e5e7eb", width: "100%", boxSizing: "border-box" }}
-              />
-            </label>
-            <div style={fieldImageWrapper}>
-              {fieldImages.immediate_step ? (
-                <>
-                  <button type="button" onClick={() => openImageViewer(fieldImages.immediate_step)} style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block", width: isMobile ? "100%" : undefined }}>
-                    <img src={fieldImages.immediate_step} alt="" style={fieldImageStyle} />
-                  </button>
-                  <button type="button" onClick={() => handleRemoveFieldImage("immediate_step")} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 999, border: "1px solid #e5e7eb", background: "#ffffff", color: "#6b7280", cursor: "pointer" }}>
-                    Remove
-                  </button>
-                </>
-              ) : (
-                <div style={placeholderImageStyle}>Image</div>
-              )}
-              <button type="button" onClick={() => handleFieldImageClick("immediate_step")} disabled={uploadingFieldKey !== null} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: uploadingFieldKey ? "wait" : "pointer" }}>{uploadingFieldKey === "immediate_step" ? "…" : "Upload"}</button>
-            </div>
-          </div>
-          </div>
-          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8, gap: 8 }}>
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving}
-              style={{
-                fontSize: 13,
-                padding: "6px 14px",
-                borderRadius: 999,
-                border: "1px solid #111827",
-                background: "#111827",
-                color: "#ffffff",
-                cursor: saving ? "wait" : "pointer",
-              }}
-            >
+
+          <div className="rs-vision-actions">
+            <button type="button" className="rs-btn-primary" onClick={handleSave} disabled={saving}>
               {saving ? "Saving…" : "Save vision"}
             </button>
           </div>
-        </div>
 
-        <div
-          style={{
-            borderTop: "1px solid #f3f4f6",
-            paddingTop: 16,
-            marginTop: 8,
-            fontSize: 13,
-          }}
-        >
-          <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 8px" }}>
-            History
-          </h2>
-          <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 8px" }}>
-            Save snapshots of your vision and restore older versions.
-          </p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
-            <input
-              type="text"
-              value={snapshotLabel}
-              onChange={(e) => setSnapshotLabel(e.target.value)}
-              placeholder="Label (optional)"
-              style={{
-                flex: "1 1 140px",
-                minWidth: 0,
-                fontSize: 12,
-                padding: "4px 8px",
-                borderRadius: 999,
-                border: "1px solid #e5e7eb",
-                width: isMobile ? "100%" : undefined,
-                boxSizing: "border-box",
-              }}
-            />
-            <button
-              type="button"
-              onClick={async () => {
-                try {
-                  const existingRes = await getUserProfile(user.id);
-                  const existing =
-                    !existingRes.error && existingRes.data
-                      ? existingRes.data.profile || {}
-                      : {};
-                  const profile = buildProfile(existing);
-                  const res = await createUserProfileVersion(
-                    user.id,
-                    profile,
-                    snapshotLabel || null
-                  );
-                  if (res.error) {
-                    setError(res.error.message || "Failed to save snapshot.");
-                  } else {
-                    setSavedMsg("Snapshot saved.");
-                    setSnapshotLabel("");
-                    const listRes = await listUserProfileVersions(user.id, 10);
-                    if (!listRes.error) {
-                      setVersions(listRes.data || []);
-                    }
-                  }
-                } catch (e) {
-                  setError(
-                    e.message || "Failed to save snapshot."
-                  );
-                }
-              }}
-              style={{
-                fontSize: 12,
-                padding: "4px 10px",
-                borderRadius: 999,
-                border: "1px solid #4b5563",
-                background: "#ffffff",
-                color: "#111827",
-                cursor: "pointer",
-              }}
-            >
-              Save snapshot
-            </button>
-          </div>
-          {versions.length === 0 ? (
-            <p style={{ fontSize: 12, color: "#6b7280", margin: 0 }}>
-              No snapshots yet. Save one after updating your vision.
-            </p>
-          ) : (
-            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-              {versions.map((v) => (
-                <li key={v.id} style={{ marginBottom: 6 }}>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const res = await getUserProfileVersion(user.id, v.id);
-                      if (!res.error && res.data && res.data.profile) {
-                        const p = res.data.profile;
-                        setIdentityAttributes(
-                          (p.identity_attributes || []).join(", ")
-                        );
-                        setLifeDomains({
-                          business: p.life_domains?.business || "",
-                          finances: p.life_domains?.finances || "",
-                          health: p.life_domains?.health || "",
-                          relationships: p.life_domains?.relationships || "",
-                          lifestyle: p.life_domains?.lifestyle || "",
-                          growth: p.life_domains?.growth || "",
-                        });
-                        setDesiredOutcomes(
-                          (p.desired_outcomes || [])
-                            .map((o) => o.title || "")
-                            .filter(Boolean)
-                            .join("\n")
-                        );
-                        setLeverageFocus(
-                          (p.leverage_focus || []).join("\n")
-                        );
-                        setQuarterFocus(
-                          (p.quarter_focus || []).join(", ")
-                        );
-                        setImmediateStep(p.immediate_step || "");
-                        setGoalsToThrive((p.thrive_goals || []).join("\n"));
-                        setFieldImages(p.vision_field_images || {});
-                        setSavedMsg("Snapshot restored (will autosave).");
-                        setTimeout(() => setSavedMsg(""), 2500);
+          <details className="rs-vision-archive">
+            <summary className="rs-vision-archive__summary">
+              <span className="material-symbols-outlined" aria-hidden>
+                history
+              </span>
+              Archives &amp; snapshots
+            </summary>
+            <div className="rs-vision-archive__body">
+              <p className="rs-vision-archive__hint">Save named snapshots and restore prior versions of your operating system.</p>
+              <div className="rs-vision-archive__row">
+                <input
+                  type="text"
+                  value={snapshotLabel}
+                  onChange={(e) => setSnapshotLabel(e.target.value)}
+                  placeholder="Label (optional)"
+                  className="rs-vision-input rs-vision-input--flex"
+                />
+                <button
+                  type="button"
+                  className="rs-btn-secondary"
+                  onClick={async () => {
+                    try {
+                      const existingRes = await getUserProfile(user.id);
+                      const existing =
+                        !existingRes.error && existingRes.data ? existingRes.data.profile || {} : {};
+                      const profile = buildProfile(existing);
+                      const res = await createUserProfileVersion(user.id, profile, snapshotLabel || null);
+                      if (res.error) {
+                        setError(res.error.message || "Failed to save snapshot.");
+                      } else {
+                        setSavedMsg("Snapshot saved.");
+                        setSnapshotLabel("");
+                        const listRes = await listUserProfileVersions(user.id, 10);
+                        if (!listRes.error) {
+                          setVersions(listRes.data || []);
+                        }
                       }
-                    }}
-                    style={{
-                      width: "100%",
-                      textAlign: "left",
-                      fontSize: 12,
-                      padding: "6px 8px",
-                      borderRadius: 999,
-                      border: "1px solid #e5e7eb",
-                      background: "#ffffff",
-                      color: "#111827",
-                      cursor: "pointer",
-                    }}
-                  >
-                    {v.label || "Snapshot"} –{" "}
-                    {v.created_at
-                      ? new Date(v.created_at).toLocaleString()
-                      : ""}
-                  </button>
-                </li>
-              )          )}
-        </ul>
-          )}
+                    } catch (e) {
+                      setError(e.message || "Failed to save snapshot.");
+                    }
+                  }}
+                >
+                  Save snapshot
+                </button>
+              </div>
+              {versions.length === 0 ? (
+                <p className="rs-vision-archive__empty">No snapshots yet.</p>
+              ) : (
+                <ul className="rs-vision-archive__list">
+                  {versions.map((v) => (
+                    <li key={v.id}>
+                      <button
+                        type="button"
+                        className="rs-vision-archive__version"
+                        onClick={async () => {
+                          const res = await getUserProfileVersion(user.id, v.id);
+                          if (!res.error && res.data && res.data.profile) {
+                            const p = res.data.profile;
+                            setIdentityAttributes((p.identity_attributes || []).join(", "));
+                            setLifeDomains({
+                              business: p.life_domains?.business || "",
+                              finances: p.life_domains?.finances || "",
+                              health: p.life_domains?.health || "",
+                              relationships: p.life_domains?.relationships || "",
+                              lifestyle: p.life_domains?.lifestyle || "",
+                              growth: p.life_domains?.growth || "",
+                            });
+                            setDesiredOutcomes(
+                              (p.desired_outcomes || []).map((o) => o.title || "").filter(Boolean).join("\n")
+                            );
+                            setLeverageFocus((p.leverage_focus || []).join("\n"));
+                            setQuarterFocus((p.quarter_focus || []).join(", "));
+                            setImmediateStep(p.immediate_step || "");
+                            setGoalsToThrive((p.thrive_goals || []).join("\n"));
+                            setFieldImages(p.vision_field_images || {});
+                            setSavedMsg("Snapshot restored (will autosave).");
+                            setTimeout(() => setSavedMsg(""), 2500);
+                          }
+                        }}
+                      >
+                        {v.label || "Snapshot"} — {v.created_at ? new Date(v.created_at).toLocaleString() : ""}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </details>
+
+          <footer className="rs-vision-footer">
+            <span className="material-symbols-outlined" aria-hidden>
+              spa
+            </span>
+            <span>The Rise &amp; Shine protocol</span>
+            <span className="rs-vision-footer__muted">Designed for the mindful curator</span>
+          </footer>
         </div>
-      </section>
       </div>
     </DashboardLayout>
-  );
-}
-
+    );
+  }
