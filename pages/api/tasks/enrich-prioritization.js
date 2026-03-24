@@ -22,6 +22,7 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const MODEL = process.env.ENRICHMENT_MODEL || process.env.PLANNER_MODEL || "gpt-4.1-mini";
 const AI_BATCH_SIZE = 10;
 const AI_TIMEOUT_MS = 25000;
+const ENRICHMENT_PROMPT_VERSION = "task_enrichment_v1";
 
 function withTimeout(promise, timeoutMs) {
   let timeoutId = null;
@@ -260,6 +261,10 @@ export default async function handler(req, res) {
         batch_size: AI_BATCH_SIZE,
         report: { updated: [], skipped: [], errors: [] },
         notes: ["No tasks missing prioritization metadata."],
+        meta: {
+          prompt_version: ENRICHMENT_PROMPT_VERSION,
+          model: MODEL,
+        },
       });
     }
 
@@ -342,6 +347,7 @@ export default async function handler(req, res) {
             event_type: "updated",
             value: {
               source: "task_enrichment_mvp",
+              prompt_version: ENRICHMENT_PROMPT_VERSION,
               mode: "apply",
               applied_patch: patch,
               tags_added: (enrichment.tags_add || []).filter((tag) => !normalizeTagList(task.tags || []).includes(tag)),
@@ -378,6 +384,10 @@ export default async function handler(req, res) {
       batches: aiResult.batches || 0,
       ai_status: aiResult.error ? `fallback:${aiResult.error}` : "ok",
       report,
+      meta: {
+        prompt_version: ENRICHMENT_PROMPT_VERSION,
+        model: MODEL,
+      },
     });
   } catch (e) {
     return res.status(e.status || 500).json({ error: e.message || String(e) });

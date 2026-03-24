@@ -7,11 +7,13 @@ import DashboardLayout from "../../components/DashboardLayout";
 import Modal from "../../components/Modal";
 import PageHeader from "../../components/PageHeader";
 import { useAuth } from "../../hooks/useAuth";
+import { supabase } from "../../lib/supabaseClient";
 import {
   createTask,
   getAllTags,
   getBacklogTasks,
   getCategoriesWithSubcategories,
+  listExternalAiImportRuns,
   getUserProfile,
   setTaskTags,
   updateTask,
@@ -22,12 +24,17 @@ import {
 import { computeTaskScore } from "../../lib/scoring";
 import {
   RESOURCE_KINDS,
+  buildProjectExportBundle,
   buildProjectContextPack,
   computeProjectAlignment,
   defaultProjectWorkspace,
   mergeProjectWorkspace,
   newResourceRow,
 } from "../../lib/projectWorkspace";
+import {
+  flattenExternalProjectImportActions,
+  groupExternalProjectImportActions,
+} from "../../lib/externalProjectImport";
 
 const LIFE_DOMAIN_KEYS = ["business", "finances", "health", "relationships", "lifestyle", "growth"];
 
@@ -83,7 +90,15 @@ export default function StrategicProjectWorkspacePage() {
   const [healthNeeds, setHealthNeeds] = useState(defaultProjectWorkspace().health_needs);
   const [projectLinks, setProjectLinks] = useState("");
   const [savingWorkspace, setSavingWorkspace] = useState(false);
-  const [copyFlash, setCopyFlash] = useState(false);
+  const [copyFlashKey, setCopyFlashKey] = useState("");
+  const [aiProvider, setAiProvider] = useState("claude");
+  const [importText, setImportText] = useState("");
+  const [importLoading, setImportLoading] = useState(false);
+  const [importApplying, setImportApplying] = useState(false);
+  const [importError, setImportError] = useState("");
+  const [importRun, setImportRun] = useState(null);
+  const [selectedImportActionIds, setSelectedImportActionIds] = useState([]);
+  const [recentImports, setRecentImports] = useState([]);
 
   const [sortKey, setSortKey] = useState("score");
   const [sortDir, setSortDir] = useState("desc");
@@ -107,10 +122,11 @@ export default function StrategicProjectWorkspacePage() {
     setLoading(true);
     setError("");
     try {
-      const [catsRes, tasksRes, profileRes] = await Promise.all([
+      const [catsRes, tasksRes, profileRes, importRunsRes] = await Promise.all([
         getCategoriesWithSubcategories(user.id),
         getBacklogTasks(user.id, { includeArchived: false }),
         getUserProfile(user.id),
+        listExternalAiImportRuns(user.id, categoryId, 6),
       ]);
 
       const cats = catsRes.data || [];
@@ -150,6 +166,9 @@ export default function StrategicProjectWorkspacePage() {
       getAllTags(user.id).then((tRes) => {
         if (!tRes.error) setTags(tRes.data || []);
       });
+      if (!importRunsRes.error) {
+        setRecentImports(importRunsRes.data || []);
+      }
     } catch (e) {
       setError(e.message || "Failed to load project.");
     } finally {
@@ -219,6 +238,53 @@ export default function StrategicProjectWorkspacePage() {
   const alignmentPct = useMemo(
     () => computeProjectAlignment(rootTasks, mantra, narrative),
     [rootTasks, mantra, narrative]
+  );
+
+  const exportBundle = useMemo(
+    () =>
+      buildProjectExportBundle(
+        {
+          categoryId,
+          categoryName: category?.name,
+          mantra,
+          narrative,
+          profile,
+          rootTasks: tasks,
+          healthNeeds,
+          resources,
+          efficiencyTip,
+          suggestedMoves,
+          legacyLinksText: projectLinks,
+        },
+        { provider: aiProvider }
+      ),
+    [
+      aiProvider,
+      category?.name,
+      categoryId,
+      efficiencyTip,
+      healthNeeds,
+      mantra,
+      narrative,
+      profile,
+      projectLinks,
+      resources,
+      suggestedMoves,
+      tasks,
+    ]
+  );
+
+  const importGroups = useMemo(
+    () => groupExternalProjectImportActions(importRun?.normalized_json || null, categoryId),
+    [categoryId, importRun]
+  );
+
+  const importActionIds = useMemo(
+    () =>
+      flattenExternalProjectImportActions(importRun?.normalized_json || null, categoryId)
+        .map((item) => item.id)
+        .filter(Boolean),
+    [categoryId, importRun]
   );
 
   const categoryOptions = useMemo(() => {
@@ -358,26 +424,169 @@ export default function StrategicProjectWorkspacePage() {
     }
   }
 
-  async function copyContextPack() {
-    const pack = buildProjectContextPack({
-      categoryName: category?.name,
-      mantra,
-      narrative,
-      profile,
-      rootTasks: sortedRootTasks,
-      healthNeeds,
-      resources,
-      efficiencyTip,
-      suggestedMoves,
-      legacyLinksText: projectLinks,
-    });
+  function flashCopy(key) {
+    setCopyFlashKey(key);
+    window.setTimeout(() => setCopyFlashKey(""), 2000);
+  }
+
+  async function copyTextValue(text, key) {
     try {
-      await navigator.clipboard.writeText(pack);
-      setCopyFlash(true);
-      window.setTimeout(() => setCopyFlash(false), 2000);
+      await navigator.clipboard.writeText(text);
+      flashCopy(key);
     } catch {
       setError("Could not copy to clipboard.");
     }
+  }
+
+  async function copyContextPack() {
+    const pack = buildProjectContextPack(
+      {
+        categoryId,
+        categoryName: category?.name,
+        mantra,
+        narrative,
+        profile,
+        rootTasks: tasks,
+        healthNeeds,
+        resources,
+        efficiencyTip,
+        suggestedMoves,
+        legacyLinksText: projectLinks,
+      },
+      { format: "conversation_pack" }
+    );
+    await copyTextValue(pack, "context");
+  }
+
+  async function copyPlanningPrompt() {
+    await copyTextValue(exportBundle.planning_prompt, "prompt");
+  }
+
+  async function copyExportJson() {
+    await copyTextValue(exportBundle.json_seed, "json");
+  }
+
+  async function copyPromptBundle() {
+    await copyTextValue(exportBundle.prompt_bundle, "bundle");
+  }
+
+  function downloadTextFile(filename, text, type) {
+    const blob = new Blob([text], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function downloadExportBundle(format) {
+    const safeName = String(category?.name || "project")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "project";
+    if (format === "md") {
+      downloadTextFile(`${safeName}-external-ai-pack.md`, exportBundle.prompt_bundle, "text/markdown;charset=utf-8");
+      return;
+    }
+    downloadTextFile(`${safeName}-external-ai-seed.json`, exportBundle.json_seed, "application/json;charset=utf-8");
+  }
+
+  async function handlePreviewImport() {
+    if (!user || !categoryId || !importText.trim()) return;
+    setImportLoading(true);
+    setImportError("");
+    try {
+      let { data: sessionData } = await supabase.auth.getSession();
+      let token = sessionData?.session?.access_token;
+      if (!token) {
+        const { data: refreshed } = await supabase.auth.refreshSession();
+        token = refreshed?.session?.access_token;
+      }
+      if (!token) throw new Error("Auth session missing. Please refresh and sign in again.");
+
+      const response = await fetch("/api/project-import/preview", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          category_id: categoryId,
+          import_text: importText,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Failed to preview import.");
+      setImportRun(payload.run || null);
+      const actionIds =
+        flattenExternalProjectImportActions(payload.run?.normalized_json || null, categoryId)
+          .map((item) => item.id)
+          .filter(Boolean);
+      setSelectedImportActionIds(actionIds);
+      setRecentImports((prev) => [payload.run, ...prev.filter((row) => row.id !== payload.run?.id)].slice(0, 6));
+    } catch (e) {
+      setImportError(e.message || "Failed to preview import.");
+    } finally {
+      setImportLoading(false);
+    }
+  }
+
+  async function handleApplyImport() {
+    if (!user || !importRun) return;
+    setImportApplying(true);
+    setImportError("");
+    try {
+      let { data: sessionData } = await supabase.auth.getSession();
+      let token = sessionData?.session?.access_token;
+      if (!token) {
+        const { data: refreshed } = await supabase.auth.refreshSession();
+        token = refreshed?.session?.access_token;
+      }
+      if (!token) throw new Error("Auth session missing. Please refresh and sign in again.");
+
+      const rejected = importActionIds.filter((id) => !selectedImportActionIds.includes(id));
+      const response = await fetch("/api/project-import/apply", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          run_id: importRun.id,
+          accepted_action_ids: selectedImportActionIds,
+          rejected_action_ids: rejected,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Failed to apply import.");
+      setImportRun(payload.run || importRun);
+      await load();
+    } catch (e) {
+      setImportError(e.message || "Failed to apply import.");
+    } finally {
+      setImportApplying(false);
+    }
+  }
+
+  function toggleImportAction(actionId) {
+    setSelectedImportActionIds((prev) =>
+      prev.includes(actionId)
+        ? prev.filter((id) => id !== actionId)
+        : [...prev, actionId]
+    );
+  }
+
+  function handleImportFile(e) {
+    const file = e.target?.files?.[0];
+    if (!file) return;
+    file.text().then((text) => {
+      setImportText(text || "");
+    });
+    e.target.value = "";
   }
 
   function openCreateTaskModal() {
@@ -651,8 +860,23 @@ export default function StrategicProjectWorkspacePage() {
                 </span>
               </div>
               <p className="rs-section-card__subtitle" style={{ marginBottom: 10 }}>
-                Paste suggestions from any model, or draft your own. Copy the context pack for a project-scoped thread.
+                Export this project into Claude, Grok, or ChatGPT, then preview a structured import before anything touches your source of truth.
               </p>
+              <div className="rs-project-import-provider">
+                <label className="rs-project-field-label" style={{ marginBottom: 0 }}>
+                  Prompt target
+                </label>
+                <select
+                  className="rs-select-compact"
+                  value={aiProvider}
+                  onChange={(e) => setAiProvider(e.target.value)}
+                >
+                  <option value="claude">Claude</option>
+                  <option value="grok">Grok</option>
+                  <option value="chatgpt">ChatGPT</option>
+                  <option value="generic">Generic</option>
+                </select>
+              </div>
               <label className="rs-project-field-label">Efficiency / batching tip</label>
               <textarea
                 className="rs-input"
@@ -697,11 +921,155 @@ export default function StrategicProjectWorkspacePage() {
               </div>
               <div className="rs-project-ai-actions">
                 <button type="button" className="rs-btn-primary" onClick={copyContextPack}>
-                  {copyFlash ? "Copied" : "Copy context for AI"}
+                  {copyFlashKey === "context" ? "Copied" : "Copy context"}
+                </button>
+                <button type="button" className="rs-btn-ghost" onClick={copyPlanningPrompt}>
+                  {copyFlashKey === "prompt" ? "Copied" : "Copy planning prompt"}
+                </button>
+                <button type="button" className="rs-btn-ghost" onClick={copyExportJson}>
+                  {copyFlashKey === "json" ? "Copied" : "Copy export JSON"}
+                </button>
+                <button type="button" className="rs-btn-ghost" onClick={copyPromptBundle}>
+                  {copyFlashKey === "bundle" ? "Copied" : "Copy full bundle"}
+                </button>
+                <button type="button" className="rs-btn-ghost" onClick={() => downloadExportBundle("md")}>
+                  Download .md
+                </button>
+                <button type="button" className="rs-btn-ghost" onClick={() => downloadExportBundle("json")}>
+                  Download .json
                 </button>
                 <button type="button" className="rs-btn-ghost" onClick={persistFullWorkspace} disabled={savingWorkspace}>
                   Save AI notes
                 </button>
+              </div>
+
+              <div className="rs-project-import-card">
+                <div className="rs-project-import-card__head">
+                  <div>
+                    <h3 className="rs-section-card__title" style={{ fontSize: "0.95rem", marginBottom: 4 }}>
+                      External AI import
+                    </h3>
+                    <p className="rs-section-card__subtitle" style={{ margin: 0 }}>
+                      Paste the JSON response here or upload a file, then review every change before apply.
+                    </p>
+                  </div>
+                  <label className="rs-btn-ghost rs-btn-ghost--small rs-project-import-upload">
+                    Upload JSON
+                    <input type="file" accept=".json,application/json,text/plain" onChange={handleImportFile} />
+                  </label>
+                </div>
+                <textarea
+                  className="rs-input rs-project-import-textarea"
+                  rows={10}
+                  value={importText}
+                  onChange={(e) => setImportText(e.target.value)}
+                  placeholder='Paste the external AI response JSON here. Tip: tell the model to return only one JSON object with workspace_patch, task_actions, alignment_actions, and vision_suggestions.'
+                />
+                <div className="rs-project-ai-actions">
+                  <button
+                    type="button"
+                    className="rs-btn-primary"
+                    onClick={handlePreviewImport}
+                    disabled={importLoading || !importText.trim()}
+                  >
+                    {importLoading ? "Previewing…" : "Preview import"}
+                  </button>
+                  <button
+                    type="button"
+                    className="rs-btn-ghost"
+                    onClick={handleApplyImport}
+                    disabled={importApplying || !importRun || selectedImportActionIds.length === 0}
+                  >
+                    {importApplying ? "Applying…" : `Apply selected (${selectedImportActionIds.length || 0})`}
+                  </button>
+                </div>
+
+                {importError && (
+                  <p className="rs-project-import-error">{importError}</p>
+                )}
+
+                {importRun?.preview_metrics && (
+                  <div className="rs-project-import-metrics">
+                    <span className="rs-project-import-pill">
+                      Actions: <strong>{importRun.preview_metrics.total_actions || 0}</strong>
+                    </span>
+                    <span className="rs-project-import-pill">
+                      Tasks: <strong>{importRun.preview_metrics.task_actions || 0}</strong>
+                    </span>
+                    <span className="rs-project-import-pill">
+                      Alignment: <strong>{importRun.preview_metrics.alignment_actions || 0}</strong>
+                    </span>
+                    <span className="rs-project-import-pill">
+                      Vision: <strong>{importRun.preview_metrics.vision_actions || 0}</strong>
+                    </span>
+                  </div>
+                )}
+
+                {importRun?.normalized_json?.summary && (
+                  <div className="rs-project-import-summary">
+                    {importRun.normalized_json.summary.current_state && (
+                      <p><strong>Current state:</strong> {importRun.normalized_json.summary.current_state}</p>
+                    )}
+                    {importRun.normalized_json.summary.strategy && (
+                      <p><strong>Strategy:</strong> {importRun.normalized_json.summary.strategy}</p>
+                    )}
+                    {importRun.normalized_json.summary.operator_notes && (
+                      <p><strong>Operator notes:</strong> {importRun.normalized_json.summary.operator_notes}</p>
+                    )}
+                  </div>
+                )}
+
+                {importGroups.length > 0 && (
+                  <div className="rs-project-import-groups">
+                    {importGroups.map((group) => (
+                      <div key={group.key} className="rs-project-import-group">
+                        <h4 className="rs-project-import-group__title">{group.label}</h4>
+                        <div className="rs-project-import-actions">
+                          {group.items.map((item) => (
+                            <label key={item.id} className="rs-project-import-action">
+                              <input
+                                type="checkbox"
+                                checked={selectedImportActionIds.includes(item.id)}
+                                onChange={() => toggleImportAction(item.id)}
+                              />
+                              <div>
+                                <strong>{item.title}</strong>
+                                {item.summary ? <p>{item.summary}</p> : null}
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {recentImports.length > 0 && (
+                  <div className="rs-project-import-history">
+                    <h4 className="rs-project-import-group__title">Recent imports</h4>
+                    <ul>
+                      {recentImports.map((row) => (
+                        <li key={row.id}>
+                          <button
+                            type="button"
+                            className="rs-project-import-history__btn"
+                            onClick={() => {
+                              setImportRun(row);
+                              setSelectedImportActionIds(
+                                flattenExternalProjectImportActions(row.normalized_json || null, categoryId)
+                                  .map((item) => item.id)
+                                  .filter(Boolean)
+                              );
+                            }}
+                          >
+                            <span>{new Date(row.created_at).toLocaleString()}</span>
+                            <span>{row.status || "draft"}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             </section>
 

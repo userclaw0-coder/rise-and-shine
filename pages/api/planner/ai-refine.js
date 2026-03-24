@@ -15,6 +15,7 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 // If unset, this defaults to gpt-5.2 (may be overkill).
 const MODEL = process.env.PLANNER_MODEL || "gpt-4.1-mini";
 const AI_TIMEOUT_MS = 25000;
+const PLANNER_PROMPT_VERSION = "planner_refine_v1";
 
 function hashQueue(mode, queue) {
   const payload = JSON.stringify({
@@ -123,7 +124,16 @@ export default async function handler(req, res) {
 
     if (cacheErr && cacheErr.code !== "PGRST116") throw cacheErr;
     if (cached?.ai_output) {
-      return res.json({ ok: true, cached: true, queue_hash: queueHash, ai: cached.ai_output });
+      return res.json({
+        ok: true,
+        cached: true,
+        queue_hash: queueHash,
+        ai: cached.ai_output,
+        meta: {
+          prompt_version: PLANNER_PROMPT_VERSION,
+          model: MODEL,
+        },
+      });
     }
 
     const taskIds = plan.queue.map((q) => q.task_id);
@@ -280,7 +290,17 @@ Keep responses concise.
     }, { onConflict: "user_id,date,queue_hash" });
     if (cacheWriteErr) throw cacheWriteErr;
 
-    return res.json({ ok: true, cached: false, queue_hash: queueHash, ai: finalOutput, ai_status: aiStatus });
+    return res.json({
+      ok: true,
+      cached: false,
+      queue_hash: queueHash,
+      ai: finalOutput,
+      ai_status: aiStatus,
+      meta: {
+        prompt_version: PLANNER_PROMPT_VERSION,
+        model: MODEL,
+      },
+    });
   } catch (e) {
     const message = e?.message || String(e);
     if (message === "planner_ai_timeout") {
@@ -289,6 +309,10 @@ Keep responses concise.
         cached: false,
         ai_status: "fallback:timeout",
         ai: buildFallbackPlannerResponse([]),
+        meta: {
+          prompt_version: PLANNER_PROMPT_VERSION,
+          model: MODEL,
+        },
       });
     }
     return res.status(e.status || 500).json({

@@ -18,6 +18,7 @@ Each **Action Items category** has a dedicated page at **`/category/[categoryId]
 
 - **Alignment %** — heuristic from mantra/narrative depth + root-task completion + outcome linkage (not a scientific metric; nudges completeness).
 - **Copy context for AI** — Markdown bundle: mantra, narrative, vision outcomes, health sliders, resources, tasks, legacy links.
+- **External AI import loop** — Copy/download a planning bundle for Claude/Grok/ChatGPT, then paste strict JSON back into the workspace for preview and approval-based apply.
 - **Action items** — same **BacklogStrategicTaskCard** as Action Items (inline edit, subtasks, outcomes, domains).
 
 ## Future improvements
