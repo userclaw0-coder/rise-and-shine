@@ -8,6 +8,7 @@ import {
   listWeeklyReviews,
   getWeeklyImprovementRun,
 } from "../lib/db";
+import { supabase } from "../lib/supabaseClient";
 
 function getWeekRange(date = new Date()) {
   const d = new Date(date);
@@ -196,9 +197,22 @@ export default function WeeklyReviewPage() {
     setCoachLoading(true);
     setCoachError("");
     try {
+      let { data: sessionData } = await supabase.auth.getSession();
+      let token = sessionData?.session?.access_token;
+      if (!token) {
+        const { data: refreshed } = await supabase.auth.refreshSession();
+        token = refreshed?.session?.access_token;
+      }
+      if (!token) {
+        throw new Error("Auth session missing. Please refresh and sign in again.");
+      }
+
       const response = await fetch("/api/weekly-review/coach", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ week_start: start }),
       });
       const payload = await response.json();
@@ -218,10 +232,23 @@ export default function WeeklyReviewPage() {
     setCoachApplying(true);
     setCoachError("");
     try {
+      let { data: sessionData } = await supabase.auth.getSession();
+      let token = sessionData?.session?.access_token;
+      if (!token) {
+        const { data: refreshed } = await supabase.auth.refreshSession();
+        token = refreshed?.session?.access_token;
+      }
+      if (!token) {
+        throw new Error("Auth session missing. Please refresh and sign in again.");
+      }
+
       const rejected = coachActionIds.filter((id) => !selectedActionIds.includes(id));
       const response = await fetch("/api/weekly-review/apply", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           week_start: start,
           accepted_action_ids: selectedActionIds,
