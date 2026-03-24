@@ -6,8 +6,13 @@ import PageHeader from "../components/PageHeader";
 import { useAuth } from "../hooks/useAuth";
 import { getBacklogTasks, getCategoriesWithSubcategories, getUserProfile } from "../lib/db";
 import { computeProjectTileMetrics } from "../lib/projectDashboardMetrics";
+import {
+  isTaskNeedingAlignment,
+  isTaskNeedingSubtasks,
+  isStaleDoingTask,
+} from "../lib/weeklyImprovementContext";
 
-function ProjectTile({ category, metrics, featured }) {
+function ProjectTile({ category, metrics, featured, badges }) {
   const href = `/category/${category.id}`;
   const cls = `rs-project-tile${featured ? " rs-project-tile--featured" : ""}`;
 
@@ -27,6 +32,28 @@ function ProjectTile({ category, metrics, featured }) {
             <span className="rs-project-tile__insight-label">AI insight</span>
             <p className="rs-project-tile__insight-text">{metrics.insight}</p>
           </div>
+          {badges.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+              {badges.map((badge) => (
+                <span
+                  key={badge.label}
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    padding: "5px 9px",
+                    borderRadius: 999,
+                    background: "rgba(240, 215, 140, 0.28)",
+                    border: "1px solid rgba(212, 175, 55, 0.38)",
+                    color: "var(--rs-primary-strong)",
+                  }}
+                >
+                  {badge.label}
+                </span>
+              ))}
+            </div>
+          )}
 
           {!featured && (
             <div className="rs-project-tile__health-block">
@@ -108,7 +135,15 @@ export default function ProjectsPage() {
       .map((cat) => {
         const tasksInCat = (tasks || []).filter((t) => String(t.category_id) === String(cat.id));
         const metrics = computeProjectTileMetrics(tasksInCat, profile);
-        return { category: cat, metrics };
+        const roots = tasksInCat.filter((t) => !t.parent_task_id);
+        const badges = [];
+        const unalignedCount = roots.filter(isTaskNeedingAlignment).length;
+        const splitCount = roots.filter(isTaskNeedingSubtasks).length;
+        const staleDoingCount = roots.filter(isStaleDoingTask).length;
+        if (unalignedCount > 0) badges.push({ label: `${unalignedCount} need alignment` });
+        if (splitCount > 0) badges.push({ label: `${splitCount} need split` });
+        if (staleDoingCount > 0) badges.push({ label: `${staleDoingCount} stale doing` });
+        return { category: cat, metrics, badges: badges.slice(0, 3) };
       })
       .sort((a, b) => String(a.category.name).localeCompare(String(b.category.name)));
   }, [categories, tasks, profile, filterQ]);
@@ -181,11 +216,12 @@ export default function ProjectsPage() {
         <p className="rs-page-muted">No projects match your filter.</p>
       ) : (
         <div className="rs-projects-grid">
-          {tiles.map(({ category, metrics }) => (
+          {tiles.map(({ category, metrics, badges }) => (
             <ProjectTile
               key={category.id}
               category={category}
               metrics={metrics}
+              badges={badges}
               featured={String(category.id) === String(featuredId)}
             />
           ))}

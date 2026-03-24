@@ -24,6 +24,11 @@ import {
 import { isMissingPrioritizationMetadata } from "../lib/task-enrichment";
 import { supabase } from "../lib/supabaseClient";
 import { computeTaskScore } from "../lib/scoring";
+import {
+  isTaskNeedingAlignment,
+  isTaskNeedingSubtasks,
+  isStaleDoingTask,
+} from "../lib/weeklyImprovementContext";
 
 const STATUS_FILTERS = [
   { value: "todo_doing", label: "Todo & Doing" },
@@ -460,6 +465,18 @@ export default function BacklogPage() {
           !!t.due_date && localDateKey(new Date(t.due_date)) < todayLocal;
       } else if (quick === "critical_high") {
         quickOk = t.priority === "Critical" || t.priority === "High";
+      } else if (quick === "needs_alignment") {
+        quickOk = isTaskNeedingAlignment(t);
+      } else if (quick === "needs_split") {
+        quickOk = isTaskNeedingSubtasks(t);
+      } else if (quick === "stale_doing") {
+        quickOk = isStaleDoingTask(t);
+      } else if (quick === "priority_cleanup") {
+        const score = computeTaskScore({
+          ...t,
+          tags: extractTagNames(t),
+        }).score;
+        quickOk = (!t.priority || t.priority === "Medium") && score >= 70;
       }
 
       return titleMatch && statusOk && categoryOk && subcategoryOk && tagOk && quickOk;
@@ -1921,6 +1938,55 @@ export default function BacklogPage() {
             className={`rs-filter-pill${statusFilter === "archived" ? " rs-filter-pill--active" : ""}`}
           >
             Archived
+          </button>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 6,
+            marginBottom: 10,
+            alignItems: "center",
+          }}
+        >
+          <span style={{ fontSize: 12, color: "#6b7280", marginRight: 4 }}>
+            Improve:
+          </span>
+          <button
+            type="button"
+            onClick={() => setQuickFilter("")}
+            className={`rs-filter-pill${!quickFilter ? " rs-filter-pill--active" : ""}`}
+          >
+            All
+          </button>
+          <button
+            type="button"
+            onClick={() => setQuickFilter("needs_alignment")}
+            className={`rs-filter-pill${quickFilter === "needs_alignment" ? " rs-filter-pill--active" : ""}`}
+          >
+            Needs alignment
+          </button>
+          <button
+            type="button"
+            onClick={() => setQuickFilter("needs_split")}
+            className={`rs-filter-pill${quickFilter === "needs_split" ? " rs-filter-pill--active" : ""}`}
+          >
+            Needs subtasks
+          </button>
+          <button
+            type="button"
+            onClick={() => setQuickFilter("stale_doing")}
+            className={`rs-filter-pill${quickFilter === "stale_doing" ? " rs-filter-pill--active" : ""}`}
+          >
+            Stale doing
+          </button>
+          <button
+            type="button"
+            onClick={() => setQuickFilter("priority_cleanup")}
+            className={`rs-filter-pill${quickFilter === "priority_cleanup" ? " rs-filter-pill--active" : ""}`}
+          >
+            Priority cleanup
           </button>
         </div>
 

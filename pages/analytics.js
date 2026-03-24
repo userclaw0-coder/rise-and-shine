@@ -12,6 +12,7 @@ import {
   getDailyTemplateTaskIds,
   getBacklogTasks,
   getUserProfile,
+  listWeeklyImprovementRuns,
 } from "../lib/db";
 import {
   BarChart,
@@ -30,6 +31,7 @@ import {
 } from "recharts";
 import { countRefinementActions } from "../lib/planner-refinement-events";
 import { getOutcomeLabel } from "../lib/scoring";
+import { buildImprovementLabReport } from "../lib/weeklyImprovementContext";
 
 function dateStr(d) {
   return d.toISOString().slice(0, 10);
@@ -155,6 +157,7 @@ export default function AnalyticsPage() {
   const [outcomeProgress, setOutcomeProgress] = useState([]);
   const [completionsByOutcome, setCompletionsByOutcome] = useState([]);
   const [completionsByLifeDomain, setCompletionsByLifeDomain] = useState([]);
+  const [improvementLabReport, setImprovementLabReport] = useState(null);
 
   useEffect(() => {
     if (!user) return;
@@ -167,7 +170,7 @@ export default function AnalyticsPage() {
       const start30 = addDays(today, -30);
 
       try {
-        const [range7, range30, last, weeks, plannerRefinements, dailyTaskIdsRes, backlogOpen, backlogAll, profileRes] = await Promise.all([
+        const [range7, range30, last, weeks, plannerRefinements, dailyTaskIdsRes, backlogOpen, backlogAll, profileRes, improvementRunsRes] = await Promise.all([
           getCompletedEventsInRange(user.id, dateStrLocal(start7), dateStrLocal(today)),
           getCompletedEventsInRange(user.id, dateStrLocal(start30), dateStrLocal(today)),
           getLastCompletedEventsWithTasks(user.id, 50),
@@ -177,6 +180,7 @@ export default function AnalyticsPage() {
           getBacklogTasks(user.id, { includeArchived: false }),
           getBacklogTasks(user.id, { includeArchived: true }),
           getUserProfile(user.id),
+          listWeeklyImprovementRuns(user.id, 12),
         ]);
 
         const dailyTemplateTaskIds = dailyTaskIdsRes.data || new Set();
@@ -262,6 +266,10 @@ export default function AnalyticsPage() {
         else {
           const events = plannerRefinements.data || [];
           setPlannerRefinementMetrics(countRefinementActions(events));
+        }
+
+        if (!improvementRunsRes.error) {
+          setImprovementLabReport(buildImprovementLabReport(improvementRunsRes.data || []));
         }
 
         const thisWeekMonday = getWeekStart(today);
@@ -568,6 +576,42 @@ export default function AnalyticsPage() {
               Dismissed: <strong>{plannerRefinementMetrics.dismissed}</strong>
             </div>
           </div>
+        </section>
+
+        <section className="rs-section-card">
+          <h2 className="rs-section-card__title" style={{ fontSize: "1rem", marginBottom: 10 }}>
+            Recursive improvement lab
+          </h2>
+          {improvementLabReport ? (
+            <>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+                <div style={{ padding: "8px 12px", borderRadius: "var(--rs-radius-md)", background: "rgba(212, 175, 55, 0.16)", color: "var(--rs-primary-strong)", fontSize: 13, fontWeight: 600 }}>
+                  Runs: <strong>{improvementLabReport.total_runs}</strong>
+                </div>
+                <div style={{ padding: "8px 12px", borderRadius: "var(--rs-radius-md)", background: "rgba(85, 93, 30, 0.1)", color: "var(--rs-olive)", fontSize: 13, fontWeight: 600 }}>
+                  Acceptance: <strong>{improvementLabReport.acceptance_rate}%</strong>
+                </div>
+                <div style={{ padding: "8px 12px", borderRadius: "var(--rs-radius-md)", background: "var(--rs-surface-low)", color: "var(--rs-on-surface-variant)", fontSize: 13, fontWeight: 600 }}>
+                  Application: <strong>{improvementLabReport.application_rate}%</strong>
+                </div>
+              </div>
+              {improvementLabReport.by_prompt_version?.length > 0 && (
+                <p style={{ margin: "0 0 6px", fontSize: 12, color: "var(--rs-on-surface-variant)" }}>
+                  Prompt versions:{" "}
+                  {improvementLabReport.by_prompt_version.map((row) => `${row.key} (${row.count})`).join(" · ")}
+                </p>
+              )}
+              {improvementLabReport.by_model?.length > 0 && (
+                <p style={{ margin: 0, fontSize: 12, color: "var(--rs-on-surface-variant)" }}>
+                  Models: {improvementLabReport.by_model.map((row) => `${row.key} (${row.count})`).join(" · ")}
+                </p>
+              )}
+            </>
+          ) : (
+            <p style={{ fontSize: 13, color: "var(--rs-on-surface-variant)", margin: 0 }}>
+              Generate a weekly improvement coach run to start measuring acceptance and application quality.
+            </p>
+          )}
         </section>
 
         <section className="rs-section-card">
