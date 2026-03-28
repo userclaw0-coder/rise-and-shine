@@ -87,6 +87,9 @@ const MEASURE_DEFAULTS = {
   hips_in: "",
   shoulders_in: "",
   neck_in: "",
+  left_bicep_in: "",
+  left_quad_in: "",
+  left_calf_in: "",
 };
 
 const CHART_COLORS = [
@@ -263,6 +266,9 @@ export default function HealthPage() {
           hips_in: om.hips_in != null ? String(om.hips_in) : "",
           shoulders_in: om.shoulders_in != null ? String(om.shoulders_in) : "",
           neck_in: om.neck_in != null ? String(om.neck_in) : "",
+          left_bicep_in: om.left_bicep_in != null ? String(om.left_bicep_in) : "",
+          left_quad_in: om.left_quad_in != null ? String(om.left_quad_in) : "",
+          left_calf_in: om.left_calf_in != null ? String(om.left_calf_in) : "",
         });
         if (om.measured_at) setMeasureDate(String(om.measured_at).slice(0, 10));
 
@@ -351,6 +357,12 @@ export default function HealthPage() {
           hips_in: measurements.hips_in === "" ? null : parseFloat(measurements.hips_in),
           shoulders_in: measurements.shoulders_in === "" ? null : parseFloat(measurements.shoulders_in),
           neck_in: measurements.neck_in === "" ? null : parseFloat(measurements.neck_in),
+          left_bicep_in:
+            measurements.left_bicep_in === "" ? null : parseFloat(measurements.left_bicep_in),
+          left_quad_in:
+            measurements.left_quad_in === "" ? null : parseFloat(measurements.left_quad_in),
+          left_calf_in:
+            measurements.left_calf_in === "" ? null : parseFloat(measurements.left_calf_in),
           measured_at: measureDate,
         },
       };
@@ -868,6 +880,9 @@ export default function HealthPage() {
                     ["hips_in", "Hips"],
                     ["shoulders_in", "Shoulders"],
                     ["neck_in", "Neck"],
+                    ["left_bicep_in", "Left bicep"],
+                    ["left_quad_in", "Left quad"],
+                    ["left_calf_in", "Left calf"],
                   ].map(([key, label]) => (
                     <label key={key} className="rs-occam-morph-field">
                       <span>{label}</span>
