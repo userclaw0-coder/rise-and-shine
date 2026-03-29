@@ -1448,6 +1448,11 @@ body {
   word-break: break-word;
 }
 
+.rs-backlog-card__simple-assignee {
+  font-size: 0.82rem;
+  color: var(--rs-on-surface-variant);
+}
+
 .rs-backlog-card__simple-expand {
   align-self: flex-start;
 }
@@ -2497,6 +2502,56 @@ body {
   resize: none;
   overflow: hidden;
   white-space: pre-wrap;
+}
+
+.rs-project-tile__members {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: 0.78rem;
+  color: var(--rs-on-surface-variant);
+}
+
+.rs-project-member-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rs-project-member-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: var(--rs-radius-md);
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(186, 177, 159, 0.18);
+}
+
+.rs-project-member-row__email {
+  min-width: 0;
+  word-break: break-word;
+  font-size: 0.9rem;
+}
+
+.rs-project-member-row__actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.rs-project-member-row__role {
+  font-size: 0.82rem;
+  text-transform: capitalize;
+  color: var(--rs-on-surface-variant);
+}
+
+.rs-project-share-box {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
 }
 
 .rs-project-narrative-label {

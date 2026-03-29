@@ -1,7 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
 import { getAuthenticatedUserId } from "../../../lib/api-auth";
 import { flattenWeeklyCoachActions } from "../../../lib/weeklyImprovementContext";
-import { mergeProjectWorkspace } from "../../../lib/projectWorkspace";
+import {
+  createTaskCollaborative,
+  saveSharedProjectWorkspace,
+  serviceSupabase as collabSupabase,
+  setTaskTagsCollaborative,
+  updateTaskCollaborative,
+} from "../../../lib/projectCollaboration";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -58,6 +64,20 @@ async function mergeTaskTags(userId, taskId, tagsAdd) {
   }
 }
 
+async function mergeCollaborativeTagNames(actorUserId, taskId, tagsAdd) {
+  const { data: taskRow, error } = await collabSupabase
+    .from("tasks")
+    .select("tags:task_tags(tag:tags(name))")
+    .eq("id", taskId)
+    .maybeSingle();
+  if (error) throw error;
+  const existing = (taskRow?.tags || []).map((row) => row?.tag?.name).filter(Boolean);
+  const merged = Array.from(
+    new Set([...(existing || []), ...(tagsAdd || [])].map((value) => String(value || "").trim()).filter(Boolean))
+  );
+  await setTaskTagsCollaborative(actorUserId, taskId, merged);
+}
+
 async function logActionEvent(userId, taskId, payload) {
   if (!taskId) return;
   await supabase.from("task_events").insert({
@@ -105,15 +125,10 @@ export default async function handler(req, res) {
           }
         });
         if (Object.keys(taskPatch).length > 0) {
-          const { error: updateErr } = await supabase
-            .from("tasks")
-            .update(taskPatch)
-            .eq("id", action.task_id)
-            .eq("user_id", userId);
-          if (updateErr) throw updateErr;
+          await updateTaskCollaborative(userId, action.task_id, taskPatch);
         }
         if (Array.isArray(action.apply_patch.tags_add) && action.apply_patch.tags_add.length > 0) {
-          await mergeTaskTags(userId, action.task_id, action.apply_patch.tags_add);
+          await mergeCollaborativeTagNames(userId, action.task_id, action.apply_patch.tags_add);
         }
         await logActionEvent(userId, action.task_id, {
           source: "weekly_coach",
@@ -127,17 +142,15 @@ export default async function handler(req, res) {
       }
 
       if (action.apply_patch.create_task && action.parent_task_id) {
-        const { data: parent, error: parentErr } = await supabase
+        const { data: parent, error: parentErr } = await collabSupabase
           .from("tasks")
           .select("category_id, subcategory_id, outcome_ids, primary_life_domain, life_domains")
           .eq("id", action.parent_task_id)
-          .eq("user_id", userId)
           .maybeSingle();
         if (parentErr) throw parentErr;
         if (!parent) continue;
 
         const createTaskPayload = {
-          user_id: userId,
           title: action.apply_patch.create_task.title,
           status: "todo",
           priority: "Medium",
@@ -153,14 +166,9 @@ export default async function handler(req, res) {
               ? "ai"
               : null,
         };
-        const { data: created, error: createErr } = await supabase
-          .from("tasks")
-          .insert(createTaskPayload)
-          .select("id")
-          .single();
-        if (createErr) throw createErr;
+        const created = await createTaskCollaborative(userId, createTaskPayload);
         if (Array.isArray(action.apply_patch.create_task.tags)) {
-          await mergeTaskTags(userId, created.id, action.apply_patch.create_task.tags);
+          await setTaskTagsCollaborative(userId, created.id, action.apply_patch.create_task.tags);
         }
         await logActionEvent(userId, action.parent_task_id, {
           source: "weekly_coach",
@@ -174,32 +182,11 @@ export default async function handler(req, res) {
       }
 
       if (action.apply_patch.workspace && action.category_id) {
-        const { data: profileRow, error: profileErr } = await supabase
-          .from("user_profile")
-          .select("profile")
-          .eq("user_id", userId)
-          .maybeSingle();
-        if (profileErr) throw profileErr;
-
-        const profile = profileRow?.profile || {};
-        const prefs = { ...(profile.preferences || {}) };
-        const current = mergeProjectWorkspace(prefs, action.category_id);
-        const rawMap = { ...(prefs.project_workspaces || {}) };
-        const currentMoves = Array.isArray(current.suggested_moves) ? current.suggested_moves : [];
         const nextSuggestedMove = action.apply_patch.workspace.suggested_move;
-        rawMap[String(action.category_id)] = {
-          ...current,
-          efficiency_tip:
-            current.efficiency_tip || action.apply_patch.workspace.efficiency_tip || "",
-          suggested_moves: nextSuggestedMove
-            ? Array.from(new Set([...currentMoves, nextSuggestedMove]))
-            : currentMoves,
-        };
-        prefs.project_workspaces = rawMap;
-        const { error: saveErr } = await supabase
-          .from("user_profile")
-          .upsert({ user_id: userId, profile: { ...profile, preferences: prefs } }, { onConflict: "user_id" });
-        if (saveErr) throw saveErr;
+        await saveSharedProjectWorkspace(userId, action.category_id, {
+          efficiency_tip: action.apply_patch.workspace.efficiency_tip || "",
+          ...(nextSuggestedMove ? { append_suggested_move: nextSuggestedMove } : {}),
+        });
         appliedActionIds.push(actionId);
       }
     }

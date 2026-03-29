@@ -7,20 +7,21 @@ import Modal from "../components/Modal";
 import PageHeader from "../components/PageHeader";
 import { useAuth } from "../hooks/useAuth";
 import {
-  getBacklogTasks,
-  updateTaskStatusWithEvent,
-  createTask,
-  updateTask,
-  setTaskTags,
-  getCategoriesWithSubcategories,
-  getAllTags,
   createCategory,
-  ensureSubcategory,
   updateCategory,
   deleteCategory,
   getUserProfile,
   upsertUserProfile,
 } from "../lib/db";
+import {
+  assignCollaborativeTask,
+  createCollaborativeTask,
+  ensureCollaborativeSubcategory,
+  loadCollaborativeBacklog,
+  updateCollaborativeTask,
+  updateCollaborativeTaskStatus,
+  setCollaborativeTaskTags,
+} from "../lib/collaborationClient";
 import { isMissingPrioritizationMetadata } from "../lib/task-enrichment";
 import { supabase } from "../lib/supabaseClient";
 import { computeTaskScore } from "../lib/scoring";
@@ -177,62 +178,43 @@ export default function BacklogPage() {
       try {
         setLoading(true);
         setError("");
-
-        const [tasksRes, catsRes, tagsRes, profileRes] = await Promise.all([
-          getBacklogTasks(user.id, { includeArchived: true }),
-          getCategoriesWithSubcategories(user.id),
-          getAllTags(user.id),
-          getUserProfile(user.id),
-        ]);
-
-        if (tasksRes.error) {
-          setError(tasksRes.error.message);
-        } else {
-          const enriched =
-            (tasksRes.data || []).map((t) => ({
-              ...t,
-              _tagsText: makeTagText(t),
-              _subcategoryText: t?.subcategory?.name || "",
-            })) || [];
-          setTasks(enriched);
-        }
-
-        if (!catsRes.error) {
-          const catData = catsRes.data || [];
-          setCategories(catData);
-          const ids = catData.map((c) => c.id);
-          const validId = (id) => typeof id === "string" && ids.includes(id);
-          const serverOrder = profileRes?.data?.profile?.preferences?.category_order_ids;
-          const validServer =
-            Array.isArray(serverOrder) && serverOrder.every(validId)
-              ? serverOrder.filter(validId)
-              : null;
-          let stored = null;
-          if (!validServer && typeof window !== "undefined") {
-            try {
-              stored = JSON.parse(window.localStorage.getItem(`rs_category_order_${user.id}`) || "null");
-            } catch {
-              stored = null;
-            }
+        const data = await loadCollaborativeBacklog(true);
+        const enriched =
+          (data.tasks || []).map((t) => ({
+            ...t,
+            _tagsText: t._tagsText ?? makeTagText(t),
+            _subcategoryText: (t._subcategoryText ?? t?.subcategory?.name) || "",
+          })) || [];
+        setTasks(enriched);
+        const catData = data.categories || [];
+        setCategories(catData);
+        const ids = catData.map((c) => c.id);
+        const validId = (id) => typeof id === "string" && ids.includes(id);
+        const serverOrder = data?.profile?.preferences?.category_order_ids;
+        const validServer =
+          Array.isArray(serverOrder) && serverOrder.every(validId)
+            ? serverOrder.filter(validId)
+            : null;
+        let stored = null;
+        if (!validServer && typeof window !== "undefined") {
+          try {
+            stored = JSON.parse(window.localStorage.getItem(`rs_category_order_${user.id}`) || "null");
+          } catch {
+            stored = null;
           }
-          const validStored =
-            Array.isArray(stored) && stored.every((id) => typeof id === "string")
-              ? stored
-              : null;
-          const orderSource = validServer || validStored;
-          const merged = [
-            ...(orderSource || []).filter((id) => ids.includes(id)),
-            ...ids.filter((id) => !(orderSource || []).includes(id)),
-          ];
-          setCategoryOrder(merged);
         }
-
-        if (!tagsRes.error) {
-          setTags(tagsRes.data || []);
-        }
-        if (profileRes?.data?.profile) {
-          setProfile(profileRes.data.profile);
-        }
+        const validStored =
+          Array.isArray(stored) && stored.every((id) => typeof id === "string")
+            ? stored
+            : null;
+        const orderSource = validServer || validStored;
+        const merged = [
+          ...(orderSource || []).filter((id) => ids.includes(id)),
+          ...ids.filter((id) => !(orderSource || []).includes(id)),
+        ];
+        setCategoryOrder(merged);
+        setTags(data.tags || []);
+        setProfile(data.profile || null);
       } catch (e) {
         setError(e.message || "Failed to load backlog.");
       } finally {
@@ -341,10 +323,8 @@ export default function BacklogPage() {
         }
       }
       if (!hadError) {
-        const catsRes = await getCategoriesWithSubcategories(user.id);
-        if (!catsRes.error && Array.isArray(catsRes.data)) {
-          setCategories(catsRes.data);
-        }
+        const fresh = await loadCollaborativeBacklog(true);
+        setCategories(fresh.categories || []);
         setCategoryEditorOpen(false);
       }
     } finally {
@@ -365,10 +345,8 @@ export default function BacklogPage() {
       if (res.error) {
         setError(res.error.message || "Failed to delete category.");
       } else {
-        const catsRes = await getCategoriesWithSubcategories(user.id);
-        if (!catsRes.error && Array.isArray(catsRes.data)) {
-          setCategories(catsRes.data);
-        }
+        const fresh = await loadCollaborativeBacklog(true);
+        setCategories(fresh.categories || []);
         setCategoryOrder((prev) => prev.filter((cid) => cid !== id));
         setCategoryEdits((prev) => {
           const next = { ...prev };
@@ -616,26 +594,29 @@ export default function BacklogPage() {
 
   async function handleStatusChange(task, nextStatus) {
     if (!user) return;
-    const res = await updateTaskStatusWithEvent(user.id, task.id, nextStatus);
-    if (res.error) {
-      setError(res.error.message);
+    try {
+      const res = await updateCollaborativeTaskStatus(task.id, nextStatus);
+      updateTaskLocal(task.id, {
+        ...(res.task || {}),
+        status: nextStatus,
+        archived_at:
+          nextStatus === "archived" ? new Date().toISOString() : null,
+      });
+    } catch (e) {
+      setError(e.message);
       return;
     }
-    updateTaskLocal(task.id, {
-      status: nextStatus,
-      archived_at:
-        nextStatus === "archived" ? new Date().toISOString() : null,
-    });
   }
 
   async function handleInlineSave(taskId, patch) {
     if (!user) return;
-    const res = await updateTask(user.id, taskId, patch);
-    if (res.error) {
-      setError(res.error.message);
+    try {
+      const res = await updateCollaborativeTask(taskId, patch);
+      updateTaskLocal(taskId, res.task || patch);
+    } catch (e) {
+      setError(e.message);
       return;
     }
-    updateTaskLocal(taskId, res.data || patch);
   }
 
   async function handleSubcategorySave(task) {
@@ -651,37 +632,52 @@ export default function BacklogPage() {
       updateTaskLocal(task.id, { subcategory_id: null, subcategory: null, _subcategoryText: "" });
       return;
     }
-    const subRes = await ensureSubcategory(user.id, categoryId, name);
-    if (subRes.error) {
-      setError(subRes.error.message || "Failed to save subcategory.");
+    let subcategory = null;
+    try {
+      const subRes = await ensureCollaborativeSubcategory(categoryId, name);
+      subcategory = subRes.subcategory || null;
+    } catch (e) {
+      setError(e.message || "Failed to save subcategory.");
       return;
     }
-    if (!subRes.data?.id) return;
-    const saveRes = await updateTask(user.id, task.id, { subcategory_id: subRes.data.id });
-    if (saveRes.error) {
-      setError(saveRes.error.message || "Failed to save subcategory.");
+    if (!subcategory?.id) return;
+    try {
+      const saveRes = await updateCollaborativeTask(task.id, { subcategory_id: subcategory.id });
+      updateTaskLocal(task.id, {
+        ...(saveRes.task || {}),
+        subcategory_id: subcategory.id,
+        subcategory: { name: subcategory.name },
+        _subcategoryText: subcategory.name,
+      });
+    } catch (e) {
+      setError(e.message || "Failed to save subcategory.");
       return;
     }
-    updateTaskLocal(task.id, {
-      ...(saveRes.data || {}),
-      subcategory_id: subRes.data.id,
-      subcategory: { name: subRes.data.name },
-      _subcategoryText: subRes.data.name,
-    });
   }
 
   async function handleTagsSave(taskId, tagsText) {
     if (!user) return;
     const names = parseTagText(tagsText);
-    const res = await setTaskTags(user.id, taskId, names);
-    if (res.error) {
-      setError(res.error.message);
+    try {
+      await setCollaborativeTaskTags(taskId, names);
+      updateTaskLocal(taskId, {
+        _tagsText: tagsText,
+        tags: names.map((name) => ({ name })),
+      });
+    } catch (e) {
+      setError(e.message);
       return;
     }
-    updateTaskLocal(taskId, {
-      _tagsText: tagsText,
-      tags: names.map((name) => ({ name })),
-    });
+  }
+
+  async function handleAssignTask(task, assigneeUserId) {
+    if (!user || !task?.id) return;
+    try {
+      const res = await assignCollaborativeTask(task.id, assigneeUserId);
+      updateTaskLocal(task.id, { assignees: res.assignees || [] });
+    } catch (e) {
+      setError(e.message || "Failed to assign task.");
+    }
   }
 
   const openAddTaskModal = useCallback(
@@ -731,13 +727,16 @@ export default function BacklogPage() {
       if (existing) {
         subcategoryId = existing.id;
       } else {
-        const subRes = await ensureSubcategory(user.id, categoryId, subName);
-        if (subRes.error) {
-          setError(subRes.error.message || "Failed to create subcategory.");
+        let subcategory = null;
+        try {
+          const subRes = await ensureCollaborativeSubcategory(categoryId, subName);
+          subcategory = subRes.subcategory || null;
+        } catch (e) {
+          setError(e.message || "Failed to create subcategory.");
           setAddingTask(false);
           return;
         }
-        if (subRes.data?.id) subcategoryId = subRes.data.id;
+        if (subcategory?.id) subcategoryId = subcategory.id;
       }
     }
     const parsedTags = parseTagText(modalTagsText);
@@ -745,31 +744,30 @@ export default function BacklogPage() {
       ? Array.from(new Set(["fire-fighting", ...parsedTags]))
       : parsedTags;
     const finalStatus = modalMoveToTop ? "todo" : (modalStatus || "todo");
-    const res = await createTask(user.id, {
-      title: modalTitle.trim(),
-      status: finalStatus,
-      priority: modalMoveToTop ? "Critical" : (modalPriority || "Medium"),
-      effort_hours: modalEffortHours === "" ? null : Number(modalEffortHours),
-      due_date: modalDueDate || null,
-      category_id: categoryId,
-      subcategory_id: subcategoryId,
-    });
-    if (res.error) {
-      setError(res.error.message);
+    let createdTask = null;
+    try {
+      const res = await createCollaborativeTask({
+        title: modalTitle.trim(),
+        status: finalStatus,
+        priority: modalMoveToTop ? "Critical" : (modalPriority || "Medium"),
+        effort_hours: modalEffortHours === "" ? null : Number(modalEffortHours),
+        due_date: modalDueDate || null,
+        category_id: categoryId,
+        subcategory_id: subcategoryId,
+        tags: finalTags,
+      });
+      createdTask = res.task || null;
+    } catch (e) {
+      setError(e.message);
       setAddingTask(false);
       return;
     }
     const created = {
-      ...res.data,
+      ...createdTask,
       _tagsText: finalTags.join(", "),
-      _subcategoryText: subName || (res.data?.subcategory?.name ?? ""),
+      _subcategoryText: subName || (createdTask?.subcategory?.name ?? ""),
+      tags: finalTags.map((name) => ({ name })),
     };
-    if (finalTags.length > 0) {
-      const tagRes = await setTaskTags(user.id, res.data.id, finalTags);
-      if (!tagRes.error) {
-        created.tags = finalTags.map((name) => ({ name }));
-      }
-    }
     setTasks((prev) => [created, ...prev]);
     setAddTaskOpen(false);
     setAddingTask(false);
@@ -778,18 +776,21 @@ export default function BacklogPage() {
   async function handleAddSubtask(parent) {
     if (!user) return;
     const title = `Subtask of ${parent.title}`;
-    const res = await createTask(user.id, {
-      title,
-      status: "todo",
-      parent_task_id: parent.id,
-      category_id: parent.category_id || null,
-      subcategory_id: parent.subcategory_id || null,
-    });
-    if (res.error) {
-      setError(res.error.message);
+    let createdTask = null;
+    try {
+      const res = await createCollaborativeTask({
+        title,
+        status: "todo",
+        parent_task_id: parent.id,
+        category_id: parent.category_id || null,
+        subcategory_id: parent.subcategory_id || null,
+      });
+      createdTask = res.task || null;
+    } catch (e) {
+      setError(e.message);
       return;
     }
-    const created = { ...res.data, _tagsText: "", _subcategoryText: parent?.subcategory?.name || "" };
+    const created = { ...createdTask, _tagsText: "", _subcategoryText: parent?.subcategory?.name || "" };
     setTasks((prev) => [...prev, created]);
     setCollapsedParents((prev) => ({
       ...prev,
@@ -807,8 +808,8 @@ export default function BacklogPage() {
       setAddingCategory(false);
       return;
     }
-    const listRes = await getCategoriesWithSubcategories(user.id);
-    if (!listRes.error) setCategories(listRes.data || []);
+    const fresh = await loadCollaborativeBacklog(true);
+    setCategories(fresh.categories || []);
     setNewCategoryName("");
     setAddingCategory(false);
   }
@@ -847,14 +848,13 @@ export default function BacklogPage() {
       setEnrichReport(payload);
 
       if (apply) {
-        const tasksRes = await getBacklogTasks(user.id, { includeArchived: true });
-        if (!tasksRes.error) {
-          const refreshed = (tasksRes.data || []).map((t) => ({
-            ...t,
-            _tagsText: makeTagText(t),
-          }));
-          setTasks(refreshed);
-        }
+        const fresh = await loadCollaborativeBacklog(true);
+        const refreshed = (fresh.tasks || []).map((t) => ({
+          ...t,
+          _tagsText: t._tagsText ?? makeTagText(t),
+          _subcategoryText: (t._subcategoryText ?? t?.subcategory?.name) || "",
+        }));
+        setTasks(refreshed);
       }
     } catch (e) {
       setError(e?.message || "Failed to run enrichment.");
@@ -2876,6 +2876,8 @@ export default function BacklogPage() {
                     handleSubcategorySave={handleSubcategorySave}
                     handleTagsSave={handleTagsSave}
                     handleAddSubtask={handleAddSubtask}
+                    handleAssignTask={handleAssignTask}
+                    memberOptions={categories.find((c) => c.id === t.category_id)?._members || []}
                     tagText={t._tagsText ?? makeTagText(t)}
                   />
                 );

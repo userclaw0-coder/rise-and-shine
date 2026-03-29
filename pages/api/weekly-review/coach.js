@@ -9,6 +9,10 @@ import {
   WEEKLY_COACH_PROMPT_VERSION,
   WEEKLY_IMPROVEMENT_SCORING_VERSION,
 } from "../../../lib/weeklyImprovementContext";
+import {
+  listAccessibleCategoriesWithMeta,
+  listBacklogTasksForActor,
+} from "../../../lib/projectCollaboration";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -114,36 +118,20 @@ function buildContextExcerpt(context) {
 }
 
 async function loadTasksWithTags(userId) {
-  const [{ data: tasks, error: taskErr }, { data: categories, error: catErr }, { data: links, error: linksErr }, { data: tags, error: tagsErr }] = await Promise.all([
-    supabase
-      .from("tasks")
-      .select("id,title,status,priority,effort_hours,due_date,created_at,updated_at,parent_task_id,archived_at,category_id,subcategory_id,outcome_ids,primary_life_domain,life_domains,alignment_source")
-      .eq("user_id", userId)
-      .neq("status", "archived"),
-    supabase.from("categories").select("id,name").eq("user_id", userId),
-    supabase.from("task_tags").select("task_id, tag_id").eq("user_id", userId),
-    supabase.from("tags").select("id,name").eq("user_id", userId),
+  const [tasks, categories] = await Promise.all([
+    listBacklogTasksForActor(userId, { includeArchived: false }),
+    listAccessibleCategoriesWithMeta(userId),
   ]);
-  if (taskErr) throw taskErr;
-  if (catErr) throw catErr;
-  if (linksErr) throw linksErr;
-  if (tagsErr) throw tagsErr;
 
   const categoryMap = new Map((categories || []).map((c) => [c.id, c]));
-  const tagMap = new Map((tags || []).map((t) => [t.id, t.name]));
-  const tagsByTask = {};
-  for (const link of links || []) {
-    const name = tagMap.get(link.tag_id);
-    if (!name) continue;
-    tagsByTask[link.task_id] = tagsByTask[link.task_id] || [];
-    tagsByTask[link.task_id].push(name);
-  }
 
   return {
     tasks: (tasks || []).map((task) => ({
       ...task,
-      category: categoryMap.get(task.category_id) || null,
-      tags: tagsByTask[task.id] || [],
+      category: categoryMap.get(task.category_id) || task.category || null,
+      tags: Array.isArray(task.tags)
+        ? task.tags.map((tag) => (typeof tag === "string" ? tag : tag?.tag?.name || tag?.name || "")).filter(Boolean)
+        : [],
     })),
     categories: categories || [],
   };
@@ -153,7 +141,7 @@ async function loadCompletionEvents(userId, startDate, endExclusiveDate) {
   const { data, error } = await supabase
     .from("task_events")
     .select("id, task_id, created_at, value")
-    .eq("user_id", userId)
+    .or(`user_id.eq.${userId},actor_user_id.eq.${userId}`)
     .eq("event_type", "completed")
     .gte("created_at", `${startDate}T00:00:00.000Z`)
     .lt("created_at", `${endExclusiveDate}T00:00:00.000Z`)
@@ -186,7 +174,7 @@ export default async function handler(req, res) {
       loadTasksWithTags(userId),
       supabase.from("human_needs_weekly").select("user_id, week_start, scores, notes, created_at").eq("user_id", userId).eq("week_start", weekStart).maybeSingle(),
       supabase.from("human_needs_weekly").select("user_id, week_start, scores, notes, created_at").eq("user_id", userId).order("week_start", { ascending: false }).limit(8),
-      supabase.from("task_events").select("id, task_id, event_type, created_at, value").eq("user_id", userId).eq("event_type", "updated").gte("created_at", `${previousWeekStart}T00:00:00.000Z`).order("created_at", { ascending: false }),
+      supabase.from("task_events").select("id, task_id, event_type, created_at, value").or(`user_id.eq.${userId},actor_user_id.eq.${userId}`).eq("event_type", "updated").gte("created_at", `${previousWeekStart}T00:00:00.000Z`).order("created_at", { ascending: false }),
       supabase.from("weekly_improvement_runs").select("*").eq("user_id", userId).order("week_start", { ascending: false }).limit(8),
       loadCompletionEvents(userId, week.start, nextDateStr(week.end, 1)),
       loadCompletionEvents(userId, previousWeek.start, nextDateStr(previousWeek.end, 1)),

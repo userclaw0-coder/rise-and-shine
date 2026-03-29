@@ -12,7 +12,6 @@ import { supabase } from "../lib/supabaseClient";
 import {
   getTemplates,
   getTemplateItems,
-  getBacklogTasks,
   getTaskEventsForTasksOnDate,
   getLastCompletedEventsForUser,
   getCompletedEventsInRange,
@@ -24,8 +23,11 @@ import {
   setTaskTags,
   getUserProfile,
   getLiftingSetsWithSession,
-  updateTask,
 } from "../lib/db";
+import {
+  loadCollaborativeBacklog,
+  toggleCollaborativeTaskCompletion,
+} from "../lib/collaborationClient";
 import {
   MODES,
   buildRationale,
@@ -375,17 +377,13 @@ export default function TodayPage() {
           setCompletionMap({});
         }
 
-        const [tasksRes, lastRes, planRes] = await Promise.all([
-          getBacklogTasks(user.id),
+        const [tasksData, lastRes, planRes] = await Promise.all([
+          loadCollaborativeBacklog(false),
           getLastCompletedEventsForUser(user.id),
           getOrCreateDailyPlan(user.id, todayStr, mode),
         ]);
 
-        if (tasksRes.error) {
-          setError(tasksRes.error.message);
-        } else {
-          setBacklogTasks(tasksRes.data || []);
-        }
+        setBacklogTasks(tasksData.tasks || []);
 
         if (!lastRes.error) {
           setLastCompletedMap(buildLastCompletedMap(lastRes.data || []));
@@ -394,7 +392,7 @@ export default function TodayPage() {
         const plan = planRes.error ? null : planRes.data;
         setDailyPlan(plan);
 
-        const tasks = tasksRes.data || [];
+        const tasks = tasksData.tasks || [];
         const catIdToName = {};
         tasks.forEach((t) => {
           if (t.category_id) {
@@ -633,14 +631,15 @@ export default function TodayPage() {
     const value = isWorkoutSynthetic ? { date: taskId.replace("workout-", "") } : null;
     if (!effectiveTaskId) return;
 
-    const res = await logTaskEvent(user.id, effectiveTaskId, nextType, value);
-    if (res.error) return;
-
-    // Keep task status aligned with completion behavior for queue tasks.
-    if (!isWorkoutSynthetic) {
-      await updateTask(user.id, effectiveTaskId, {
-        status: nextType === "completed" ? "archived" : "todo",
-      });
+    if (isWorkoutSynthetic) {
+      const res = await logTaskEvent(user.id, effectiveTaskId, nextType, value);
+      if (res.error) return;
+    } else {
+      try {
+        await toggleCollaborativeTaskCompletion(effectiveTaskId, nextType === "completed");
+      } catch {
+        return;
+      }
     }
 
     const optimisticMap = { ...completionMap, [taskId]: !isCompleted };
