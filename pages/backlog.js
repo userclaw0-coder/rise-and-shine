@@ -508,28 +508,55 @@ export default function BacklogPage() {
 
   const PRIORITY_ORDER = { Critical: 4, High: 3, Medium: 2, Low: 1 };
   const STATUS_ORDER = { todo: 0, doing: 1, done: 2, archived: 3 };
-  const sortedRootTasks = useMemo(() => {
-    const list = [...filteredRootTasks];
+  function compareTasksForSort(a, b) {
     const key = comfortableSortKey;
     const dir = comfortableSortDir === "asc" ? 1 : -1;
-    const catName = (t) => (t.category?.name ?? categories.find((c) => c.id === t.category_id)?.name ?? "");
-    list.sort((a, b) => {
-      let cmp = 0;
-      if (key === "score") cmp = (a._aiPriorityScore ?? 0) - (b._aiPriorityScore ?? 0);
-      else if (key === "title") cmp = String(a.title || "").localeCompare(String(b.title || ""), undefined, { sensitivity: "base" });
-      else if (key === "category") cmp = catName(a).localeCompare(catName(b), undefined, { sensitivity: "base" });
-      else if (key === "priority") cmp = (PRIORITY_ORDER[a.priority] ?? 0) - (PRIORITY_ORDER[b.priority] ?? 0);
-      else if (key === "due") {
-        const da = a.due_date ? new Date(a.due_date).getTime() : 0;
-        const db = b.due_date ? new Date(b.due_date).getTime() : 0;
-        cmp = da - db;
-      } else if (key === "status") cmp = (STATUS_ORDER[a.status] ?? 0) - (STATUS_ORDER[b.status] ?? 0);
-      else if (key === "outcome") cmp = String((Array.isArray(a.outcome_ids) && a.outcome_ids[0]) || "").localeCompare(String((Array.isArray(b.outcome_ids) && b.outcome_ids[0]) || ""), undefined, { sensitivity: "base" });
-      else if (key === "domain") cmp = String(a.primary_life_domain || "").localeCompare(String(b.primary_life_domain || ""), undefined, { sensitivity: "base" });
-      else if (key === "tags") cmp = (a._tagsText || "").localeCompare(b._tagsText || "", undefined, { sensitivity: "base" });
-      if (cmp !== 0) return dir * cmp;
-      return String(a.title || "").localeCompare(String(b.title || ""), undefined, { sensitivity: "base" });
+    const catName = (t) =>
+      t.category?.name ?? categories.find((c) => c.id === t.category_id)?.name ?? "";
+
+    let cmp = 0;
+    if (key === "score") cmp = (a._aiPriorityScore ?? 0) - (b._aiPriorityScore ?? 0);
+    else if (key === "title") {
+      cmp = String(a.title || "").localeCompare(String(b.title || ""), undefined, {
+        sensitivity: "base",
+      });
+    } else if (key === "category") {
+      cmp = catName(a).localeCompare(catName(b), undefined, { sensitivity: "base" });
+    } else if (key === "priority") {
+      cmp = (PRIORITY_ORDER[a.priority] ?? 0) - (PRIORITY_ORDER[b.priority] ?? 0);
+    } else if (key === "due") {
+      const da = a.due_date ? new Date(a.due_date).getTime() : 0;
+      const db = b.due_date ? new Date(b.due_date).getTime() : 0;
+      cmp = da - db;
+    } else if (key === "status") {
+      cmp = (STATUS_ORDER[a.status] ?? 0) - (STATUS_ORDER[b.status] ?? 0);
+    } else if (key === "outcome") {
+      cmp = String((Array.isArray(a.outcome_ids) && a.outcome_ids[0]) || "").localeCompare(
+        String((Array.isArray(b.outcome_ids) && b.outcome_ids[0]) || ""),
+        undefined,
+        { sensitivity: "base" }
+      );
+    } else if (key === "domain") {
+      cmp = String(a.primary_life_domain || "").localeCompare(
+        String(b.primary_life_domain || ""),
+        undefined,
+        { sensitivity: "base" }
+      );
+    } else if (key === "tags") {
+      cmp = (a._tagsText || "").localeCompare(b._tagsText || "", undefined, {
+        sensitivity: "base",
+      });
+    }
+
+    if (cmp !== 0) return dir * cmp;
+    return String(a.title || "").localeCompare(String(b.title || ""), undefined, {
+      sensitivity: "base",
     });
+  }
+
+  const sortedRootTasks = useMemo(() => {
+    const list = [...filteredRootTasks];
+    list.sort(compareTasksForSort);
     return list;
   }, [filteredRootTasks, comfortableSortKey, comfortableSortDir, categories]);
 
@@ -542,35 +569,12 @@ export default function BacklogPage() {
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [compactListMode, setCompactListMode] = useState(false);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return undefined;
-    try {
-      const key = window.localStorage.getItem("backlog-comfortable-sort-key");
-      const dir = window.localStorage.getItem("backlog-comfortable-sort-dir");
-      if (
-        key &&
-        ["score", "title", "category", "priority", "due", "status", "tags", "outcome", "domain"].includes(
-          key
-        )
-      )
-        setComfortableSortKey(key);
-      if (dir === "asc" || dir === "desc") setComfortableSortDir(dir);
-    } catch (_) {}
-    return undefined;
-  }, []);
   function handleComfortableSort(key) {
     const same = comfortableSortKey === key;
     const nextDir = same ? (comfortableSortDir === "asc" ? "desc" : "asc") : (["title", "category", "outcome", "domain", "tags"].includes(key) ? "asc" : "desc");
     setComfortableSortKey(key);
     setComfortableSortDir(nextDir);
   }
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      window.localStorage.setItem("backlog-comfortable-sort-key", comfortableSortKey);
-      window.localStorage.setItem("backlog-comfortable-sort-dir", comfortableSortDir);
-    } catch (_) {}
-  }, [comfortableSortKey, comfortableSortDir]);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -862,6 +866,7 @@ export default function BacklogPage() {
 
   function renderTaskRow(task, depth) {
     const children = childrenByParent.get(task.id) || [];
+    const sortedChildren = [...children].sort(compareTasksForSort);
     const hasChildren = children.length > 0;
     const isCollapsed = collapsedParents[task.id];
     const isDone = task.status === "done";
@@ -1067,7 +1072,7 @@ export default function BacklogPage() {
               style={{ width: "100%", minWidth: 0, fontSize: 11, padding: "3px 6px", borderRadius: 4, border: "1px solid #e5e7eb", background: "#fff" }}
             />
           </div>
-          {!isCollapsed && children.map((child) => renderTaskRow(child, depth + 1))}
+          {!isCollapsed && sortedChildren.map((child) => renderTaskRow(child, depth + 1))}
         </div>
       );
     }
@@ -1400,7 +1405,7 @@ export default function BacklogPage() {
             </div>
           </div>
           {!isCollapsed &&
-            children.map((child) => renderTaskRow(child, depth + 1))}
+            sortedChildren.map((child) => renderTaskRow(child, depth + 1))}
         </div>
       );
     }
@@ -1758,7 +1763,7 @@ export default function BacklogPage() {
         </div>
 
         {!isCollapsed &&
-          children.map((child) => renderTaskRow(child, depth + 1))}
+          sortedChildren.map((child) => renderTaskRow(child, depth + 1))}
       </div>
     );
   }
@@ -2742,27 +2747,25 @@ export default function BacklogPage() {
           </datalist>
         ))}
 
-        {!compactListMode && (
-          <div className="rs-backlog-sort-bar">
-            <span className="rs-backlog-sort-bar__label">Sort initiatives</span>
-            {BACKLOG_SORT_KEYS.map(({ key, label }) => {
-              const active = comfortableSortKey === key;
-              const arrow = active ? (comfortableSortDir === "asc" ? " ↑" : " ↓") : "";
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  className={`rs-backlog-sort-btn${active ? " rs-backlog-sort-btn--active" : ""}`}
-                  onClick={() => handleComfortableSort(key)}
-                  title={`Sort by ${label} (${active && comfortableSortDir === "asc" ? "desc" : "asc"})`}
-                >
-                  {label}
-                  {arrow}
-                </button>
-              );
-            })}
-          </div>
-        )}
+        <div className="rs-backlog-sort-bar">
+          <span className="rs-backlog-sort-bar__label">Sort tasks</span>
+          {BACKLOG_SORT_KEYS.map(({ key, label }) => {
+            const active = comfortableSortKey === key;
+            const arrow = active ? (comfortableSortDir === "asc" ? " ↑" : " ↓") : "";
+            return (
+              <button
+                key={key}
+                type="button"
+                className={`rs-backlog-sort-btn${active ? " rs-backlog-sort-btn--active" : ""}`}
+                onClick={() => handleComfortableSort(key)}
+                title={`Sort by ${label} (${active && comfortableSortDir === "asc" ? "desc" : "asc"})`}
+              >
+                {label}
+                {arrow}
+              </button>
+            );
+          })}
+        </div>
 
         {compactListMode ? (
           <div
@@ -2849,11 +2852,7 @@ export default function BacklogPage() {
               </p>
             ) : (
               sortedRootTasks.map((t) => {
-                const kids = (childrenByParent.get(t.id) || []).slice().sort((a, b) =>
-                  String(a.title || "").localeCompare(String(b.title || ""), undefined, {
-                    sensitivity: "base",
-                  })
-                );
+                const kids = (childrenByParent.get(t.id) || []).slice().sort(compareTasksForSort);
                 return (
                   <BacklogStrategicTaskCard
                     key={t.id}
