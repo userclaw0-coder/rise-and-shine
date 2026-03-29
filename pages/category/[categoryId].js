@@ -102,6 +102,9 @@ export default function StrategicProjectWorkspacePage() {
 
   const [sortKey, setSortKey] = useState("score");
   const [sortDir, setSortDir] = useState("desc");
+  const [taskStatusScope, setTaskStatusScope] = useState("open");
+  const [taskViewMode, setTaskViewMode] = useState("full");
+  const [expandedSimpleCards, setExpandedSimpleCards] = useState({});
 
   const [orderIds, setOrderIds] = useState([]);
 
@@ -180,6 +183,28 @@ export default function StrategicProjectWorkspacePage() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const storedScope = window.localStorage.getItem("project-workspace-task-scope");
+      const storedView = window.localStorage.getItem("project-workspace-task-view");
+      if (storedScope === "open" || storedScope === "all") setTaskStatusScope(storedScope);
+      if (storedView === "full" || storedView === "simplified") setTaskViewMode(storedView);
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem("project-workspace-task-scope", taskStatusScope);
+      window.localStorage.setItem("project-workspace-task-view", taskViewMode);
+    } catch {
+      // ignore storage errors
+    }
+  }, [taskStatusScope, taskViewMode]);
+
   const childrenByParent = useMemo(() => {
     const m = new Map();
     for (const t of tasks || []) {
@@ -196,10 +221,13 @@ export default function StrategicProjectWorkspacePage() {
     [tasks]
   );
 
-  const pendingRootCount = useMemo(
-    () => rootTasks.filter((t) => t.status !== "done" && t.status !== "archived").length,
-    [rootTasks]
-  );
+  function taskMatchesScope(task) {
+    if (!task) return false;
+    if (taskStatusScope === "open") {
+      return task.status === "todo" || task.status === "doing";
+    }
+    return true;
+  }
 
   const scoredRoots = useMemo(() => {
     return rootTasks.map((t) => {
@@ -211,10 +239,15 @@ export default function StrategicProjectWorkspacePage() {
     });
   }, [rootTasks, profile?.preferences?.default_mode]);
 
+  const visibleScoredRoots = useMemo(
+    () => scoredRoots.filter(taskMatchesScope),
+    [scoredRoots, taskStatusScope]
+  );
+
   const sortedRootTasks = useMemo(() => {
-    const byId = new Map(scoredRoots.map((t) => [t.id, t]));
+    const byId = new Map(visibleScoredRoots.map((t) => [t.id, t]));
     const inOrder = (orderIds || []).map((id) => byId.get(id)).filter(Boolean);
-    const remaining = scoredRoots.filter((t) => !(orderIds || []).includes(t.id));
+    const remaining = visibleScoredRoots.filter((t) => !(orderIds || []).includes(t.id));
     let list = [...inOrder, ...remaining];
 
     const dir = sortDir === "asc" ? 1 : -1;
@@ -233,7 +266,7 @@ export default function StrategicProjectWorkspacePage() {
       return cmp * dir;
     });
     return sorted;
-  }, [scoredRoots, orderIds, sortKey, sortDir]);
+  }, [visibleScoredRoots, orderIds, sortKey, sortDir]);
 
   const alignmentPct = useMemo(
     () => computeProjectAlignment(rootTasks, mantra, narrative),
@@ -589,6 +622,13 @@ export default function StrategicProjectWorkspacePage() {
     e.target.value = "";
   }
 
+  function toggleSimpleCard(taskId) {
+    setExpandedSimpleCards((prev) => ({
+      ...prev,
+      [taskId]: !prev[taskId],
+    }));
+  }
+
   function openCreateTaskModal() {
     setTaskTitle("");
     setTaskPriority("Medium");
@@ -771,11 +811,34 @@ export default function StrategicProjectWorkspacePage() {
                     Action items
                   </h2>
                   <p className="rs-section-card__subtitle" style={{ margin: 0 }}>
-                    {pendingRootCount} pending root initiative{pendingRootCount === 1 ? "" : "s"} · strategic priority
-                    from scoring model
+                    {sortedRootTasks.length} visible root initiative{sortedRootTasks.length === 1 ? "" : "s"} ·{" "}
+                    {taskStatusScope === "open" ? "showing todo + doing by default" : "showing all statuses"} ·
+                    strategic priority from scoring model
                   </p>
                 </div>
                 <div className="rs-project-sort">
+                  <label>
+                    Show
+                    <select
+                      className="rs-select-compact"
+                      value={taskStatusScope}
+                      onChange={(e) => setTaskStatusScope(e.target.value)}
+                    >
+                      <option value="open">Todo + Doing</option>
+                      <option value="all">All tasks</option>
+                    </select>
+                  </label>
+                  <label>
+                    View
+                    <select
+                      className="rs-select-compact"
+                      value={taskViewMode}
+                      onChange={(e) => setTaskViewMode(e.target.value)}
+                    >
+                      <option value="full">Full</option>
+                      <option value="simplified">Simplified</option>
+                    </select>
+                  </label>
                   <label>
                     Sort
                     <select
@@ -808,14 +871,19 @@ export default function StrategicProjectWorkspacePage() {
 
               <div className="rs-backlog-card-list" style={{ marginTop: 16 }}>
                 {sortedRootTasks.length === 0 ? (
-                  <p className="rs-section-card__subtitle">No initiatives in this project yet.</p>
+                  <p className="rs-section-card__subtitle">
+                    {taskStatusScope === "open"
+                      ? "No todo or doing initiatives match this project right now."
+                      : "No initiatives in this project yet."}
+                  </p>
                 ) : (
                   sortedRootTasks.map((t) => {
-                    const kids = (childrenByParent.get(t.id) || []).slice().sort((a, b) =>
-                      String(a.title || "").localeCompare(String(b.title || ""), undefined, {
+                    const kids = (childrenByParent.get(t.id) || [])
+                      .filter(taskMatchesScope)
+                      .slice()
+                      .sort((a, b) => String(a.title || "").localeCompare(String(b.title || ""), undefined, {
                         sensitivity: "base",
-                      })
-                    );
+                      }));
                     return (
                       <div key={t.id}>
                         <BacklogStrategicTaskCard
@@ -840,6 +908,9 @@ export default function StrategicProjectWorkspacePage() {
                           handleTagsSave={handleTagsSave}
                           handleAddSubtask={handleAddSubtask}
                           tagText={t._tagsText ?? makeTagText(t)}
+                          simplified={taskViewMode === "simplified"}
+                          expanded={!!expandedSimpleCards[t.id]}
+                          onToggleExpanded={() => toggleSimpleCard(t.id)}
                         />
                       </div>
                     );

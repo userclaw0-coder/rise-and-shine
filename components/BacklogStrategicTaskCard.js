@@ -78,6 +78,9 @@ export default function BacklogStrategicTaskCard({
   handleTagsSave,
   handleAddSubtask,
   tagText,
+  simplified = false,
+  expanded = true,
+  onToggleExpanded,
 }) {
   const isDone = task.status === "done";
   const cat =
@@ -121,6 +124,32 @@ export default function BacklogStrategicTaskCard({
       />
     </label>
   );
+
+  if (simplified && !expanded) {
+    return (
+      <article className="rs-backlog-card rs-backlog-card--simple">
+        <div className="rs-backlog-card__simple-main">
+          <div className="rs-backlog-card__simple-title">{task.title || "Untitled task"}</div>
+          <button
+            type="button"
+            className="rs-btn-ghost rs-backlog-card__simple-expand"
+            onClick={onToggleExpanded}
+          >
+            Expand
+          </button>
+        </div>
+        <div
+          className={`rs-backlog-card__score rs-backlog-card__score--simple${scoreHot ? " rs-backlog-card__score--hot" : ""}`}
+          title="AI strategic priority score"
+        >
+          <div className="rs-backlog-card__score-value">
+            {scoreNum != null ? scoreNum.toFixed(1) : "—"}
+          </div>
+          <div className="rs-backlog-card__score-label">STRATEGIC SCORE</div>
+        </div>
+      </article>
+    );
+  }
 
   return (
     <article className="rs-backlog-card">
@@ -390,6 +419,15 @@ export default function BacklogStrategicTaskCard({
       </div>
 
       <div className="rs-backlog-card__actions">
+        {simplified && onToggleExpanded && (
+          <button
+            type="button"
+            className="rs-btn-ghost rs-backlog-card__action-btn"
+            onClick={onToggleExpanded}
+          >
+            Collapse
+          </button>
+        )}
         <button type="button" className="rs-btn-ghost rs-backlog-card__action-btn" onClick={() => handleAddSubtask(task)}>
           + Subtask
         </button>
