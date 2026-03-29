@@ -255,6 +255,19 @@ export default function TodayPage() {
     return ids;
   }, [items]);
 
+  useEffect(() => {
+    const dailyHitsSet = new Set(dailyTemplateTaskIds);
+    const doneCount = dailyTemplateTaskIds.filter((taskId) => !!completionMap[taskId]).length;
+    setDailyHitsCompleted(doneCount);
+
+    const otherDoneCount = Object.keys(completionMap || {}).filter((taskId) => {
+      if (!taskId || String(taskId).startsWith("workout-")) return false;
+      if (dailyHitsSet.has(taskId)) return false;
+      return !!completionMap[taskId];
+    }).length;
+    setOtherCompletedToday(otherDoneCount);
+  }, [dailyTemplateTaskIds, completionMap]);
+
   // Load user preferences (category weights, quick-win minutes, default mode)
   useEffect(() => {
     if (!user) return;
@@ -627,11 +640,12 @@ export default function TodayPage() {
     const isCompleted = !!completionMap[taskId];
     const nextType = isCompleted ? "uncompleted" : "completed";
     const isWorkoutSynthetic = typeof taskId === "string" && taskId.startsWith("workout-");
+    const isDailyHitTask = dailyTemplateTaskIds.includes(taskId);
     const effectiveTaskId = isWorkoutSynthetic ? workoutTaskId : taskId;
     const value = isWorkoutSynthetic ? { date: taskId.replace("workout-", "") } : null;
     if (!effectiveTaskId) return;
 
-    if (isWorkoutSynthetic) {
+    if (isWorkoutSynthetic || isDailyHitTask) {
       const res = await logTaskEvent(user.id, effectiveTaskId, nextType, value);
       if (res.error) return;
     } else {
@@ -663,15 +677,11 @@ export default function TodayPage() {
     const todayRes = await getCompletedEventsInRange(user.id, todayStr, todayStr);
     if (!todayRes.error && todayRes.data) {
       const events = todayRes.data || [];
-      const dailyHitsSet = new Set(dailyTemplateTaskIds);
-      const dailyHitsDone = new Set(
-        events.filter((e) => dailyHitsSet.has(e.task_id)).map((e) => e.task_id)
-      ).size;
-      const otherDone = new Set(
-        events.filter((e) => !dailyHitsSet.has(e.task_id)).map((e) => e.task_id)
-      ).size;
-      setDailyHitsCompleted(dailyHitsDone);
-      setOtherCompletedToday(otherDone);
+      const merged = { ...optimisticMap };
+      events.forEach((event) => {
+        merged[event.task_id] = true;
+      });
+      setCompletionMap((prev) => ({ ...prev, ...merged }));
     }
   }
 
