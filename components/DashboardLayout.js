@@ -37,9 +37,10 @@ const NAV_LINKS = [
   { href: "/ideas", label: "Ideas", icon: "lightbulb" },
   { href: "/health", label: "Occam Workout", icon: "fitness_center" },
   { href: "/vision", label: "Vision", icon: "visibility" },
-  { href: "/account", label: "Account", icon: "person" },
   { href: "/weekly-review", label: "Weekly review", icon: "calendar_month" },
 ];
+
+const ACCOUNT_LINK = { href: "/account", label: "Account", icon: "person" };
 
 export default function DashboardLayout({ children }) {
   const router = useRouter();
@@ -123,72 +124,75 @@ export default function DashboardLayout({ children }) {
           </p>
         </div>
 
-        <nav className="rs-sidebar-nav" aria-label="Sections">
-          {NAV_LINKS.map((link) => {
-            const isActive =
-              link.href === "/projects"
-                ? path === "/projects" || path.startsWith("/category/")
-                : path === link.href;
-            return (
-              <button
-                key={link.href}
-                type="button"
-                className={`rs-sidebar-link${isActive ? " rs-sidebar-link--active" : ""}`}
-                onClick={() => {
-                  router.push(link.href);
-                  closeSidebar();
-                }}
-              >
-                <span className="material-symbols-outlined" aria-hidden>
-                  {link.icon}
-                </span>
-                <span>{link.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-
-        <button
-          type="button"
-          className="rs-sidebar-cta"
-          onClick={() => {
-            router.push("/today");
-            closeSidebar();
-          }}
-        >
-          Start on Today
-        </button>
-
-        <div className="rs-sidebar-footer">
-          {user && (
-            <>
-              <div
-                style={{
-                  fontSize: 12,
-                  color: "var(--rs-on-surface-variant)",
-                  padding: "0 4px 6px",
-                  wordBreak: "break-word",
-                }}
-              >
-                {user.email}
-              </div>
-              {localDateTime && (
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: "var(--rs-on-surface-variant)",
-                    opacity: 0.9,
-                    padding: "0 4px 8px",
+        <div className="rs-sidebar-stack">
+          <nav className="rs-sidebar-nav" aria-label="Sections">
+            {NAV_LINKS.map((link) => {
+              const isActive =
+                link.href === "/projects"
+                  ? path === "/projects" || path.startsWith("/category/")
+                  : path === link.href;
+              return (
+                <button
+                  key={link.href}
+                  type="button"
+                  className={`rs-sidebar-link${isActive ? " rs-sidebar-link--active" : ""}`}
+                  onClick={() => {
+                    router.push(link.href);
+                    closeSidebar();
                   }}
                 >
+                  <span className="material-symbols-outlined" aria-hidden>
+                    {link.icon}
+                  </span>
+                  <span>{link.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+
+          <div className="rs-sidebar-footer">
+            <button
+              type="button"
+              className="rs-sidebar-cta"
+              onClick={() => {
+                router.push("/today");
+                closeSidebar();
+              }}
+            >
+              Start on Today
+            </button>
+            <div className="rs-sidebar-status">
+              <div className="rs-sidebar-status__label">
+                {user ? "Signed in" : "Signed out"}
+              </div>
+              {user?.email && (
+                <div className="rs-sidebar-status__email">
+                  {user.email}
+                </div>
+              )}
+              {localDateTime && (
+                <div className="rs-sidebar-status__time">
                   {localDateTime}
                 </div>
               )}
-            </>
-          )}
-          <button type="button" className="rs-sidebar-signout" onClick={handleSignOut}>
-            Sign out
-          </button>
+            </div>
+            <button
+              type="button"
+              className={`rs-sidebar-link${path === ACCOUNT_LINK.href ? " rs-sidebar-link--active" : ""}`}
+              onClick={() => {
+                router.push(ACCOUNT_LINK.href);
+                closeSidebar();
+              }}
+            >
+              <span className="material-symbols-outlined" aria-hidden>
+                {ACCOUNT_LINK.icon}
+              </span>
+              <span>{ACCOUNT_LINK.label}</span>
+            </button>
+            <button type="button" className="rs-sidebar-signout" onClick={handleSignOut}>
+              Sign out
+            </button>
+          </div>
         </div>
       </aside>
 

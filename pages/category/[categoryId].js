@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 
@@ -37,6 +37,34 @@ import {
 } from "../../lib/externalProjectImport";
 
 const LIFE_DOMAIN_KEYS = ["business", "finances", "health", "relationships", "lifestyle", "growth"];
+
+function AutoHeightTextarea({ value, onChange, rows = 2, className, placeholder }) {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.max(el.scrollHeight, 24 * rows)}px`;
+  }, [value, rows]);
+
+  return (
+    <textarea
+      ref={ref}
+      className={className}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      rows={rows}
+      style={{
+        width: "100%",
+        resize: "none",
+        overflow: "hidden",
+        boxSizing: "border-box",
+      }}
+    />
+  );
+}
 
 function lifeDomainLabel(key, profile) {
   if (!key) return "";
@@ -760,11 +788,11 @@ export default function StrategicProjectWorkspacePage() {
               <p className="rs-page-eyebrow" style={{ marginBottom: 8 }}>
                 Active mantra
               </p>
-              <input
-                type="text"
+              <AutoHeightTextarea
                 className="rs-input rs-project-mantra-input"
                 value={mantra}
-                onChange={(e) => setMantra(e.target.value)}
+                onChange={setMantra}
+                rows={2}
                 placeholder="One line that captures why this project exists (e.g. dignified transition for parents)."
               />
               <label className="rs-project-narrative-label">
