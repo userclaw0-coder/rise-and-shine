@@ -11,12 +11,14 @@ import {
   getWeeklyReview,
   getDailyTemplateTaskIds,
   getBacklogTasks,
+  getCategoriesWithSubcategories,
   getUserProfile,
   listWeeklyImprovementRuns,
 } from "../lib/db";
 import {
   BarChart,
   Bar,
+  LabelList,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -30,7 +32,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { countRefinementActions } from "../lib/planner-refinement-events";
-import { getOutcomeLabel } from "../lib/scoring";
+import { computeProjectAlignment, mergeProjectWorkspace } from "../lib/projectWorkspace";
 import { buildImprovementLabReport } from "../lib/weeklyImprovementContext";
 
 function dateStr(d) {
@@ -81,6 +83,12 @@ function formatWeekLabel(weekStartStr) {
   if (!weekStartStr) return "";
   const d = new Date(weekStartStr + "T12:00:00Z");
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function shortenChartLabel(value, max = 26) {
+  const text = String(value || "");
+  if (text.length <= max) return text;
+  return `${text.slice(0, max - 1)}...`;
 }
 
 function MeasuredChart({ height = 220, renderChart }) {
@@ -154,7 +162,6 @@ export default function AnalyticsPage() {
   });
   const [puttingOff, setPuttingOff] = useState({ overdue: 0, highPriorityOpen: 0 });
   const [completionsByCategory, setCompletionsByCategory] = useState([]);
-  const [outcomeProgress, setOutcomeProgress] = useState([]);
   const [completionsByOutcome, setCompletionsByOutcome] = useState([]);
   const [completionsByLifeDomain, setCompletionsByLifeDomain] = useState([]);
   const [improvementLabReport, setImprovementLabReport] = useState(null);
@@ -170,7 +177,7 @@ export default function AnalyticsPage() {
       const start30 = addDays(today, -30);
 
       try {
-        const [range7, range30, last, weeks, plannerRefinements, dailyTaskIdsRes, backlogOpen, backlogAll, profileRes, improvementRunsRes] = await Promise.all([
+        const [range7, range30, last, weeks, plannerRefinements, dailyTaskIdsRes, backlogOpen, backlogAll, categoriesRes, profileRes, improvementRunsRes] = await Promise.all([
           getCompletedEventsInRange(user.id, dateStrLocal(start7), dateStrLocal(today)),
           getCompletedEventsInRange(user.id, dateStrLocal(start30), dateStrLocal(today)),
           getLastCompletedEventsWithTasks(user.id, 50),
@@ -179,6 +186,7 @@ export default function AnalyticsPage() {
           getDailyTemplateTaskIds(user.id),
           getBacklogTasks(user.id, { includeArchived: false }),
           getBacklogTasks(user.id, { includeArchived: true }),
+          getCategoriesWithSubcategories(user.id),
           getUserProfile(user.id),
           listWeeklyImprovementRuns(user.id, 12),
         ]);
@@ -321,27 +329,55 @@ export default function AnalyticsPage() {
         setPuttingOff({ overdue, highPriorityOpen });
 
         const categoryCounts = {};
+        const projectAlignmentByCategory = {};
+        const prefs = profileRes?.data?.profile?.preferences || {};
+        const allCategories = (categoriesRes?.data || []).map((category) => ({
+          id: category.id,
+          name: (category?.name || "Uncategorized").trim() || "Uncategorized",
+        }));
+        allCategories.forEach((category) => {
+          const catTasks = (allTasks || []).filter((task) => String(task.category_id) === String(category.id));
+          const rootTasks = catTasks.filter((task) => !task.parent_task_id);
+          const workspace = mergeProjectWorkspace(prefs, category.id);
+          projectAlignmentByCategory[category.name] = computeProjectAlignment(
+            rootTasks,
+            workspace.mantra || "",
+            workspace.narrative || ""
+          );
+        });
         (range30.data || []).forEach((ev) => {
           const task = tasksById.get(ev.task_id);
           const name = (task?.category?.name ?? "Uncategorized").trim() || "Uncategorized";
+          if (name.toLowerCase() === "daily repeat") return;
           categoryCounts[name] = (categoryCounts[name] || 0) + 1;
         });
-        const byCategory = Object.entries(categoryCounts)
-          .map(([name, count]) => ({ name, count }))
+        const byCategory = allCategories
+          .filter((category) => category.name.toLowerCase() !== "daily repeat")
+          .map((category) => ({
+            name: category.name,
+            count: categoryCounts[category.name] || 0,
+            alignment: projectAlignmentByCategory[category.name] ?? null,
+            alignment_label:
+              typeof projectAlignmentByCategory[category.name] === "number"
+                ? `${projectAlignmentByCategory[category.name]}`
+                : "",
+          }))
+          .concat(
+            Object.entries(categoryCounts)
+              .filter(([name]) => !allCategories.some((category) => category.name === name))
+              .map(([name, count]) => ({
+            name,
+            count,
+            alignment: projectAlignmentByCategory[name] ?? null,
+            alignment_label:
+              typeof projectAlignmentByCategory[name] === "number"
+                ? `${projectAlignmentByCategory[name]}`
+                : "",
+              }))
+          )
           .sort((a, b) => b.count - a.count)
-          .slice(0, 10);
+          .filter((row) => row.name.toLowerCase() !== "daily repeat");
         setCompletionsByCategory(byCategory);
-
-        const byOutcome = new Map();
-        Object.entries(categoryCounts).forEach(([catName, count]) => {
-          const label = getOutcomeLabel(catName) || catName;
-          byOutcome.set(label, (byOutcome.get(label) || 0) + count);
-        });
-        setOutcomeProgress(
-          Array.from(byOutcome.entries())
-            .map(([name, count]) => ({ name, count }))
-            .sort((a, b) => b.count - a.count)
-        );
 
         const profile = profileRes?.data?.profile || {};
         const desiredOutcomes = profile.desired_outcomes || [];
@@ -362,10 +398,19 @@ export default function AnalyticsPage() {
             byDomain[domain] = (byDomain[domain] || 0) + 1;
           }
         });
+        const knownOutcomeRows = desiredOutcomes.map((outcome) => ({
+          id: outcome.id || outcome.title,
+          name: outcome.title || outcome.id || "Outcome",
+          count: byOutcomeId[outcome.id || outcome.title] || 0,
+        }));
+        const unknownOutcomeRows = Object.entries(byOutcomeId)
+          .filter(([id]) => !knownOutcomeRows.some((row) => String(row.id) === String(id)))
+          .map(([id, count]) => ({ id, name: outcomesById.get(id) || id, count }));
         setCompletionsByOutcome(
-          Object.entries(byOutcomeId)
-            .map(([id, count]) => ({ name: outcomesById.get(id) || id, count }))
-            .sort((a, b) => b.count - a.count)
+          [...knownOutcomeRows, ...unknownOutcomeRows].sort((a, b) => {
+            if (b.count !== a.count) return b.count - a.count;
+            return String(a.name).localeCompare(String(b.name));
+          })
         );
         setCompletionsByLifeDomain(
           Object.entries(byDomain)
@@ -392,6 +437,10 @@ export default function AnalyticsPage() {
       </DashboardLayout>
     );
   }
+
+  const categoryChartHeight = Math.max(280, completionsByCategory.length * 46);
+  const outcomeChartHeight = Math.max(280, completionsByOutcome.length * 42);
+  const lifeDomainChartHeight = Math.max(260, completionsByLifeDomain.length * 40);
 
   return (
     <DashboardLayout>
@@ -680,57 +729,52 @@ export default function AnalyticsPage() {
             Progress by category (30 days)
           </h2>
           <p className="rs-section-card__subtitle" style={{ marginBottom: 8, fontSize: 12 }}>
-            Where your completions landed — helps see balance toward goals.
+            Where your completions landed. Numbers at the right edge show each project's alignment score.
           </p>
           {completionsByCategory.length > 0 ? (
             <MeasuredChart
-              height={260}
+              height={categoryChartHeight}
               renderChart={({ width, height }) => (
-                <BarChart width={width} height={height} data={completionsByCategory} layout="vertical" margin={{ left: 60 }}>
+                <BarChart
+                  width={width}
+                  height={height}
+                  data={completionsByCategory}
+                  layout="vertical"
+                  margin={{ top: 8, right: 42, bottom: 8, left: 120 }}
+                >
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} />
-                  <YAxis type="category" dataKey="name" width={56} tick={{ fontSize: 11 }} />
-                  <Tooltip />
-                  <Bar dataKey="count" fill="#555d1e" radius={[0, 4, 4, 0]} name="Completions" />
+                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    width={112}
+                    interval={0}
+                    tick={{ fontSize: 12 }}
+                    tickFormatter={(value) => shortenChartLabel(value, 22)}
+                  />
+                  <Tooltip
+                    formatter={(value, name, payload) => {
+                      if (name === "Alignment") return [`${value}`, name];
+                      return [value, name];
+                    }}
+                    labelFormatter={(label) => label}
+                  />
+                  <Bar dataKey="count" fill="#555d1e" radius={[0, 4, 4, 0]} name="Completions">
+                    <LabelList
+                      dataKey="alignment_label"
+                      position="right"
+                      offset={10}
+                      fill="#555d1e"
+                      fontSize={12}
+                      formatter={(value) => (value ? `${value}` : "")}
+                    />
+                  </Bar>
                 </BarChart>
               )}
             />
           ) : (
             <p style={{ fontSize: 13, color: "var(--rs-on-surface-variant)", margin: 0 }}>
               Complete tasks to see breakdown by category.
-            </p>
-          )}
-        </section>
-
-        <section
-          className="rs-section-card"
-          style={{
-            background: "linear-gradient(180deg, rgba(85, 93, 30, 0.06) 0%, var(--rs-surface-raised) 100%)",
-            borderColor: "rgba(85, 93, 30, 0.15)",
-          }}
-        >
-          <h2 className="rs-section-card__title" style={{ fontSize: "1rem", marginBottom: 4, color: "var(--rs-olive)" }}>
-            Progress toward outcomes (30 days)
-          </h2>
-          <p className="rs-section-card__subtitle" style={{ marginBottom: 8, fontSize: 12, color: "var(--rs-on-surface-variant)" }}>
-            Completions that advance each outcome area — your goals in motion.
-          </p>
-          {outcomeProgress.length > 0 ? (
-            <MeasuredChart
-              height={260}
-              renderChart={({ width, height }) => (
-                <BarChart width={width} height={height} data={outcomeProgress} layout="vertical" margin={{ left: 80 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(186, 177, 159, 0.25)" />
-                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} />
-                  <YAxis type="category" dataKey="name" width={76} tick={{ fontSize: 11 }} />
-                  <Tooltip />
-                  <Bar dataKey="count" fill="#6b5500" radius={[0, 4, 4, 0]} name="Completions" />
-                </BarChart>
-              )}
-            />
-          ) : (
-            <p style={{ fontSize: 13, color: "var(--rs-on-surface-variant)", margin: 0 }}>
-              Complete tasks in categorized areas to see progress toward your outcomes.
             </p>
           )}
         </section>
@@ -753,12 +797,25 @@ export default function AnalyticsPage() {
           </p>
           {completionsByOutcome.length > 0 ? (
             <MeasuredChart
-              height={260}
+              height={outcomeChartHeight}
               renderChart={({ width, height }) => (
-                <BarChart width={width} height={height} data={completionsByOutcome} layout="vertical" margin={{ left: 80 }}>
+                <BarChart
+                  width={width}
+                  height={height}
+                  data={completionsByOutcome}
+                  layout="vertical"
+                  margin={{ top: 8, right: 20, bottom: 8, left: 140 }}
+                >
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(186, 177, 159, 0.25)" />
-                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} />
-                  <YAxis type="category" dataKey="name" width={76} tick={{ fontSize: 11 }} />
+                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    width={132}
+                    interval={0}
+                    tick={{ fontSize: 12 }}
+                    tickFormatter={(value) => shortenChartLabel(value, 28)}
+                  />
                   <Tooltip />
                   <Bar dataKey="count" fill="#b8860b" radius={[0, 4, 4, 0]} name="Completions" />
                 </BarChart>
@@ -785,12 +842,25 @@ export default function AnalyticsPage() {
           </p>
           {completionsByLifeDomain.length > 0 ? (
             <MeasuredChart
-              height={260}
+              height={lifeDomainChartHeight}
               renderChart={({ width, height }) => (
-                <BarChart width={width} height={height} data={completionsByLifeDomain} layout="vertical" margin={{ left: 80 }}>
+                <BarChart
+                  width={width}
+                  height={height}
+                  data={completionsByLifeDomain}
+                  layout="vertical"
+                  margin={{ top: 8, right: 20, bottom: 8, left: 120 }}
+                >
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(186, 177, 159, 0.25)" />
-                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} />
-                  <YAxis type="category" dataKey="name" width={76} tick={{ fontSize: 11 }} />
+                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    width={112}
+                    interval={0}
+                    tick={{ fontSize: 12 }}
+                    tickFormatter={(value) => shortenChartLabel(value, 24)}
+                  />
                   <Tooltip />
                   <Bar dataKey="count" fill="#7f5c53" radius={[0, 4, 4, 0]} name="Completions" />
                 </BarChart>
