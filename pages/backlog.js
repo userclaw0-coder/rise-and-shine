@@ -24,6 +24,10 @@ import {
 } from "../lib/collaborationClient";
 import { isMissingPrioritizationMetadata } from "../lib/task-enrichment";
 import { supabase } from "../lib/supabaseClient";
+import {
+  HUMAN_NEED_STRATEGY_KEYS as LIFE_DOMAIN_KEYS,
+  getHumanNeedStrategyLabel,
+} from "../lib/humanNeedStrategies";
 import { computeTaskScore } from "../lib/scoring";
 import {
   isTaskNeedingAlignment,
@@ -64,12 +68,8 @@ const BACKLOG_SORT_KEYS = [
   { key: "tags", label: "Tags" },
 ];
 
-const LIFE_DOMAIN_KEYS = ["business", "finances", "health", "relationships", "lifestyle", "growth"];
 function lifeDomainLabel(key, profile) {
-  if (!key) return "";
-  const ld = profile?.life_domains;
-  const text = ld && ld[key] ? String(ld[key]).slice(0, 24) : key;
-  return text || key;
+  return getHumanNeedStrategyLabel(key);
 }
 
 function normalize(str) {
@@ -1374,7 +1374,7 @@ export default function BacklogPage() {
                     minWidth: 0,
                   }}
                 >
-                  <option value="">Life domain…</option>
+                  <option value="">Human need strategy…</option>
                   {LIFE_DOMAIN_KEYS.map((key) => (
                     <option key={key} value={key}>
                       {lifeDomainLabel(key, profile) || key}
@@ -1722,7 +1722,7 @@ export default function BacklogPage() {
                 updateTaskLocal(task.id, { primary_life_domain: v });
                 handleInlineSave(task.id, { outcome_ids: task.outcome_ids, primary_life_domain: v || null, alignment_source: "user" });
               }}
-              title="Life domain"
+              title="Human need strategy"
               style={{
                 width: "100%",
                 fontSize: 12,

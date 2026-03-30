@@ -419,7 +419,7 @@ export default function BacklogStrategicTaskCard({
             </select>
           </label>
           <label className="rs-backlog-card__field">
-            <span className="rs-backlog-card__field-label">Life domain</span>
+            <span className="rs-backlog-card__field-label">Human need strategy</span>
             <select
               value={task.primary_life_domain || ""}
               disabled={!permissions.can_edit}

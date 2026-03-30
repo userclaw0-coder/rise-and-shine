@@ -38,8 +38,10 @@ import {
   flattenExternalProjectImportActions,
   groupExternalProjectImportActions,
 } from "../../lib/externalProjectImport";
-
-const LIFE_DOMAIN_KEYS = ["business", "finances", "health", "relationships", "lifestyle", "growth"];
+import {
+  HUMAN_NEED_STRATEGY_KEYS as LIFE_DOMAIN_KEYS,
+  getHumanNeedStrategyLabel,
+} from "../../lib/humanNeedStrategies";
 
 function AutoHeightTextarea({ value, onChange, rows = 2, className, placeholder, disabled = false }) {
   const ref = useRef(null);
@@ -71,10 +73,7 @@ function AutoHeightTextarea({ value, onChange, rows = 2, className, placeholder,
 }
 
 function lifeDomainLabel(key, profile) {
-  if (!key) return "";
-  const ld = profile?.life_domains;
-  const text = ld && ld[key] ? String(ld[key]).slice(0, 24) : key;
-  return text || key;
+  return getHumanNeedStrategyLabel(key);
 }
 
 function extractTagNames(task) {

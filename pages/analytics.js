@@ -32,6 +32,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { countRefinementActions } from "../lib/planner-refinement-events";
+import { getHumanNeedStrategyLabel } from "../lib/humanNeedStrategies";
 import { computeProjectAlignment, mergeProjectWorkspace } from "../lib/projectWorkspace";
 import { buildImprovementLabReport } from "../lib/weeklyImprovementContext";
 
@@ -382,7 +383,6 @@ export default function AnalyticsPage() {
         const profile = profileRes?.data?.profile || {};
         const desiredOutcomes = profile.desired_outcomes || [];
         const outcomesById = new Map(desiredOutcomes.map((o) => [o.id || o.title, o.title || o.id]));
-        const lifeDomains = profile.life_domains || {};
         const byOutcomeId = {};
         const byDomain = {};
         (range30.data || []).forEach((ev) => {
@@ -415,7 +415,7 @@ export default function AnalyticsPage() {
         setCompletionsByLifeDomain(
           Object.entries(byDomain)
             .map(([key, count]) => ({
-              name: (lifeDomains[key] && String(lifeDomains[key]).slice(0, 30)) || key,
+              name: getHumanNeedStrategyLabel(key),
               count,
             }))
             .sort((a, b) => b.count - a.count)
@@ -835,10 +835,10 @@ export default function AnalyticsPage() {
           }}
         >
           <h2 className="rs-section-card__title" style={{ fontSize: "1rem", marginBottom: 4 }}>
-            Completions by life domain (30 days)
+            Completions by human need strategy (30 days)
           </h2>
           <p className="rs-section-card__subtitle" style={{ marginBottom: 8, fontSize: 12 }}>
-            Effort by life domain — set Domain on Action Items or via AI Enrich.
+            Effort by human need strategy — set it on Action Items or via AI Enrich.
           </p>
           {completionsByLifeDomain.length > 0 ? (
             <MeasuredChart
@@ -868,7 +868,7 @@ export default function AnalyticsPage() {
             />
           ) : (
             <p style={{ fontSize: 13, color: "var(--rs-on-surface-variant)", margin: 0 }}>
-              Set Life domain on Action Items or run Apply enrichment to see effort by domain.
+              Set a human need strategy on Action Items or run Apply enrichment to see effort here.
             </p>
           )}
         </section>

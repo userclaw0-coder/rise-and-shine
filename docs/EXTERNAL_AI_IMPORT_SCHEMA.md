@@ -130,7 +130,7 @@ Example:
 
 ## `alignment_actions`
 
-Use this when the task should stay the same structurally but needs stronger linkage to outcomes or life domains.
+Use this when the task should stay the same structurally but needs stronger linkage to outcomes or human need strategies.
 
 ```json
 [

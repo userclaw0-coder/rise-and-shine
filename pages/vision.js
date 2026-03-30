@@ -8,6 +8,10 @@ import {
   listUserProfileVersions,
   getUserProfileVersion,
 } from "../lib/db";
+import {
+  HUMAN_NEED_STRATEGY_CONFIG,
+  getHumanNeedStrategiesState,
+} from "../lib/humanNeedStrategies";
 import { supabase } from "../lib/supabaseClient";
 
 const MANIFESTATION_TAGS = [
@@ -65,14 +69,7 @@ export default function VisionPage() {
   const fileInputRef = useRef(null);
 
   const [identityAttributes, setIdentityAttributes] = useState("");
-  const [lifeDomains, setLifeDomains] = useState({
-    business: "",
-    finances: "",
-    health: "",
-    relationships: "",
-    lifestyle: "",
-    growth: "",
-  });
+  const [lifeDomains, setLifeDomains] = useState(getHumanNeedStrategiesState());
   const [desiredOutcomes, setDesiredOutcomes] = useState("");
   const [leverageFocus, setLeverageFocus] = useState("");
   const [quarterFocus, setQuarterFocus] = useState("");
@@ -126,14 +123,7 @@ export default function VisionPage() {
       if (!res.error && res.data && res.data.profile) {
         const p = res.data.profile;
         setIdentityAttributes((p.identity_attributes || []).join(", "));
-        setLifeDomains({
-          business: p.life_domains?.business || "",
-          finances: p.life_domains?.finances || "",
-          health: p.life_domains?.health || "",
-          relationships: p.life_domains?.relationships || "",
-          lifestyle: p.life_domains?.lifestyle || "",
-          growth: p.life_domains?.growth || "",
-        });
+        setLifeDomains(getHumanNeedStrategiesState(p));
         setDesiredOutcomes(
           (p.desired_outcomes || [])
             .map((o) => o.title || "")
@@ -204,14 +194,7 @@ export default function VisionPage() {
   ]);
 
   const DOMAIN_ROWS = useMemo(
-    () => [
-      { key: "business", label: "Business", icon: "lightbulb" },
-      { key: "finances", label: "Finances", icon: "payments" },
-      { key: "health", label: "Health", icon: "fitness_center" },
-      { key: "relationships", label: "Relationships", icon: "favorite" },
-      { key: "lifestyle", label: "Lifestyle", icon: "weekend" },
-      { key: "growth", label: "Growth", icon: "auto_awesome" },
-    ],
+    () => HUMAN_NEED_STRATEGY_CONFIG,
     []
   );
 
@@ -821,9 +804,9 @@ export default function VisionPage() {
 
           <section className="rs-vision-section">
             <header className="rs-vision-section__head">
-              <h2 className="rs-vision-section__title">Life domains</h2>
+              <h2 className="rs-vision-section__title">Human Need Strategies</h2>
               <p className="rs-vision-section__sub">
-                Truth statements for each arena — what your subconscious should rehearse daily.
+                Keep the current text and images here as your working draft for each human need strategy.
               </p>
             </header>
             <div className={`rs-vision-domain-grid${isMobile ? " rs-vision-domain-grid--1" : ""}`}>
@@ -1145,14 +1128,7 @@ export default function VisionPage() {
                           if (!res.error && res.data && res.data.profile) {
                             const p = res.data.profile;
                             setIdentityAttributes((p.identity_attributes || []).join(", "));
-                            setLifeDomains({
-                              business: p.life_domains?.business || "",
-                              finances: p.life_domains?.finances || "",
-                              health: p.life_domains?.health || "",
-                              relationships: p.life_domains?.relationships || "",
-                              lifestyle: p.life_domains?.lifestyle || "",
-                              growth: p.life_domains?.growth || "",
-                            });
+                            setLifeDomains(getHumanNeedStrategiesState(p));
                             setDesiredOutcomes(
                               (p.desired_outcomes || []).map((o) => o.title || "").filter(Boolean).join("\n")
                             );

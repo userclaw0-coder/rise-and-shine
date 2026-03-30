@@ -10,8 +10,10 @@ import {
   ENRICHMENT_TAGS,
   normalizeTagList,
 } from "../../../lib/task-enrichment";
-
-const LIFE_DOMAIN_KEYS = ["business", "finances", "health", "relationships", "lifestyle", "growth"];
+import {
+  HUMAN_NEED_STRATEGY_KEYS as LIFE_DOMAIN_KEYS,
+  HUMAN_NEED_STRATEGY_LABELS,
+} from "../../../lib/humanNeedStrategies";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -140,6 +142,7 @@ async function fetchAiEnrichments(tasks, visionContext = {}) {
     allowed_tags: ENRICHMENT_TAGS,
     desired_outcomes: desiredOutcomes.map((o) => ({ id: o.id || o.title, title: o.title || o.id })),
     life_domain_keys: LIFE_DOMAIN_KEYS,
+    human_need_strategy_labels: HUMAN_NEED_STRATEGY_LABELS,
     tasks: tasks.map((t) => ({
       task_id: t.id,
       title: t.title,
@@ -165,7 +168,7 @@ async function fetchAiEnrichments(tasks, visionContext = {}) {
     },
   };
 
-  const instructions = `You enrich task prioritization metadata and optionally link tasks to the user's desired outcomes and life domains. Return ONLY valid JSON matching the schema. Keep rationale under 180 chars. For outcome_ids use only ids from desired_outcomes. For primary_life_domain use one of the life_domain_keys. Be conservative and practical; leave outcome_ids/primary_life_domain empty if unclear.`;
+  const instructions = `You enrich task prioritization metadata and optionally link tasks to the user's desired outcomes and human need strategies. The stored keys remain the values in life_domain_keys, and human_need_strategy_labels maps those legacy keys to the visible labels shown in the app. Return ONLY valid JSON matching the schema. Keep rationale under 180 chars. For outcome_ids use only ids from desired_outcomes. For primary_life_domain use one of the life_domain_keys. Be conservative and practical; leave outcome_ids/primary_life_domain empty if unclear.`;
 
   try {
     const response = await withTimeout(

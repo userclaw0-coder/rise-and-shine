@@ -28,7 +28,7 @@ Goals:
 - sharpen the source of truth narrative
 - propose better next moves
 - split oversized work into subtasks
-- improve alignment to desired outcomes and life domains
+- improve alignment to desired outcomes and human need strategies
 - suggest vision-level updates only when they clearly improve this project
 
 Rules:
