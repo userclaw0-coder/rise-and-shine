@@ -64,6 +64,7 @@ export default function BacklogStrategicTaskCard({
   task,
   sortedChildren,
   categories,
+  memberOptions = [],
   profile,
   lifeDomainLabel,
   LIFE_DOMAIN_KEYS,
@@ -77,7 +78,11 @@ export default function BacklogStrategicTaskCard({
   handleSubcategorySave,
   handleTagsSave,
   handleAddSubtask,
+  handleAssignTask,
   tagText,
+  simplified = false,
+  expanded = true,
+  onToggleExpanded,
 }) {
   const isDone = task.status === "done";
   const cat =
@@ -90,6 +95,13 @@ export default function BacklogStrategicTaskCard({
   const scoreNum = Number.isFinite(score) ? score : null;
   const scoreHot = scoreNum != null && scoreNum >= 65;
   const tagNames = extractTagNames(task);
+  const permissions = task._permissions || {
+    can_edit: true,
+    can_change_status: true,
+    can_assign: true,
+  };
+  const currentAssigneeId = task.assignees?.[0]?.user_id || "";
+  const currentAssigneeLabel = task.assignees?.[0]?.email || "";
   const visibleTags = expandedTagPills ? tagNames : tagNames.slice(0, TAG_PILL_PREVIEW);
   /** Tags not in the collapsed preview — same as how many re-hide on collapse (not “currently hidden” when expanded). */
   const tagsBeyondPreview = Math.max(0, tagNames.length - TAG_PILL_PREVIEW);
@@ -117,10 +129,42 @@ export default function BacklogStrategicTaskCard({
         type="checkbox"
         checked={isDone}
         onChange={(e) => handleStatusChange(task, e.target.checked ? "done" : "todo")}
+        disabled={!permissions.can_change_status}
         style={{ width: 20, height: 20, accentColor: "var(--rs-accent-gold)", cursor: "pointer" }}
       />
     </label>
   );
+
+  if (simplified && !expanded) {
+    return (
+      <article className="rs-backlog-card rs-backlog-card--simple">
+        <div className="rs-backlog-card__simple-main">
+          <div className="rs-backlog-card__simple-title">{task.title || "Untitled task"}</div>
+          {(currentAssigneeLabel || task._permissions?.role) && (
+            <div className="rs-backlog-card__simple-assignee">
+              {currentAssigneeLabel ? `Assigned: ${currentAssigneeLabel}` : `Role: ${task._permissions?.role || "viewer"}`}
+            </div>
+          )}
+          <button
+            type="button"
+            className="rs-btn-ghost rs-backlog-card__simple-expand"
+            onClick={onToggleExpanded}
+          >
+            Expand
+          </button>
+        </div>
+        <div
+          className={`rs-backlog-card__score rs-backlog-card__score--simple${scoreHot ? " rs-backlog-card__score--hot" : ""}`}
+          title="AI strategic priority score"
+        >
+          <div className="rs-backlog-card__score-value">
+            {scoreNum != null ? scoreNum.toFixed(1) : "—"}
+          </div>
+          <div className="rs-backlog-card__score-label">STRATEGIC SCORE</div>
+        </div>
+      </article>
+    );
+  }
 
   return (
     <article className="rs-backlog-card">
@@ -158,6 +202,7 @@ export default function BacklogStrategicTaskCard({
             value={task.title || ""}
             onChange={(e) => updateTaskLocal(task.id, { title: e.target.value })}
             onBlur={(e) => handleInlineSave(task.id, { title: e.target.value })}
+            disabled={!permissions.can_edit}
             className="rs-backlog-card__title-input"
             style={{
               textDecoration: isDone ? "line-through" : "none",
@@ -191,6 +236,7 @@ export default function BacklogStrategicTaskCard({
                     onChange={(e) =>
                       handleStatusChange(child, e.target.checked ? "done" : "todo")
                     }
+                    disabled={!(child._permissions?.can_change_status ?? permissions.can_change_status)}
                     style={{
                       width: 18,
                       height: 18,
@@ -206,6 +252,7 @@ export default function BacklogStrategicTaskCard({
                     value={child.title || ""}
                     onChange={(e) => updateTaskLocal(child.id, { title: e.target.value })}
                     onBlur={(e) => handleInlineSave(child.id, { title: e.target.value })}
+                    disabled={!(child._permissions?.can_edit ?? permissions.can_edit)}
                     className="rs-backlog-card__subtask-title"
                     style={{
                       ...inputBase,
@@ -218,6 +265,7 @@ export default function BacklogStrategicTaskCard({
                   <select
                     value={child.status || "todo"}
                     onChange={(e) => handleStatusChange(child, e.target.value)}
+                    disabled={!(child._permissions?.can_change_status ?? permissions.can_change_status)}
                     style={{ ...inputBase, width: "auto", minWidth: 100, fontSize: 12 }}
                   >
                     <option value="todo">Todo</option>
@@ -249,6 +297,7 @@ export default function BacklogStrategicTaskCard({
             <span className="rs-backlog-card__field-label">Category</span>
             <select
               value={task.category_id || ""}
+              disabled={!permissions.can_edit}
               onChange={(e) => {
                 const cid = e.target.value || null;
                 updateTaskLocal(task.id, {
@@ -275,6 +324,7 @@ export default function BacklogStrategicTaskCard({
               type="text"
               value={task._subcategoryText ?? task?.subcategory?.name ?? ""}
               placeholder="Optional"
+              disabled={!permissions.can_edit}
               onChange={(e) => updateTaskLocal(task.id, { _subcategoryText: e.target.value })}
               onBlur={() => handleSubcategorySave(task)}
               list={task.category_id ? `subcategory-options-${task.category_id}` : undefined}
@@ -285,6 +335,7 @@ export default function BacklogStrategicTaskCard({
             <span className="rs-backlog-card__field-label">Priority</span>
             <select
               value={task.priority || "Medium"}
+              disabled={!permissions.can_edit}
               onChange={(e) => handleInlineSave(task.id, { priority: e.target.value })}
               style={{ ...inputBase, width: "100%" }}
             >
@@ -301,6 +352,7 @@ export default function BacklogStrategicTaskCard({
               step="0.25"
               value={task.effort_hours ?? ""}
               placeholder="—"
+              disabled={!permissions.can_edit}
               onChange={(e) =>
                 updateTaskLocal(task.id, {
                   effort_hours: e.target.value === "" ? null : Number(e.target.value),
@@ -319,6 +371,7 @@ export default function BacklogStrategicTaskCard({
             <input
               type="date"
               value={task.due_date || ""}
+              disabled={!permissions.can_edit}
               onChange={(e) => {
                 updateTaskLocal(task.id, { due_date: e.target.value || null });
                 handleInlineSave(task.id, { due_date: e.target.value || null });
@@ -330,6 +383,7 @@ export default function BacklogStrategicTaskCard({
             <span className="rs-backlog-card__field-label">Status</span>
             <select
               value={task.status || "todo"}
+              disabled={!permissions.can_change_status}
               onChange={(e) => handleStatusChange(task, e.target.value)}
               style={{ ...inputBase, width: "100%" }}
             >
@@ -343,6 +397,7 @@ export default function BacklogStrategicTaskCard({
             <span className="rs-backlog-card__field-label">Outcome</span>
             <select
               value={(Array.isArray(task.outcome_ids) && task.outcome_ids[0]) || ""}
+              disabled={!permissions.can_edit}
               onChange={(e) => {
                 const v = e.target.value || null;
                 const outcome_ids = v ? [v] : [];
@@ -364,9 +419,10 @@ export default function BacklogStrategicTaskCard({
             </select>
           </label>
           <label className="rs-backlog-card__field">
-            <span className="rs-backlog-card__field-label">Life domain</span>
+            <span className="rs-backlog-card__field-label">Human need strategy</span>
             <select
               value={task.primary_life_domain || ""}
+              disabled={!permissions.can_edit}
               onChange={(e) => {
                 const v = e.target.value || null;
                 updateTaskLocal(task.id, { primary_life_domain: v });
@@ -386,11 +442,41 @@ export default function BacklogStrategicTaskCard({
               ))}
             </select>
           </label>
+          <label className="rs-backlog-card__field">
+            <span className="rs-backlog-card__field-label">Assignee</span>
+            <select
+              value={currentAssigneeId}
+              disabled={!permissions.can_assign}
+              onChange={(e) => handleAssignTask?.(task, e.target.value || null)}
+              style={{ ...inputBase, width: "100%" }}
+            >
+              <option value="">Unassigned</option>
+              {memberOptions.map((member) => (
+                <option key={member.user_id} value={member.user_id}>
+                  {member.email || member.user_id}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
       </div>
 
       <div className="rs-backlog-card__actions">
-        <button type="button" className="rs-btn-ghost rs-backlog-card__action-btn" onClick={() => handleAddSubtask(task)}>
+        {simplified && onToggleExpanded && (
+          <button
+            type="button"
+            className="rs-btn-ghost rs-backlog-card__action-btn"
+            onClick={onToggleExpanded}
+          >
+            Collapse
+          </button>
+        )}
+        <button
+          type="button"
+          className="rs-btn-ghost rs-backlog-card__action-btn"
+          onClick={() => handleAddSubtask(task)}
+          disabled={!permissions.can_edit}
+        >
           + Subtask
         </button>
         {task.status === "archived" ? (
@@ -398,6 +484,7 @@ export default function BacklogStrategicTaskCard({
             type="button"
             className="rs-btn-ghost rs-backlog-card__action-btn"
             onClick={() => handleStatusChange(task, "todo")}
+            disabled={!permissions.can_change_status}
           >
             Restore
           </button>
@@ -406,6 +493,7 @@ export default function BacklogStrategicTaskCard({
             type="button"
             className="rs-backlog-card__archive-btn"
             onClick={() => handleStatusChange(task, "archived")}
+            disabled={!permissions.can_change_status}
           >
             Archive
           </button>
@@ -447,6 +535,7 @@ export default function BacklogStrategicTaskCard({
         <input
           type="text"
           value={tagText}
+          disabled={!permissions.can_edit}
           onChange={(e) => updateTaskLocal(task.id, { _tagsText: e.target.value })}
           onBlur={(e) => handleTagsSave(task.id, e.target.value)}
           placeholder="Tags (comma separated)"

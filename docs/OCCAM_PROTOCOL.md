@@ -34,7 +34,7 @@ Target **7+** on bench; squat toward **7+** with strict form (adjust if you pref
 
 - **Bench goal:** working weight vs **1×** latest logged body weight (bench / incline / decline patterns in `lib/occam.js`).
 - **Squat-side goal:** **2×** body weight vs best **squat** logged.
-- **Measurements:** `user_profile.profile.preferences.occam_measurements` (chest, waist, hips, shoulders, neck + `measured_at`).
+- **Measurements:** `user_profile.profile.preferences.occam_measurements` stores the latest snapshot, and `user_profile.profile.preferences.occam_measurement_history` stores the over-time chart history (chest, waist, hips, shoulders, neck, left_bicep, left_quad, left_calf + `measured_at`).
 - **Progression hints:** `suggestOccamWeight` in `lib/occamSchedule.js` — add load when reps exceed target, repeat when at the edge, per Occam-style rules.
 
 ## UI

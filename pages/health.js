@@ -87,7 +87,21 @@ const MEASURE_DEFAULTS = {
   hips_in: "",
   shoulders_in: "",
   neck_in: "",
+  left_bicep_in: "",
+  left_quad_in: "",
+  left_calf_in: "",
 };
+
+const MEASURE_FIELDS = [
+  ["chest_in", "Chest"],
+  ["waist_in", "Waist"],
+  ["hips_in", "Hips"],
+  ["shoulders_in", "Shoulders"],
+  ["neck_in", "Neck"],
+  ["left_bicep_in", "Left bicep"],
+  ["left_quad_in", "Left quad"],
+  ["left_calf_in", "Left calf"],
+];
 
 const CHART_COLORS = [
   "#6b5500",
@@ -170,6 +184,7 @@ export default function HealthPage() {
   const [newSetNumber, setNewSetNumber] = useState("");
 
   const [measurements, setMeasurements] = useState(MEASURE_DEFAULTS);
+  const [measurementHistory, setMeasurementHistory] = useState([]);
   const [measureDate, setMeasureDate] = useState(todayStr());
   const [savingMeasures, setSavingMeasures] = useState(false);
 
@@ -257,13 +272,26 @@ export default function HealthPage() {
       if (!profileRes.error && profileRes.data?.profile) {
         const prof = profileRes.data.profile;
         const om = prof.preferences?.occam_measurements || {};
+        const savedHistory = Array.isArray(prof.preferences?.occam_measurement_history)
+          ? prof.preferences.occam_measurement_history
+          : [];
         setMeasurements({
           chest_in: om.chest_in != null ? String(om.chest_in) : "",
           waist_in: om.waist_in != null ? String(om.waist_in) : "",
           hips_in: om.hips_in != null ? String(om.hips_in) : "",
           shoulders_in: om.shoulders_in != null ? String(om.shoulders_in) : "",
           neck_in: om.neck_in != null ? String(om.neck_in) : "",
+          left_bicep_in: om.left_bicep_in != null ? String(om.left_bicep_in) : "",
+          left_quad_in: om.left_quad_in != null ? String(om.left_quad_in) : "",
+          left_calf_in: om.left_calf_in != null ? String(om.left_calf_in) : "",
         });
+        setMeasurementHistory(
+          savedHistory.length > 0
+            ? savedHistory
+            : om.measured_at
+              ? [{ ...om }]
+              : []
+        );
         if (om.measured_at) setMeasureDate(String(om.measured_at).slice(0, 10));
 
         let prefs = prof.preferences || {};
@@ -343,21 +371,39 @@ export default function HealthPage() {
     try {
       const res = await getUserProfile(user.id);
       const profile = res?.data?.profile || {};
+      const measurementSnapshot = {
+        chest_in: measurements.chest_in === "" ? null : parseFloat(measurements.chest_in),
+        waist_in: measurements.waist_in === "" ? null : parseFloat(measurements.waist_in),
+        hips_in: measurements.hips_in === "" ? null : parseFloat(measurements.hips_in),
+        shoulders_in: measurements.shoulders_in === "" ? null : parseFloat(measurements.shoulders_in),
+        neck_in: measurements.neck_in === "" ? null : parseFloat(measurements.neck_in),
+        left_bicep_in:
+          measurements.left_bicep_in === "" ? null : parseFloat(measurements.left_bicep_in),
+        left_quad_in:
+          measurements.left_quad_in === "" ? null : parseFloat(measurements.left_quad_in),
+        left_calf_in:
+          measurements.left_calf_in === "" ? null : parseFloat(measurements.left_calf_in),
+        measured_at: measureDate,
+      };
+      const prevHistory = Array.isArray(profile.preferences?.occam_measurement_history)
+        ? profile.preferences.occam_measurement_history
+        : [];
+      const nextHistory = [
+        ...prevHistory.filter((row) => String(row?.measured_at || "").slice(0, 10) !== measureDate),
+        measurementSnapshot,
+      ]
+        .sort((a, b) => new Date(a.measured_at) - new Date(b.measured_at))
+        .slice(-180);
       const prefs = {
         ...(profile.preferences || {}),
-        occam_measurements: {
-          chest_in: measurements.chest_in === "" ? null : parseFloat(measurements.chest_in),
-          waist_in: measurements.waist_in === "" ? null : parseFloat(measurements.waist_in),
-          hips_in: measurements.hips_in === "" ? null : parseFloat(measurements.hips_in),
-          shoulders_in: measurements.shoulders_in === "" ? null : parseFloat(measurements.shoulders_in),
-          neck_in: measurements.neck_in === "" ? null : parseFloat(measurements.neck_in),
-          measured_at: measureDate,
-        },
+        occam_measurements: measurementSnapshot,
+        occam_measurement_history: nextHistory,
       };
       const up = await upsertUserProfile(user.id, { ...profile, preferences: prefs });
       if (up.error) setError(up.error.message);
       else {
         setUserPreferences(prefs);
+        setMeasurementHistory(nextHistory);
         flashCelebrate({
           kind: "measures",
           title: "Measurements saved",
@@ -548,6 +594,22 @@ export default function HealthPage() {
       .sort();
     return { data, exerciseNames };
   }, [setsWithSession]);
+
+  const morphologyChartData = useMemo(() => {
+    return [...(measurementHistory || [])]
+      .filter((row) => row?.measured_at)
+      .sort((a, b) => new Date(a.measured_at) - new Date(b.measured_at))
+      .map((row) => {
+        const entry = {
+          date: String(row.measured_at).slice(0, 10),
+        };
+        MEASURE_FIELDS.forEach(([key]) => {
+          const value = row[key];
+          entry[key] = value == null || value === "" ? null : Number(value);
+        });
+        return entry;
+      });
+  }, [measurementHistory]);
 
   const occamExerciseOptions = useMemo(() => {
     const set = new Set();
@@ -862,13 +924,7 @@ export default function HealthPage() {
                   </span>
                 </div>
                 <div className="rs-occam-morph-grid">
-                  {[
-                    ["chest_in", "Chest"],
-                    ["waist_in", "Waist"],
-                    ["hips_in", "Hips"],
-                    ["shoulders_in", "Shoulders"],
-                    ["neck_in", "Neck"],
-                  ].map(([key, label]) => (
+                  {MEASURE_FIELDS.map(([key, label]) => (
                     <label key={key} className="rs-occam-morph-field">
                       <span>{label}</span>
                       <input
@@ -898,6 +954,31 @@ export default function HealthPage() {
                     {savingMeasures ? "Saving…" : "Update measurements"}
                   </button>
                 </div>
+                {morphologyChartData.length > 0 && (
+                  <div style={{ height: 240, marginTop: 16 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={morphologyChartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(186, 177, 159, 0.25)" />
+                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#655e4f" }} />
+                        <YAxis domain={["auto", "auto"]} tick={{ fontSize: 11, fill: "#655e4f" }} />
+                        <Tooltip />
+                        <Legend />
+                        {MEASURE_FIELDS.map(([key, label], i) => (
+                          <Line
+                            key={key}
+                            type="monotone"
+                            dataKey={key}
+                            name={`${label} (in)`}
+                            stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                            strokeWidth={2}
+                            dot={{ r: 2 }}
+                            connectNulls
+                          />
+                        ))}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
               </div>
 
               <div className="rs-section-card rs-occam-aside-card rs-occam-golden">

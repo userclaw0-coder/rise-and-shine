@@ -12,7 +12,6 @@ import { supabase } from "../lib/supabaseClient";
 import {
   getTemplates,
   getTemplateItems,
-  getBacklogTasks,
   getTaskEventsForTasksOnDate,
   getLastCompletedEventsForUser,
   getCompletedEventsInRange,
@@ -24,8 +23,11 @@ import {
   setTaskTags,
   getUserProfile,
   getLiftingSetsWithSession,
-  updateTask,
 } from "../lib/db";
+import {
+  loadCollaborativeBacklog,
+  toggleCollaborativeTaskCompletion,
+} from "../lib/collaborationClient";
 import {
   MODES,
   buildRationale,
@@ -253,6 +255,19 @@ export default function TodayPage() {
     return ids;
   }, [items]);
 
+  useEffect(() => {
+    const dailyHitsSet = new Set(dailyTemplateTaskIds);
+    const doneCount = dailyTemplateTaskIds.filter((taskId) => !!completionMap[taskId]).length;
+    setDailyHitsCompleted(doneCount);
+
+    const otherDoneCount = Object.keys(completionMap || {}).filter((taskId) => {
+      if (!taskId || String(taskId).startsWith("workout-")) return false;
+      if (dailyHitsSet.has(taskId)) return false;
+      return !!completionMap[taskId];
+    }).length;
+    setOtherCompletedToday(otherDoneCount);
+  }, [dailyTemplateTaskIds, completionMap]);
+
   // Load user preferences (category weights, quick-win minutes, default mode)
   useEffect(() => {
     if (!user) return;
@@ -375,17 +390,13 @@ export default function TodayPage() {
           setCompletionMap({});
         }
 
-        const [tasksRes, lastRes, planRes] = await Promise.all([
-          getBacklogTasks(user.id),
+        const [tasksData, lastRes, planRes] = await Promise.all([
+          loadCollaborativeBacklog(false),
           getLastCompletedEventsForUser(user.id),
           getOrCreateDailyPlan(user.id, todayStr, mode),
         ]);
 
-        if (tasksRes.error) {
-          setError(tasksRes.error.message);
-        } else {
-          setBacklogTasks(tasksRes.data || []);
-        }
+        setBacklogTasks(tasksData.tasks || []);
 
         if (!lastRes.error) {
           setLastCompletedMap(buildLastCompletedMap(lastRes.data || []));
@@ -394,7 +405,7 @@ export default function TodayPage() {
         const plan = planRes.error ? null : planRes.data;
         setDailyPlan(plan);
 
-        const tasks = tasksRes.data || [];
+        const tasks = tasksData.tasks || [];
         const catIdToName = {};
         tasks.forEach((t) => {
           if (t.category_id) {
@@ -629,18 +640,20 @@ export default function TodayPage() {
     const isCompleted = !!completionMap[taskId];
     const nextType = isCompleted ? "uncompleted" : "completed";
     const isWorkoutSynthetic = typeof taskId === "string" && taskId.startsWith("workout-");
+    const isDailyHitTask = dailyTemplateTaskIds.includes(taskId);
     const effectiveTaskId = isWorkoutSynthetic ? workoutTaskId : taskId;
     const value = isWorkoutSynthetic ? { date: taskId.replace("workout-", "") } : null;
     if (!effectiveTaskId) return;
 
-    const res = await logTaskEvent(user.id, effectiveTaskId, nextType, value);
-    if (res.error) return;
-
-    // Keep task status aligned with completion behavior for queue tasks.
-    if (!isWorkoutSynthetic) {
-      await updateTask(user.id, effectiveTaskId, {
-        status: nextType === "completed" ? "archived" : "todo",
-      });
+    if (isWorkoutSynthetic || isDailyHitTask) {
+      const res = await logTaskEvent(user.id, effectiveTaskId, nextType, value);
+      if (res.error) return;
+    } else {
+      try {
+        await toggleCollaborativeTaskCompletion(effectiveTaskId, nextType === "completed");
+      } catch {
+        return;
+      }
     }
 
     const optimisticMap = { ...completionMap, [taskId]: !isCompleted };
@@ -664,15 +677,11 @@ export default function TodayPage() {
     const todayRes = await getCompletedEventsInRange(user.id, todayStr, todayStr);
     if (!todayRes.error && todayRes.data) {
       const events = todayRes.data || [];
-      const dailyHitsSet = new Set(dailyTemplateTaskIds);
-      const dailyHitsDone = new Set(
-        events.filter((e) => dailyHitsSet.has(e.task_id)).map((e) => e.task_id)
-      ).size;
-      const otherDone = new Set(
-        events.filter((e) => !dailyHitsSet.has(e.task_id)).map((e) => e.task_id)
-      ).size;
-      setDailyHitsCompleted(dailyHitsDone);
-      setOtherCompletedToday(otherDone);
+      const merged = { ...optimisticMap };
+      events.forEach((event) => {
+        merged[event.task_id] = true;
+      });
+      setCompletionMap((prev) => ({ ...prev, ...merged }));
     }
   }
 

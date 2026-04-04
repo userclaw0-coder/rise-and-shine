@@ -7,6 +7,12 @@ import {
   upsertWeeklyReview,
   createTask,
 } from "../lib/db";
+import {
+  HUMAN_NEED_STRATEGY_EXAMPLES,
+  HUMAN_NEED_STRATEGY_KEYS,
+  getHumanNeedStrategiesState,
+  getHumanNeedStrategyLabel,
+} from "../lib/humanNeedStrategies";
 
 /** Monday of current week, YYYY-MM-DD (for human_needs_weekly baseline). */
 function getCurrentWeekStart() {
@@ -33,15 +39,6 @@ const NEED_LABELS = {
   love_connection: "Love & Connection",
   growth: "Growth",
   contribution: "Contribution",
-};
-
-const LIFE_DOMAIN_EXAMPLES = {
-  business: "Grow MRR to $15k with one clear offer",
-  finances: "Build a 6-month cash buffer and automate bills",
-  health: "Lift 3x/week and sleep 7.5h average",
-  relationships: "Weekly date night + protected family evenings",
-  lifestyle: "Fewer context switches, more calm mornings",
-  growth: "Ship one learning project per month",
 };
 
 const NEED_EXAMPLES = {
@@ -73,7 +70,7 @@ const NEED_EXAMPLES = {
 
 const STEPS = [
   "Identity & vision",
-  "Life domains & outcomes",
+  "Human Need Strategies & outcomes",
   "Six needs assessment",
   "Brain dump, resources, constraints",
   "Time & energy",
@@ -90,14 +87,7 @@ export default function OnboardingPage() {
   const [stepErrors, setStepErrors] = useState([]);
 
   const [identityAttributes, setIdentityAttributes] = useState("");
-  const [lifeDomains, setLifeDomains] = useState({
-    business: "",
-    finances: "",
-    health: "",
-    relationships: "",
-    lifestyle: "",
-    growth: "",
-  });
+  const [lifeDomains, setLifeDomains] = useState(getHumanNeedStrategiesState());
   const [desiredOutcomes, setDesiredOutcomes] = useState("");
   const [humanNeedsScores, setHumanNeedsScores] = useState({
     certainty: "",
@@ -145,14 +135,7 @@ export default function OnboardingPage() {
       if (!res.error && res.data && res.data.profile) {
         const p = res.data.profile;
         setIdentityAttributes((p.identity_attributes || []).join(", "));
-        setLifeDomains({
-          business: p.life_domains?.business || "",
-          finances: p.life_domains?.finances || "",
-          health: p.life_domains?.health || "",
-          relationships: p.life_domains?.relationships || "",
-          lifestyle: p.life_domains?.lifestyle || "",
-          growth: p.life_domains?.growth || "",
-        });
+        setLifeDomains(getHumanNeedStrategiesState(p));
         setDesiredOutcomes(
           (p.desired_outcomes || [])
             .map((o) => o.title || "")
@@ -313,7 +296,7 @@ export default function OnboardingPage() {
         .map((s) => s.trim())
         .filter(Boolean).length > 0;
       if (!hasLifeDomain && !hasOutcomes) {
-        errors.push("Add at least one life domain note or one desired outcome.");
+        errors.push("Add at least one human need strategy note or one desired outcome.");
       }
     }
 
@@ -485,10 +468,10 @@ export default function OnboardingPage() {
       return (
         <>
           <h2 style={{ fontSize: 16, fontWeight: 600, margin: "0 0 8px" }}>
-            Life domains & outcomes
+            Human Need Strategies & outcomes
           </h2>
           <p style={{ fontSize: 13, color: "#6b7280", margin: "0 0 10px" }}>
-            Short vision statements for each domain, plus key outcomes you
+            Short working statements for each human need strategy, plus key outcomes you
             want in the next 12 months.
           </p>
           <div
@@ -502,7 +485,7 @@ export default function OnboardingPage() {
               marginBottom: 10,
             }}
           >
-            Keep domain notes outcome-based (where you want to be), and outcomes execution-based (what you will ship).
+            Preserve what you already have, then rename and refine each strategy over time. Outcomes stay execution-based.
           </div>
           <div
             style={{
@@ -512,14 +495,14 @@ export default function OnboardingPage() {
               marginBottom: 10,
             }}
           >
-            {Object.entries(lifeDomains).map(([key, value]) => (
+            {HUMAN_NEED_STRATEGY_KEYS.map((key) => (
               <label
                 key={key}
                 style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}
               >
-                <span style={{ textTransform: "capitalize" }}>{key}</span>
+                <span>{getHumanNeedStrategyLabel(key)}</span>
                 <textarea
-                  value={value}
+                  value={lifeDomains[key] || ""}
                   onChange={(e) =>
                     setLifeDomains((prev) => ({
                       ...prev,
@@ -527,7 +510,7 @@ export default function OnboardingPage() {
                     }))
                   }
                   rows={2}
-                  placeholder={LIFE_DOMAIN_EXAMPLES[key] || ""}
+                  placeholder={HUMAN_NEED_STRATEGY_EXAMPLES[key] || ""}
                   style={{
                     fontSize: 13,
                     padding: 6,

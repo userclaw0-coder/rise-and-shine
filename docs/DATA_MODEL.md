@@ -142,7 +142,7 @@ Core task structure:
 Notes:
 - **Archive instead of delete** to preserve analytics and audit history.
 - Tags are many-to-many in DB; represented as list in API.
-- **Outcome/domain alignment:** `outcome_ids` reference `user_profile.profile.desired_outcomes[].id` (e.g. `vision-0`). `primary_life_domain` and `life_domains` use vision life_domain keys (business, finances, health, relationships, lifestyle, growth). `alignment_source` indicates who set the mapping (`user`, `ai`, or unset). Used for analytics: distribution of completed effort by outcome and life domain.
+- **Outcome/domain alignment:** `outcome_ids` reference `user_profile.profile.desired_outcomes[].id` (e.g. `vision-0`). `primary_life_domain` and `life_domains` use the stored vision keys (business, finances, health, relationships, lifestyle, growth), which now display in the app as Human Need Strategies. `alignment_source` indicates who set the mapping (`user`, `ai`, or unset). Used for analytics: distribution of completed effort by outcome and human need strategy.
 
 ---
 

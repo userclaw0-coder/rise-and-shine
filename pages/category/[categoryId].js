@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 
@@ -9,18 +9,22 @@ import PageHeader from "../../components/PageHeader";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabaseClient";
 import {
-  createTask,
   getAllTags,
-  getBacklogTasks,
-  getCategoriesWithSubcategories,
-  listExternalAiImportRuns,
-  getUserProfile,
-  setTaskTags,
-  updateTask,
-  upsertUserProfile,
-  updateTaskStatusWithEvent,
-  ensureSubcategory,
 } from "../../lib/db";
+import {
+  addCollaborativeProjectMember,
+  assignCollaborativeTask,
+  createCollaborativeTask,
+  ensureCollaborativeSubcategory,
+  listCollaborativeProjectMembers,
+  loadCollaborativeProject,
+  removeCollaborativeProjectMember,
+  saveCollaborativeProjectWorkspace,
+  setCollaborativeTaskTags,
+  updateCollaborativeProjectMember,
+  updateCollaborativeTask,
+  updateCollaborativeTaskStatus,
+} from "../../lib/collaborationClient";
 import { computeTaskScore } from "../../lib/scoring";
 import {
   RESOURCE_KINDS,
@@ -28,21 +32,48 @@ import {
   buildProjectContextPack,
   computeProjectAlignment,
   defaultProjectWorkspace,
-  mergeProjectWorkspace,
   newResourceRow,
 } from "../../lib/projectWorkspace";
 import {
   flattenExternalProjectImportActions,
   groupExternalProjectImportActions,
 } from "../../lib/externalProjectImport";
+import {
+  HUMAN_NEED_STRATEGY_KEYS as LIFE_DOMAIN_KEYS,
+  getHumanNeedStrategyLabel,
+} from "../../lib/humanNeedStrategies";
 
-const LIFE_DOMAIN_KEYS = ["business", "finances", "health", "relationships", "lifestyle", "growth"];
+function AutoHeightTextarea({ value, onChange, rows = 2, className, placeholder, disabled = false }) {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.max(el.scrollHeight, 24 * rows)}px`;
+  }, [value, rows]);
+
+  return (
+    <textarea
+      ref={ref}
+      className={className}
+      value={value}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      rows={rows}
+      style={{
+        width: "100%",
+        resize: "none",
+        overflow: "hidden",
+        boxSizing: "border-box",
+      }}
+    />
+  );
+}
 
 function lifeDomainLabel(key, profile) {
-  if (!key) return "";
-  const ld = profile?.life_domains;
-  const text = ld && ld[key] ? String(ld[key]).slice(0, 24) : key;
-  return text || key;
+  return getHumanNeedStrategyLabel(key);
 }
 
 function extractTagNames(task) {
@@ -102,6 +133,9 @@ export default function StrategicProjectWorkspacePage() {
 
   const [sortKey, setSortKey] = useState("score");
   const [sortDir, setSortDir] = useState("desc");
+  const [taskStatusScope, setTaskStatusScope] = useState("open");
+  const [taskViewMode, setTaskViewMode] = useState("full");
+  const [expandedSimpleCards, setExpandedSimpleCards] = useState({});
 
   const [orderIds, setOrderIds] = useState([]);
 
@@ -116,26 +150,22 @@ export default function StrategicProjectWorkspacePage() {
   const [taskEffortHours, setTaskEffortHours] = useState("");
   const [taskTagsText, setTaskTagsText] = useState("");
   const [savingTask, setSavingTask] = useState(false);
+  const [members, setMembers] = useState([]);
+  const [shareEmail, setShareEmail] = useState("");
+  const [shareRole, setShareRole] = useState("viewer");
+  const [sharingMember, setSharingMember] = useState(false);
 
   const load = useCallback(async () => {
     if (!user || !categoryId) return;
     setLoading(true);
     setError("");
     try {
-      const [catsRes, tasksRes, profileRes, importRunsRes] = await Promise.all([
-        getCategoriesWithSubcategories(user.id),
-        getBacklogTasks(user.id, { includeArchived: false }),
-        getUserProfile(user.id),
-        listExternalAiImportRuns(user.id, categoryId, 6),
-      ]);
-
-      const cats = catsRes.data || [];
+      const data = await loadCollaborativeProject(categoryId);
+      const cats = data.categories || [];
       setCategories(cats);
-      const cat = cats.find((c) => String(c.id) === String(categoryId)) || null;
+      const cat = data.category || cats.find((c) => String(c.id) === String(categoryId)) || null;
       setCategory(cat);
-
-      const all = tasksRes.data || [];
-      const inCat = all.filter((t) => String(t.category_id) === String(categoryId));
+      const inCat = data.tasks || [];
       setTasks(
         inCat.map((t) => ({
           ...t,
@@ -143,32 +173,27 @@ export default function StrategicProjectWorkspacePage() {
           _subcategoryText: t?.subcategory?.name || "",
         }))
       );
-
-      const prof = profileRes?.data?.profile || null;
+      setMembers(data.members || []);
+      const prof = data.profile || null;
       setProfile(prof);
-      const prefs = prof?.preferences || {};
-      const linksMap = prefs.category_project_links || {};
-      const legacy = String(linksMap[String(categoryId)] || "");
+      const legacy = String(data.legacy_links || "");
       setProjectLinks(legacy);
-
-      const ws = mergeProjectWorkspace(prefs, categoryId, legacy);
+      const ws = {
+        ...defaultProjectWorkspace(),
+        ...(data.workspace || {}),
+      };
       setMantra(ws.mantra || "");
       setNarrative(ws.narrative || "");
       setEfficiencyTip(ws.efficiency_tip || "");
       setSuggestedMoves(ws.suggested_moves || []);
       setResources(ws.resources?.length ? ws.resources : []);
       setHealthNeeds({ ...defaultProjectWorkspace().health_needs, ...(ws.health_needs || {}) });
-
-      const orderMap = prefs.category_task_order_ids || {};
-      const serverOrder = Array.isArray(orderMap[String(categoryId)]) ? orderMap[String(categoryId)] : [];
-      setOrderIds(serverOrder.filter(Boolean));
+      setOrderIds((data.task_order_ids || []).filter(Boolean));
 
       getAllTags(user.id).then((tRes) => {
         if (!tRes.error) setTags(tRes.data || []);
       });
-      if (!importRunsRes.error) {
-        setRecentImports(importRunsRes.data || []);
-      }
+      setRecentImports(data.recent_imports || []);
     } catch (e) {
       setError(e.message || "Failed to load project.");
     } finally {
@@ -179,6 +204,28 @@ export default function StrategicProjectWorkspacePage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const storedScope = window.localStorage.getItem("project-workspace-task-scope");
+      const storedView = window.localStorage.getItem("project-workspace-task-view");
+      if (storedScope === "open" || storedScope === "all") setTaskStatusScope(storedScope);
+      if (storedView === "full" || storedView === "simplified") setTaskViewMode(storedView);
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem("project-workspace-task-scope", taskStatusScope);
+      window.localStorage.setItem("project-workspace-task-view", taskViewMode);
+    } catch {
+      // ignore storage errors
+    }
+  }, [taskStatusScope, taskViewMode]);
 
   const childrenByParent = useMemo(() => {
     const m = new Map();
@@ -196,10 +243,13 @@ export default function StrategicProjectWorkspacePage() {
     [tasks]
   );
 
-  const pendingRootCount = useMemo(
-    () => rootTasks.filter((t) => t.status !== "done" && t.status !== "archived").length,
-    [rootTasks]
-  );
+  function taskMatchesScope(task) {
+    if (!task) return false;
+    if (taskStatusScope === "open") {
+      return task.status === "todo" || task.status === "doing";
+    }
+    return true;
+  }
 
   const scoredRoots = useMemo(() => {
     return rootTasks.map((t) => {
@@ -211,10 +261,15 @@ export default function StrategicProjectWorkspacePage() {
     });
   }, [rootTasks, profile?.preferences?.default_mode]);
 
+  const visibleScoredRoots = useMemo(
+    () => scoredRoots.filter(taskMatchesScope),
+    [scoredRoots, taskStatusScope]
+  );
+
   const sortedRootTasks = useMemo(() => {
-    const byId = new Map(scoredRoots.map((t) => [t.id, t]));
+    const byId = new Map(visibleScoredRoots.map((t) => [t.id, t]));
     const inOrder = (orderIds || []).map((id) => byId.get(id)).filter(Boolean);
-    const remaining = scoredRoots.filter((t) => !(orderIds || []).includes(t.id));
+    const remaining = visibleScoredRoots.filter((t) => !(orderIds || []).includes(t.id));
     let list = [...inOrder, ...remaining];
 
     const dir = sortDir === "asc" ? 1 : -1;
@@ -233,7 +288,7 @@ export default function StrategicProjectWorkspacePage() {
       return cmp * dir;
     });
     return sorted;
-  }, [scoredRoots, orderIds, sortKey, sortDir]);
+  }, [visibleScoredRoots, orderIds, sortKey, sortDir]);
 
   const alignmentPct = useMemo(
     () => computeProjectAlignment(rootTasks, mantra, narrative),
@@ -298,27 +353,33 @@ export default function StrategicProjectWorkspacePage() {
     setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, ...patch } : t)));
   }
 
+  const canEditProject = !!category?._access?.can_edit;
+  const canManageMembers = !!category?._access?.can_manage_members;
+
   async function handleStatusChange(task, nextStatus) {
     if (!user) return;
-    const res = await updateTaskStatusWithEvent(user.id, task.id, nextStatus);
-    if (res.error) {
-      setError(res.error.message);
+    try {
+      const res = await updateCollaborativeTaskStatus(task.id, nextStatus);
+      updateTaskLocal(task.id, {
+        ...(res.task || {}),
+        status: nextStatus,
+        archived_at: nextStatus === "archived" ? new Date().toISOString() : null,
+      });
+    } catch (e) {
+      setError(e.message);
       return;
     }
-    updateTaskLocal(task.id, {
-      status: nextStatus,
-      archived_at: nextStatus === "archived" ? new Date().toISOString() : null,
-    });
   }
 
   async function handleInlineSave(taskId, patch) {
     if (!user) return;
-    const res = await updateTask(user.id, taskId, patch);
-    if (res.error) {
-      setError(res.error.message);
+    try {
+      const res = await updateCollaborativeTask(taskId, patch);
+      updateTaskLocal(taskId, res.task || patch);
+    } catch (e) {
+      setError(e.message);
       return;
     }
-    updateTaskLocal(taskId, res.data || patch);
   }
 
   async function handleSubcategorySave(task) {
@@ -334,55 +395,63 @@ export default function StrategicProjectWorkspacePage() {
       updateTaskLocal(task.id, { subcategory_id: null, subcategory: null, _subcategoryText: "" });
       return;
     }
-    const subRes = await ensureSubcategory(user.id, catId, name);
-    if (subRes.error) {
-      setError(subRes.error.message || "Failed to save subcategory.");
+    let subcategory = null;
+    try {
+      const subRes = await ensureCollaborativeSubcategory(catId, name);
+      subcategory = subRes.subcategory || null;
+    } catch (e) {
+      setError(e.message || "Failed to save subcategory.");
       return;
     }
-    if (!subRes.data?.id) return;
-    const saveRes = await updateTask(user.id, task.id, { subcategory_id: subRes.data.id });
-    if (saveRes.error) {
-      setError(saveRes.error.message || "Failed to save subcategory.");
+    if (!subcategory?.id) return;
+    try {
+      const saveRes = await updateCollaborativeTask(task.id, { subcategory_id: subcategory.id });
+      updateTaskLocal(task.id, {
+        ...(saveRes.task || {}),
+        subcategory_id: subcategory.id,
+        subcategory: { name: subcategory.name },
+        _subcategoryText: subcategory.name,
+      });
+    } catch (e) {
+      setError(e.message || "Failed to save subcategory.");
       return;
     }
-    updateTaskLocal(task.id, {
-      ...(saveRes.data || {}),
-      subcategory_id: subRes.data.id,
-      subcategory: { name: subRes.data.name },
-      _subcategoryText: subRes.data.name,
-    });
   }
 
   async function handleTagsSave(taskId, tagsText) {
     if (!user) return;
     const names = parseTagText(tagsText);
-    const res = await setTaskTags(user.id, taskId, names);
-    if (res.error) {
-      setError(res.error.message);
+    try {
+      await setCollaborativeTaskTags(taskId, names);
+      updateTaskLocal(taskId, {
+        _tagsText: tagsText,
+        tags: names.map((name) => ({ name })),
+      });
+    } catch (e) {
+      setError(e.message);
       return;
     }
-    updateTaskLocal(taskId, {
-      _tagsText: tagsText,
-      tags: names.map((name) => ({ name })),
-    });
   }
 
   async function handleAddSubtask(parent) {
     if (!user) return;
     const title = `Subtask of ${parent.title}`;
-    const res = await createTask(user.id, {
-      title,
-      status: "todo",
-      parent_task_id: parent.id,
-      category_id: parent.category_id || null,
-      subcategory_id: parent.subcategory_id || null,
-    });
-    if (res.error) {
-      setError(res.error.message);
+    let createdTask = null;
+    try {
+      const res = await createCollaborativeTask({
+        title,
+        status: "todo",
+        parent_task_id: parent.id,
+        category_id: parent.category_id || null,
+        subcategory_id: parent.subcategory_id || null,
+      });
+      createdTask = res.task || null;
+    } catch (e) {
+      setError(e.message);
       return;
     }
     const created = {
-      ...res.data,
+      ...createdTask,
       _tagsText: "",
       _subcategoryText: parent?.subcategory?.name || "",
     };
@@ -394,33 +463,67 @@ export default function StrategicProjectWorkspacePage() {
     setSavingWorkspace(true);
     setError("");
     try {
-      const res = await getUserProfile(user.id);
-      const existing = res?.data?.profile || {};
-      const prefs = { ...(existing.preferences || {}) };
-      const id = String(categoryId);
-      const prevWs = prefs.project_workspaces?.[id] || {};
-      prefs.project_workspaces = {
-        ...(prefs.project_workspaces || {}),
-        [id]: {
-          ...defaultProjectWorkspace(),
-          ...prevWs,
-          mantra: mantra.trim(),
-          narrative: narrative.trim(),
-          efficiency_tip: efficiencyTip.trim(),
-          suggested_moves: suggestedMoves.filter((s) => String(s).trim()),
-          resources: resources.filter((r) => r.url?.trim() || r.label?.trim()),
-          health_needs: { ...healthNeeds },
-        },
-      };
-      const linkMap = { ...(prefs.category_project_links || {}) };
-      linkMap[id] = String(projectLinks || "");
-      prefs.category_project_links = linkMap;
-
-      const up = await upsertUserProfile(user.id, { ...existing, preferences: prefs });
-      if (up.error) setError(up.error.message || "Failed to save.");
-      else setProfile((p) => ({ ...(p || {}), preferences: prefs }));
+      await saveCollaborativeProjectWorkspace(categoryId, {
+        mantra: mantra.trim(),
+        narrative: narrative.trim(),
+        efficiency_tip: efficiencyTip.trim(),
+        suggested_moves: suggestedMoves.filter((s) => String(s).trim()),
+        resources: resources.filter((r) => r.url?.trim() || r.label?.trim()),
+        health_needs: { ...healthNeeds },
+        legacy_links: String(projectLinks || ""),
+        task_order_ids: orderIds,
+      });
     } finally {
       setSavingWorkspace(false);
+    }
+  }
+
+  async function handleAssignTask(task, assigneeUserId) {
+    if (!user || !task?.id) return;
+    try {
+      const res = await assignCollaborativeTask(task.id, assigneeUserId);
+      updateTaskLocal(task.id, { assignees: res.assignees || [] });
+    } catch (e) {
+      setError(e.message || "Failed to assign task.");
+    }
+  }
+
+  async function handleAddMember() {
+    if (!user || !categoryId || !shareEmail.trim()) return;
+    setSharingMember(true);
+    setError("");
+    try {
+      const res = await addCollaborativeProjectMember(categoryId, shareEmail.trim(), shareRole);
+      setMembers(res.members || []);
+      setShareEmail("");
+      await load();
+    } catch (e) {
+      setError(e.message || "Failed to share project.");
+    } finally {
+      setSharingMember(false);
+    }
+  }
+
+  async function handleMemberRoleChange(memberUserId, role) {
+    if (!categoryId) return;
+    try {
+      const res = await updateCollaborativeProjectMember(categoryId, memberUserId, role);
+      setMembers(res.members || []);
+    } catch (e) {
+      setError(e.message || "Failed to update member.");
+    }
+  }
+
+  async function handleRemoveMember(memberUserId) {
+    if (!categoryId) return;
+    try {
+      const res = await removeCollaborativeProjectMember(categoryId, memberUserId);
+      setMembers(res.members || []);
+      const freshMembers = await listCollaborativeProjectMembers(categoryId);
+      setMembers(freshMembers.members || res.members || []);
+      await load();
+    } catch (e) {
+      setError(e.message || "Failed to remove member.");
     }
   }
 
@@ -589,6 +692,13 @@ export default function StrategicProjectWorkspacePage() {
     e.target.value = "";
   }
 
+  function toggleSimpleCard(taskId) {
+    setExpandedSimpleCards((prev) => ({
+      ...prev,
+      [taskId]: !prev[taskId],
+    }));
+  }
+
   function openCreateTaskModal() {
     setTaskTitle("");
     setTaskPriority("Medium");
@@ -616,15 +726,12 @@ export default function StrategicProjectWorkspacePage() {
         category_id: categoryId,
       };
 
-      const res = await createTask(user.id, updates);
-      if (res.error) {
-        setError(res.error.message || "Failed to create task.");
-        return;
-      }
-      const newTaskId = res.data?.id;
+      const res = await createCollaborativeTask({
+        ...updates,
+        tags: parseTagText(taskTagsText),
+      });
+      const newTaskId = res.task?.id;
       if (newTaskId) {
-        const tagNames = parseTagText(taskTagsText);
-        await setTaskTags(user.id, newTaskId, tagNames);
         setOrderIds((prev) => (prev.includes(newTaskId) ? prev : [...prev, newTaskId]));
       }
 
@@ -683,7 +790,7 @@ export default function StrategicProjectWorkspacePage() {
         <PageHeader
           eyebrow="Strategic project workspace"
           title={category?.name || "Project"}
-          subtitle="Source of truth, resources, and AI context — with Action Items scoped to this initiative."
+          subtitle={`Source of truth, resources, and AI context — with Action Items scoped to this initiative. Access: ${category?._access?.role || "viewer"}.`}
           right={
             <div className="rs-project-workspace__header-actions">
               <select
@@ -704,7 +811,7 @@ export default function StrategicProjectWorkspacePage() {
               <Link href="/backlog" className="rs-btn-ghost" style={{ textDecoration: "none" }}>
                 Action Items
               </Link>
-              <button type="button" className="rs-btn-primary" onClick={openCreateTaskModal}>
+              <button type="button" className="rs-btn-primary" onClick={openCreateTaskModal} disabled={!canEditProject}>
                 New initiative
               </button>
             </div>
@@ -720,11 +827,12 @@ export default function StrategicProjectWorkspacePage() {
               <p className="rs-page-eyebrow" style={{ marginBottom: 8 }}>
                 Active mantra
               </p>
-              <input
-                type="text"
+              <AutoHeightTextarea
                 className="rs-input rs-project-mantra-input"
                 value={mantra}
-                onChange={(e) => setMantra(e.target.value)}
+                onChange={setMantra}
+                rows={2}
+                disabled={!canEditProject}
                 placeholder="One line that captures why this project exists (e.g. dignified transition for parents)."
               />
               <label className="rs-project-narrative-label">
@@ -732,6 +840,7 @@ export default function StrategicProjectWorkspacePage() {
                 <textarea
                   className="rs-input rs-project-narrative"
                   value={narrative}
+                  disabled={!canEditProject}
                   onChange={(e) => setNarrative(e.target.value)}
                   rows={5}
                   placeholder="Long-form context for you and your AI: constraints, stakeholders, non-negotiables, timeline, how this ties to vision and outcomes."
@@ -742,7 +851,7 @@ export default function StrategicProjectWorkspacePage() {
                   type="button"
                   className="rs-btn-primary"
                   onClick={persistFullWorkspace}
-                  disabled={savingWorkspace}
+                  disabled={savingWorkspace || !canEditProject}
                 >
                   {savingWorkspace ? "Saving…" : "Save strategic brief"}
                 </button>
@@ -771,11 +880,34 @@ export default function StrategicProjectWorkspacePage() {
                     Action items
                   </h2>
                   <p className="rs-section-card__subtitle" style={{ margin: 0 }}>
-                    {pendingRootCount} pending root initiative{pendingRootCount === 1 ? "" : "s"} · strategic priority
-                    from scoring model
+                    {sortedRootTasks.length} visible root initiative{sortedRootTasks.length === 1 ? "" : "s"} ·{" "}
+                    {taskStatusScope === "open" ? "showing todo + doing by default" : "showing all statuses"} ·
+                    strategic priority from scoring model
                   </p>
                 </div>
                 <div className="rs-project-sort">
+                  <label>
+                    Show
+                    <select
+                      className="rs-select-compact"
+                      value={taskStatusScope}
+                      onChange={(e) => setTaskStatusScope(e.target.value)}
+                    >
+                      <option value="open">Todo + Doing</option>
+                      <option value="all">All tasks</option>
+                    </select>
+                  </label>
+                  <label>
+                    View
+                    <select
+                      className="rs-select-compact"
+                      value={taskViewMode}
+                      onChange={(e) => setTaskViewMode(e.target.value)}
+                    >
+                      <option value="full">Full</option>
+                      <option value="simplified">Simplified</option>
+                    </select>
+                  </label>
                   <label>
                     Sort
                     <select
@@ -808,20 +940,26 @@ export default function StrategicProjectWorkspacePage() {
 
               <div className="rs-backlog-card-list" style={{ marginTop: 16 }}>
                 {sortedRootTasks.length === 0 ? (
-                  <p className="rs-section-card__subtitle">No initiatives in this project yet.</p>
+                  <p className="rs-section-card__subtitle">
+                    {taskStatusScope === "open"
+                      ? "No todo or doing initiatives match this project right now."
+                      : "No initiatives in this project yet."}
+                  </p>
                 ) : (
                   sortedRootTasks.map((t) => {
-                    const kids = (childrenByParent.get(t.id) || []).slice().sort((a, b) =>
-                      String(a.title || "").localeCompare(String(b.title || ""), undefined, {
+                    const kids = (childrenByParent.get(t.id) || [])
+                      .filter(taskMatchesScope)
+                      .slice()
+                      .sort((a, b) => String(a.title || "").localeCompare(String(b.title || ""), undefined, {
                         sensitivity: "base",
-                      })
-                    );
+                      }));
                     return (
                       <div key={t.id}>
                         <BacklogStrategicTaskCard
                           task={t}
                           sortedChildren={kids}
                           categories={categories}
+                          memberOptions={members}
                           profile={profile}
                           lifeDomainLabel={lifeDomainLabel}
                           LIFE_DOMAIN_KEYS={LIFE_DOMAIN_KEYS}
@@ -839,7 +977,11 @@ export default function StrategicProjectWorkspacePage() {
                           handleSubcategorySave={handleSubcategorySave}
                           handleTagsSave={handleTagsSave}
                           handleAddSubtask={handleAddSubtask}
+                          handleAssignTask={handleAssignTask}
                           tagText={t._tagsText ?? makeTagText(t)}
+                          simplified={taskViewMode === "simplified"}
+                          expanded={!!expandedSimpleCards[t.id]}
+                          onToggleExpanded={() => toggleSimpleCard(t.id)}
                         />
                       </div>
                     );
@@ -850,6 +992,56 @@ export default function StrategicProjectWorkspacePage() {
           </div>
 
           <aside className="rs-project-workspace__aside">
+            <section className="rs-section-card">
+              <h2 className="rs-section-card__title" style={{ marginBottom: 8 }}>
+                Shared access
+              </h2>
+              <p className="rs-section-card__subtitle" style={{ marginBottom: 12 }}>
+                {members.length || 1} collaborator{members.length === 1 ? "" : "s"} · {category?._access?.role || "viewer"}
+              </p>
+              <div className="rs-project-member-list">
+                {members.map((member) => (
+                  <div key={member.user_id} className="rs-project-member-row">
+                    <div className="rs-project-member-row__email">{member.email_snapshot || member.user_id}</div>
+                    {canManageMembers && member.role !== "owner" ? (
+                      <div className="rs-project-member-row__actions">
+                        <select
+                          className="rs-select-compact"
+                          value={member.role}
+                          onChange={(e) => handleMemberRoleChange(member.user_id, e.target.value)}
+                        >
+                          <option value="viewer">Viewer</option>
+                          <option value="editor">Editor</option>
+                        </select>
+                        <button type="button" className="rs-btn-ghost rs-btn-ghost--small" onClick={() => handleRemoveMember(member.user_id)}>
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="rs-project-member-row__role">{member.role}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {canManageMembers && (
+                <div className="rs-project-share-box">
+                  <input
+                    type="email"
+                    className="rs-input"
+                    value={shareEmail}
+                    onChange={(e) => setShareEmail(e.target.value)}
+                    placeholder="Member email"
+                  />
+                  <select className="rs-select-compact" value={shareRole} onChange={(e) => setShareRole(e.target.value)}>
+                    <option value="viewer">Viewer</option>
+                    <option value="editor">Editor</option>
+                  </select>
+                  <button type="button" className="rs-btn-primary" onClick={handleAddMember} disabled={sharingMember || !shareEmail.trim()}>
+                    {sharingMember ? "Sharing…" : "Share project"}
+                  </button>
+                </div>
+              )}
+            </section>
             <section className="rs-section-card rs-project-ai-card">
               <div className="rs-project-ai-card__head">
                 <h2 className="rs-section-card__title" style={{ margin: 0, fontSize: "1rem" }}>
@@ -869,6 +1061,7 @@ export default function StrategicProjectWorkspacePage() {
                 <select
                   className="rs-select-compact"
                   value={aiProvider}
+                  disabled={!canEditProject}
                   onChange={(e) => setAiProvider(e.target.value)}
                 >
                   <option value="claude">Claude</option>
@@ -882,6 +1075,7 @@ export default function StrategicProjectWorkspacePage() {
                 className="rs-input"
                 rows={3}
                 value={efficiencyTip}
+                disabled={!canEditProject}
                 onChange={(e) => setEfficiencyTip(e.target.value)}
                 placeholder="e.g. Batch estate notarization to save travel time next week."
               />
@@ -898,6 +1092,7 @@ export default function StrategicProjectWorkspacePage() {
                     <button
                       type="button"
                       className="rs-project-icon-btn"
+                      disabled={!canEditProject}
                       onClick={() => removeSuggestedMove(idx)}
                       aria-label="Remove"
                     >
@@ -911,11 +1106,12 @@ export default function StrategicProjectWorkspacePage() {
                   type="text"
                   className="rs-input"
                   value={newMoveText}
+                  disabled={!canEditProject}
                   onChange={(e) => setNewMoveText(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addSuggestedMove())}
                   placeholder="Add a line from your AI planner…"
                 />
-                <button type="button" className="rs-btn-ghost" onClick={addSuggestedMove}>
+                <button type="button" className="rs-btn-ghost" onClick={addSuggestedMove} disabled={!canEditProject}>
                   Add
                 </button>
               </div>

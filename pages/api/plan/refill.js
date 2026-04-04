@@ -2,6 +2,10 @@ import { createClient } from "@supabase/supabase-js";
 import { chooseKeyOutcomes } from "../../../lib/scoring";
 import { reduceParentsToBestSubtask } from "../../../lib/today-queue";
 import { getAuthenticatedUserId } from "../../../lib/api-auth";
+import {
+  listAccessibleCategoriesWithMeta,
+  listBacklogTasksForActor,
+} from "../../../lib/projectCollaboration";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -49,34 +53,22 @@ export default async function handler(req, res) {
     }
 
     const [
-      { data: tasks, error: tasksErr },
-      { data: categories, error: catsErr },
-      { data: tagLinks, error: linksErr },
-      { data: tagRows, error: tagsErr },
+      tasks,
+      categories,
       { data: completedEvents, error: compErr },
       { data: profileRow, error: profileErr },
     ] = await Promise.all([
-      supabase
-        .from("tasks")
-        .select("id,title,priority,effort_hours,due_date,status,parent_task_id,category_id,subcategory_id")
-        .eq("user_id", userId)
-        .in("status", ["todo", "doing"]),
-      supabase.from("categories").select("id,name").eq("user_id", userId),
-      supabase.from("task_tags").select("task_id, tag_id").eq("user_id", userId),
-      supabase.from("tags").select("id,name").eq("user_id", userId),
+      listBacklogTasksForActor(userId, { includeArchived: false }),
+      listAccessibleCategoriesWithMeta(userId),
       supabase
         .from("task_events")
         .select("task_id,created_at,event_type")
-        .eq("user_id", userId)
+        .or(`user_id.eq.${userId},actor_user_id.eq.${userId}`)
         .eq("event_type", "completed")
         .order("created_at", { ascending: false }),
       supabase.from("user_profile").select("profile").eq("user_id", userId).maybeSingle(),
     ]);
 
-    if (tasksErr) throw tasksErr;
-    if (catsErr) throw catsErr;
-    if (linksErr) throw linksErr;
-    if (tagsErr) throw tagsErr;
     if (compErr) throw compErr;
 
     const profile = profileRow?.profile || {};
@@ -96,15 +88,6 @@ export default async function handler(req, res) {
         : base_category_weights || prefs.base_category_weights;
 
     const catMap = Object.fromEntries((categories || []).map((c) => [c.id, c.name]));
-    const tagMap = Object.fromEntries((tagRows || []).map((t) => [t.id, t.name]));
-
-    const tagsByTask = {};
-    for (const link of tagLinks || []) {
-      const name = tagMap[link.tag_id];
-      if (!name) continue;
-      tagsByTask[link.task_id] = tagsByTask[link.task_id] || [];
-      tagsByTask[link.task_id].push(name);
-    }
 
     const lastCompletedMap = {};
     for (const ev of completedEvents || []) {
@@ -115,8 +98,15 @@ export default async function handler(req, res) {
 
     const withMeta = (tasks || []).map((t) => ({
       ...t,
-      category: catMap[t.category_id] || "Unknown",
-      tags: tagsByTask[t.id] || [],
+      category:
+        (typeof t.category === "string" ? t.category : t.category?.name) ||
+        catMap[t.category_id] ||
+        "Unknown",
+      tags: Array.isArray(t.tags)
+        ? t.tags
+            .map((tag) => (typeof tag === "string" ? tag : tag?.tag?.name || tag?.name || ""))
+            .filter(Boolean)
+        : [],
     }));
     const filtered = withMeta
       .filter((t) => t.category !== "Daily Repeat")

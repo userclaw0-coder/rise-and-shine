@@ -4,7 +4,7 @@ import Link from "next/link";
 import DashboardLayout from "../components/DashboardLayout";
 import PageHeader from "../components/PageHeader";
 import { useAuth } from "../hooks/useAuth";
-import { getBacklogTasks, getCategoriesWithSubcategories, getUserProfile } from "../lib/db";
+import { loadCollaborativeProjects } from "../lib/collaborationClient";
 import { computeProjectTileMetrics } from "../lib/projectDashboardMetrics";
 import {
   isTaskNeedingAlignment,
@@ -15,6 +15,8 @@ import {
 function ProjectTile({ category, metrics, featured, badges }) {
   const href = `/category/${category.id}`;
   const cls = `rs-project-tile${featured ? " rs-project-tile--featured" : ""}`;
+  const memberPreview = Array.isArray(category._memberPreview) ? category._memberPreview : [];
+  const roleLabel = category?._access?.role || "viewer";
 
   return (
     <Link href={href} className={cls}>
@@ -28,6 +30,17 @@ function ProjectTile({ category, metrics, featured, badges }) {
       <div className={featured ? "rs-project-tile__featured-body" : undefined}>
         <div className="rs-project-tile__main">
           <h2 className="rs-project-tile__title">{category.name}</h2>
+          <div className="rs-project-tile__members">
+            <span>{category._memberCount || 1} collaborator{category._memberCount === 1 ? "" : "s"}</span>
+            <span aria-hidden>·</span>
+            <span>{roleLabel}</span>
+            {memberPreview.length > 0 && (
+              <>
+                <span aria-hidden>·</span>
+                <span>{memberPreview.map((member) => member.email || "member").join(", ")}</span>
+              </>
+            )}
+          </div>
           <div className="rs-project-tile__insight">
             <span className="rs-project-tile__insight-label">AI insight</span>
             <p className="rs-project-tile__insight-text">{metrics.insight}</p>
@@ -106,16 +119,10 @@ export default function ProjectsPage() {
     setLoading(true);
     setError("");
     try {
-      const [catsRes, tasksRes, profileRes] = await Promise.all([
-        getCategoriesWithSubcategories(user.id),
-        getBacklogTasks(user.id, { includeArchived: false }),
-        getUserProfile(user.id),
-      ]);
-      if (catsRes.error) throw catsRes.error;
-      if (tasksRes.error) throw tasksRes.error;
-      setCategories(catsRes.data || []);
-      setTasks(tasksRes.data || []);
-      setProfile(profileRes?.data?.profile || null);
+      const data = await loadCollaborativeProjects();
+      setCategories(data.categories || []);
+      setTasks(data.tasks || []);
+      setProfile(data.profile || null);
     } catch (e) {
       setError(e.message || "Failed to load projects.");
     } finally {

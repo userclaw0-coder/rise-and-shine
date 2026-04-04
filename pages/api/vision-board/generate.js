@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { getAuthenticatedUserId } from "../../../lib/api-auth";
+import { getHumanNeedStrategyLabel } from "../../../lib/humanNeedStrategies";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -23,8 +24,8 @@ function buildVisionPrompt(profile) {
   if (profile.life_domains && typeof profile.life_domains === "object") {
     const domains = Object.entries(profile.life_domains)
       .filter(([, v]) => v)
-      .map(([k, v]) => `${k}: ${v}`);
-    if (domains.length) parts.push("Life domains: " + domains.join(". "));
+      .map(([k, v]) => `${getHumanNeedStrategyLabel(k)}: ${v}`);
+    if (domains.length) parts.push("Human need strategies: " + domains.join(". "));
   }
   if (profile.leverage_focus?.length) {
     parts.push("Leverage focus: " + profile.leverage_focus.join(", "));

@@ -11,6 +11,7 @@ import {
   safeJsonParse,
   summarizeExternalProjectImport,
 } from "../../../lib/externalProjectImport";
+import { getProjectPageData } from "../../../lib/projectCollaboration";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -31,27 +32,22 @@ export default async function handler(req, res) {
     if (!categoryId) return res.status(400).json({ error: "category_id is required" });
     if (!importText) return res.status(400).json({ error: "Paste the JSON returned by your external AI." });
 
-    const [{ data: category, error: categoryErr }, { data: profileRow, error: profileErr }, { data: tasks, error: taskErr }] =
-      await Promise.all([
-        supabase
-          .from("categories")
-          .select("id, name")
-          .eq("user_id", userId)
-          .eq("id", categoryId)
-          .maybeSingle(),
-        supabase.from("user_profile").select("profile").eq("user_id", userId).maybeSingle(),
-        supabase
-          .from("tasks")
-          .select("id, parent_task_id, title, status, priority, due_date, effort_hours, outcome_ids, primary_life_domain, life_domains, alignment_source")
-          .eq("user_id", userId)
-          .eq("category_id", categoryId)
-          .neq("status", "archived"),
-      ]);
-
-    if (categoryErr) throw categoryErr;
-    if (profileErr) throw profileErr;
-    if (taskErr) throw taskErr;
-    if (!category) return res.status(404).json({ error: "Project not found." });
+    const project = await getProjectPageData(userId, categoryId);
+    const category = project.category;
+    const profile = project.profile || {};
+    const tasks = (project.tasks || []).map((task) => ({
+      id: task.id,
+      parent_task_id: task.parent_task_id,
+      title: task.title,
+      status: task.status,
+      priority: task.priority,
+      due_date: task.due_date,
+      effort_hours: task.effort_hours,
+      outcome_ids: task.outcome_ids,
+      primary_life_domain: task.primary_life_domain,
+      life_domains: task.life_domains,
+      alignment_source: task.alignment_source,
+    }));
 
     const rawJson = safeJsonParse(importText);
     if (!rawJson || typeof rawJson !== "object") {
@@ -60,12 +56,11 @@ export default async function handler(req, res) {
       });
     }
 
-    const profile = profileRow?.profile || {};
     const normalized = normalizeExternalProjectImport(rawJson, {
       categoryId,
       category,
       profile,
-      tasks: tasks || [],
+      tasks,
     });
     const groups = groupExternalProjectImportActions(normalized, categoryId);
     const actions = flattenExternalProjectImportActions(normalized, categoryId);

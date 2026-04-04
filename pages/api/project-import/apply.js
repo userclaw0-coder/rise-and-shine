@@ -4,7 +4,13 @@ import {
   EXTERNAL_PROJECT_IMPORT_SOURCE,
   flattenExternalProjectImportActions,
 } from "../../../lib/externalProjectImport";
-import { mergeProjectWorkspace } from "../../../lib/projectWorkspace";
+import {
+  createTaskCollaborative,
+  saveSharedProjectWorkspace,
+  serviceSupabase as collabSupabase,
+  setTaskTagsCollaborative,
+  updateTaskCollaborative,
+} from "../../../lib/projectCollaboration";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -59,6 +65,20 @@ async function mergeTaskTags(userId, taskId, tagsAdd) {
     const { error: insertErr } = await supabase.from("task_tags").insert(inserts);
     if (insertErr) throw insertErr;
   }
+}
+
+async function mergeCollaborativeTagNames(actorUserId, taskId, tagsAdd) {
+  const { data: taskRow, error } = await collabSupabase
+    .from("tasks")
+    .select("tags:task_tags(tag:tags(name))")
+    .eq("id", taskId)
+    .maybeSingle();
+  if (error) throw error;
+  const existing = (taskRow?.tags || [])
+    .map((row) => row?.tag?.name)
+    .filter(Boolean);
+  const merged = Array.from(new Set([...(existing || []), ...(tagsAdd || [])].map((value) => String(value || "").trim()).filter(Boolean)));
+  await setTaskTagsCollaborative(actorUserId, taskId, merged);
 }
 
 async function logTaskEvent(userId, taskId, payload) {
@@ -183,23 +203,8 @@ export default async function handler(req, res) {
       if (!action?.apply_patch) continue;
 
       if (action.apply_patch.workspace && run.category_id) {
-        const prefs = { ...(profile?.preferences || {}) };
-        const current = mergeProjectWorkspace(prefs, run.category_id);
         const patch = action.apply_patch.workspace || {};
-        prefs.project_workspaces = {
-          ...(prefs.project_workspaces || {}),
-          [String(run.category_id)]: {
-            ...current,
-            ...(patch.mantra ? { mantra: patch.mantra } : {}),
-            ...(patch.narrative ? { narrative: patch.narrative } : {}),
-            ...(patch.efficiency_tip ? { efficiency_tip: patch.efficiency_tip } : {}),
-            ...(Array.isArray(patch.suggested_moves) ? { suggested_moves: patch.suggested_moves } : {}),
-            ...(Array.isArray(patch.resources) ? { resources: patch.resources } : {}),
-            ...(patch.health_needs ? { health_needs: { ...current.health_needs, ...patch.health_needs } } : {}),
-          },
-        };
-        profile = { ...profile, preferences: prefs };
-        profileDirty = true;
+        await saveSharedProjectWorkspace(userId, run.category_id, patch);
         appliedActionIds.push(actionId);
         continue;
       }
@@ -216,15 +221,10 @@ export default async function handler(req, res) {
           }
         });
         if (Object.keys(taskPatch).length > 0) {
-          const { error: updateErr } = await supabase
-            .from("tasks")
-            .update(taskPatch)
-            .eq("id", action.task_id)
-            .eq("user_id", userId);
-          if (updateErr) throw updateErr;
+          await updateTaskCollaborative(userId, action.task_id, taskPatch);
         }
         if (Array.isArray(action.apply_patch.tags_add) && action.apply_patch.tags_add.length > 0) {
-          await mergeTaskTags(userId, action.task_id, action.apply_patch.tags_add);
+          await mergeCollaborativeTagNames(userId, action.task_id, action.apply_patch.tags_add);
         }
         await logTaskEvent(userId, action.task_id, {
           source: EXTERNAL_PROJECT_IMPORT_SOURCE,
@@ -238,18 +238,16 @@ export default async function handler(req, res) {
       }
 
       if (action.apply_patch.create_task && action.parent_task_id) {
-        const { data: parent, error: parentErr } = await supabase
+        const { data: parent, error: parentErr } = await collabSupabase
           .from("tasks")
           .select("category_id, subcategory_id, outcome_ids, primary_life_domain, life_domains")
           .eq("id", action.parent_task_id)
-          .eq("user_id", userId)
           .maybeSingle();
         if (parentErr) throw parentErr;
         if (!parent) continue;
 
         const patch = action.apply_patch.create_task;
         const createPayload = {
-          user_id: userId,
           title: patch.title,
           status: patch.status || "todo",
           priority: patch.priority || "Medium",
@@ -275,14 +273,9 @@ export default async function handler(req, res) {
               ? "ai"
               : null,
         };
-        const { data: created, error: createErr } = await supabase
-          .from("tasks")
-          .insert(createPayload)
-          .select("id")
-          .single();
-        if (createErr) throw createErr;
+        const created = await createTaskCollaborative(userId, createPayload);
         if (Array.isArray(patch.tags) && patch.tags.length > 0) {
-          await mergeTaskTags(userId, created.id, patch.tags);
+          await setTaskTagsCollaborative(userId, created.id, patch.tags);
         }
         await logTaskEvent(userId, action.parent_task_id, {
           source: EXTERNAL_PROJECT_IMPORT_SOURCE,
@@ -298,7 +291,6 @@ export default async function handler(req, res) {
       if (action.apply_patch.create_task && action.category_id) {
         const patch = action.apply_patch.create_task;
         const createPayload = {
-          user_id: userId,
           title: patch.title,
           status: patch.status || "todo",
           priority: patch.priority || "Medium",
@@ -313,14 +305,9 @@ export default async function handler(req, res) {
               ? "ai"
               : null,
         };
-        const { data: created, error: createErr } = await supabase
-          .from("tasks")
-          .insert(createPayload)
-          .select("id")
-          .single();
-        if (createErr) throw createErr;
+        const created = await createTaskCollaborative(userId, createPayload);
         if (Array.isArray(patch.tags) && patch.tags.length > 0) {
-          await mergeTaskTags(userId, created.id, patch.tags);
+          await setTaskTagsCollaborative(userId, created.id, patch.tags);
         }
         await logTaskEvent(userId, created.id, {
           source: EXTERNAL_PROJECT_IMPORT_SOURCE,

@@ -20,7 +20,7 @@ Rise-and-Shine is an AI-guided life execution system for general self-improvemen
 - **Today queue (Next-3):** surfaces the best three actions from backlog using weighted scoring.
 - **Backlog + templates:** capture recurring patterns and projects.
 - **Planner refinement:** AI-assisted task rewrite/effort/tag suggestions with apply + analytics events.
-- **Onboarding (6-step):** identity, life domains, six-needs profile, brain dump, energy/time, strategic focus.
+- **Onboarding (6-step):** identity, human need strategies, six-needs profile, brain dump, energy/time, strategic focus.
 - **Analytics:** momentum, completion timing, planner refinement stats.
 - **Health + notes + ideas:** lightweight personal operating data in one place.
 

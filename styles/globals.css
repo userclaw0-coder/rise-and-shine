@@ -452,8 +452,13 @@ body {
 .rs-sidebar {
   flex-shrink: 0;
   width: var(--rs-sidebar-width);
+  height: 100vh;
+  height: 100dvh;
   min-height: 100vh;
   min-height: 100dvh;
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
   padding: calc(22px + var(--rs-safe-top)) calc(16px + var(--rs-safe-right))
     calc(20px + var(--rs-safe-bottom)) calc(16px + var(--rs-safe-left));
   background: linear-gradient(
@@ -467,6 +472,17 @@ body {
   gap: 8px;
   box-sizing: border-box;
   z-index: 50;
+  overflow: hidden;
+}
+
+.rs-sidebar-stack {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
 }
 
 .rs-sidebar-brand {
@@ -494,8 +510,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  flex: 1;
-  overflow-y: auto;
+  flex: 1 0 auto;
+  overflow: visible;
   padding: 4px 0;
 }
 
@@ -574,7 +590,34 @@ body {
   border-top: 1px solid rgba(186, 177, 159, 0.1);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
+}
+
+.rs-sidebar-status {
+  padding: 2px 4px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.rs-sidebar-status__label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--rs-on-surface-variant);
+}
+
+.rs-sidebar-status__email {
+  font-size: 12px;
+  color: var(--rs-on-surface);
+  word-break: break-word;
+}
+
+.rs-sidebar-status__time {
+  font-size: 11px;
+  color: var(--rs-on-surface-variant);
+  opacity: 0.9;
 }
 
 .rs-sidebar-signout {
@@ -601,6 +644,7 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .rs-main-inner {
@@ -1174,6 +1218,8 @@ body {
     top: 0;
     left: 0;
     bottom: 0;
+    height: auto;
+    overflow: hidden;
     transform: translateX(-105%);
     transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 8px 0 32px rgba(55, 50, 42, 0.12);
@@ -1373,6 +1419,44 @@ body {
   padding: var(--rs-space-4);
 }
 
+.rs-backlog-card--simple {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  .rs-backlog-card--simple {
+    grid-template-columns: 1fr;
+  }
+}
+
+.rs-backlog-card__simple-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rs-backlog-card__simple-title {
+  font-family: var(--rs-font-serif);
+  font-size: clamp(1.05rem, 2.4vw, 1.3rem);
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--rs-on-surface);
+  word-break: break-word;
+}
+
+.rs-backlog-card__simple-assignee {
+  font-size: 0.82rem;
+  color: var(--rs-on-surface-variant);
+}
+
+.rs-backlog-card__simple-expand {
+  align-self: flex-start;
+}
+
 .rs-backlog-card__meta {
   display: flex;
   flex-wrap: wrap;
@@ -1460,6 +1544,10 @@ body {
   border: 1px solid rgba(186, 177, 159, 0.25);
   background: var(--rs-surface-low);
   min-width: 108px;
+}
+
+.rs-backlog-card__score--simple {
+  min-width: 124px;
 }
 
 .rs-backlog-card__score--hot {
@@ -2409,6 +2497,61 @@ body {
   font-weight: 600;
   padding: 12px 14px !important;
   margin-bottom: 14px;
+  line-height: 1.35;
+  min-height: 56px;
+  resize: none;
+  overflow: hidden;
+  white-space: pre-wrap;
+}
+
+.rs-project-tile__members {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: 0.78rem;
+  color: var(--rs-on-surface-variant);
+}
+
+.rs-project-member-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rs-project-member-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: var(--rs-radius-md);
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(186, 177, 159, 0.18);
+}
+
+.rs-project-member-row__email {
+  min-width: 0;
+  word-break: break-word;
+  font-size: 0.9rem;
+}
+
+.rs-project-member-row__actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.rs-project-member-row__role {
+  font-size: 0.82rem;
+  text-transform: capitalize;
+  color: var(--rs-on-surface-variant);
+}
+
+.rs-project-share-box {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
 }
 
 .rs-project-narrative-label {
