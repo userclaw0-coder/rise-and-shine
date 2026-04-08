@@ -9,10 +9,70 @@ export default function ChatPanel({ isOverlay = false, isOpen = true, onClose })
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [error, setError] = useState(null);
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
   const abortRef = useRef(null);
+  const historyLoadedRef = useRef(false);
+
+  const getToken = useCallback(async () => {
+    let { data: sessionData } = await supabase.auth.getSession();
+    let token = sessionData?.session?.access_token;
+    if (!token) {
+      const { data: refreshed } = await supabase.auth.refreshSession();
+      token = refreshed?.session?.access_token;
+    }
+    return token;
+  }, []);
+
+  // Load conversation history on mount
+  useEffect(() => {
+    if (historyLoadedRef.current) return;
+    historyLoadedRef.current = true;
+
+    async function loadHistory() {
+      try {
+        const token = await getToken();
+        if (!token) { setIsLoadingHistory(false); return; }
+
+        const res = await fetch("/api/chat/history?limit=100", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) { setIsLoadingHistory(false); return; }
+
+        const data = await res.json();
+        if (data.messages && data.messages.length > 0) {
+          // Convert DB messages to display format
+          const displayMsgs = [];
+          for (const msg of data.messages) {
+            if (msg.role === "user") {
+              displayMsgs.push({ role: "user", content: msg.content });
+            } else if (msg.role === "assistant") {
+              displayMsgs.push({ role: "assistant", content: msg.content || "", toolCalls: [] });
+            } else if (msg.role === "tool_call") {
+              // Attach tool calls to the previous assistant message
+              const lastAssistant = displayMsgs.findLast((m) => m.role === "assistant");
+              if (lastAssistant && msg.tool_calls) {
+                lastAssistant.toolCalls = msg.tool_calls.map((tc) => ({
+                  name: tc.name,
+                  status: "done",
+                }));
+              }
+            }
+            // Skip tool_result messages in display
+          }
+          setMessages(displayMsgs);
+        }
+      } catch {
+        // Silently fail — empty chat is fine
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    }
+
+    loadHistory();
+  }, [getToken]);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -37,16 +97,6 @@ export default function ChatPanel({ isOverlay = false, isOpen = true, onClose })
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [isOverlay, isOpen, onClose]);
-
-  const getToken = useCallback(async () => {
-    let { data: sessionData } = await supabase.auth.getSession();
-    let token = sessionData?.session?.access_token;
-    if (!token) {
-      const { data: refreshed } = await supabase.auth.refreshSession();
-      token = refreshed?.session?.access_token;
-    }
-    return token;
-  }, []);
 
   const sendMessage = useCallback(async () => {
     const text = input.trim();
@@ -210,7 +260,16 @@ export default function ChatPanel({ isOverlay = false, isOpen = true, onClose })
 
         {/* Messages */}
         <div className="jarvis-messages" ref={scrollRef}>
-          {messages.length === 0 && (
+          {isLoadingHistory && messages.length === 0 && (
+            <div className="jarvis-empty">
+              <div className="jarvis-typing">
+                <span className="jarvis-typing__dot" />
+                <span className="jarvis-typing__dot" />
+                <span className="jarvis-typing__dot" />
+              </div>
+            </div>
+          )}
+          {!isLoadingHistory && messages.length === 0 && (
             <div className="jarvis-empty">
               <span className="material-symbols-outlined jarvis-empty__icon">chat</span>
               <p>Hey! I'm Jarvis, your Rise &amp; Shine coach.</p>
