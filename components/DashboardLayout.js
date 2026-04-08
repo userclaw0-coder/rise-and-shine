@@ -51,6 +51,28 @@ export default function DashboardLayout({ children }) {
   const localDateTime = useLocalDateTime();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [nudgeCount, setNudgeCount] = useState(0);
+
+  // Check for nudges on mount
+  useEffect(() => {
+    if (!user) return;
+    async function checkNudges() {
+      try {
+        let { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        if (!token) return;
+        const res = await fetch("/api/chat/nudges", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        setNudgeCount(data.nudges?.length || 0);
+      } catch {
+        // silent
+      }
+    }
+    checkNudges();
+  }, [user]);
 
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
   const openSidebar = useCallback(() => setSidebarOpen(true), []);
@@ -209,10 +231,13 @@ export default function DashboardLayout({ children }) {
         <button
           type="button"
           className="jarvis-fab"
-          onClick={() => setChatOpen(true)}
+          onClick={() => { setChatOpen(true); setNudgeCount(0); }}
           aria-label="Open Jarvis chat"
         >
           <span className="material-symbols-outlined">smart_toy</span>
+          {nudgeCount > 0 && (
+            <span className="jarvis-fab__badge">{nudgeCount > 9 ? "9+" : nudgeCount}</span>
+          )}
         </button>
       )}
 

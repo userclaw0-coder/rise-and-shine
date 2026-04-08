@@ -15,6 +15,7 @@ export default function ChatPanel({ isOverlay = false, isOpen = true, onClose })
   const inputRef = useRef(null);
   const abortRef = useRef(null);
   const historyLoadedRef = useRef(false);
+  const pendingGreetRef = useRef(false);
 
   const getToken = useCallback(async () => {
     let { data: sessionData } = await supabase.auth.getSession();
@@ -63,14 +64,20 @@ export default function ChatPanel({ isOverlay = false, isOpen = true, onClose })
             // Skip tool_result messages in display
           }
           setMessages(displayMsgs);
+          shouldAutoGreet = false;
         }
       } catch {
         // Silently fail — empty chat is fine
       } finally {
         setIsLoadingHistory(false);
+        // Auto-greeting: if no history, trigger Jarvis with nudge check
+        if (shouldAutoGreet) {
+          pendingGreetRef.current = true;
+        }
       }
     }
 
+    let shouldAutoGreet = true;
     loadHistory();
   }, [getToken]);
 
@@ -80,6 +87,16 @@ export default function ChatPanel({ isOverlay = false, isOpen = true, onClose })
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // Auto-greeting pickup: after history loads, if no messages found, greet
+  useEffect(() => {
+    if (!isLoadingHistory && pendingGreetRef.current && !isStreaming) {
+      pendingGreetRef.current = false;
+      // Delay to ensure sendText is ready
+      const timer = setTimeout(() => sendText("[auto-greeting]", { hidden: true }), 200);
+      return () => clearTimeout(timer);
+    }
+  }); // intentionally no deps — runs every render until it fires once
 
   // Focus input when panel opens
   useEffect(() => {
@@ -98,18 +115,17 @@ export default function ChatPanel({ isOverlay = false, isOpen = true, onClose })
     return () => window.removeEventListener("keydown", onKey);
   }, [isOverlay, isOpen, onClose]);
 
-  const sendMessage = useCallback(async () => {
-    const text = input.trim();
+  const sendText = useCallback(async (text, { hidden = false } = {}) => {
     if (!text || isStreaming) return;
-    setInput("");
     setError(null);
 
-    const userMsg = { role: "user", content: text };
-    setMessages((prev) => [...prev, userMsg]);
+    if (!hidden) {
+      const userMsg = { role: "user", content: text };
+      setMessages((prev) => [...prev, userMsg]);
+    }
     setIsStreaming(true);
 
     // Create a placeholder for the assistant response
-    const assistantIdx = messages.length + 1; // after the user message
     setMessages((prev) => [
       ...prev,
       { role: "assistant", content: "", toolCalls: [] },
@@ -221,7 +237,14 @@ export default function ChatPanel({ isOverlay = false, isOpen = true, onClose })
       setIsStreaming(false);
       abortRef.current = null;
     }
-  }, [input, isStreaming, messages.length, getToken]);
+  }, [isStreaming, getToken]);
+
+  const sendMessage = useCallback(() => {
+    const text = input.trim();
+    if (!text) return;
+    setInput("");
+    sendText(text);
+  }, [input, sendText]);
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
