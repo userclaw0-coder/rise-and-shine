@@ -112,6 +112,37 @@ const CHART_COLORS = [
   "#6b7530",
 ];
 
+function toMeasurementSnapshot(raw = {}) {
+  const snapshot = {
+    measured_at: raw?.measured_at ? String(raw.measured_at).slice(0, 10) : "",
+  };
+  MEASURE_FIELDS.forEach(([key]) => {
+    const value = raw?.[key];
+    snapshot[key] =
+      value == null || value === "" || Number.isNaN(Number(value)) ? null : Number(value);
+  });
+  return snapshot;
+}
+
+function sortMeasurementSnapshots(rows = []) {
+  return [...rows]
+    .map((row) => toMeasurementSnapshot(row))
+    .filter((row) => row.measured_at)
+    .sort((a, b) => new Date(a.measured_at) - new Date(b.measured_at));
+}
+
+function getLatestMeasurementSnapshot(rows = []) {
+  const sorted = sortMeasurementSnapshots(rows);
+  return sorted.length > 0 ? sorted[sorted.length - 1] : null;
+}
+
+function formatMeasurementDelta(value) {
+  if (value == null || Number.isNaN(value)) return null;
+  const rounded = Math.round(value * 10) / 10;
+  if (rounded === 0) return "No change";
+  return `${rounded > 0 ? "+" : ""}${rounded.toFixed(1)} in`;
+}
+
 function OccamGoalRing({ pct, title, sub, detail }) {
   const uid = useId();
   const gradId = `occam-ring-grad-${uid}`;
@@ -275,24 +306,29 @@ export default function HealthPage() {
         const savedHistory = Array.isArray(prof.preferences?.occam_measurement_history)
           ? prof.preferences.occam_measurement_history
           : [];
-        setMeasurements({
-          chest_in: om.chest_in != null ? String(om.chest_in) : "",
-          waist_in: om.waist_in != null ? String(om.waist_in) : "",
-          hips_in: om.hips_in != null ? String(om.hips_in) : "",
-          shoulders_in: om.shoulders_in != null ? String(om.shoulders_in) : "",
-          neck_in: om.neck_in != null ? String(om.neck_in) : "",
-          left_bicep_in: om.left_bicep_in != null ? String(om.left_bicep_in) : "",
-          left_quad_in: om.left_quad_in != null ? String(om.left_quad_in) : "",
-          left_calf_in: om.left_calf_in != null ? String(om.left_calf_in) : "",
-        });
-        setMeasurementHistory(
+        const normalizedHistory =
           savedHistory.length > 0
-            ? savedHistory
+            ? sortMeasurementSnapshots(savedHistory)
             : om.measured_at
-              ? [{ ...om }]
-              : []
-        );
-        if (om.measured_at) setMeasureDate(String(om.measured_at).slice(0, 10));
+              ? sortMeasurementSnapshots([om])
+              : [];
+        const latestMeasurement = getLatestMeasurementSnapshot(normalizedHistory);
+        setMeasurements({
+          chest_in: latestMeasurement?.chest_in != null ? String(latestMeasurement.chest_in) : "",
+          waist_in: latestMeasurement?.waist_in != null ? String(latestMeasurement.waist_in) : "",
+          hips_in: latestMeasurement?.hips_in != null ? String(latestMeasurement.hips_in) : "",
+          shoulders_in:
+            latestMeasurement?.shoulders_in != null ? String(latestMeasurement.shoulders_in) : "",
+          neck_in: latestMeasurement?.neck_in != null ? String(latestMeasurement.neck_in) : "",
+          left_bicep_in:
+            latestMeasurement?.left_bicep_in != null ? String(latestMeasurement.left_bicep_in) : "",
+          left_quad_in:
+            latestMeasurement?.left_quad_in != null ? String(latestMeasurement.left_quad_in) : "",
+          left_calf_in:
+            latestMeasurement?.left_calf_in != null ? String(latestMeasurement.left_calf_in) : "",
+        });
+        setMeasurementHistory(normalizedHistory);
+        if (latestMeasurement?.measured_at) setMeasureDate(String(latestMeasurement.measured_at).slice(0, 10));
 
         let prefs = prof.preferences || {};
         const rows = setsRes.error ? [] : setsRes.data || [];
@@ -388,15 +424,14 @@ export default function HealthPage() {
       const prevHistory = Array.isArray(profile.preferences?.occam_measurement_history)
         ? profile.preferences.occam_measurement_history
         : [];
-      const nextHistory = [
+      const nextHistory = sortMeasurementSnapshots([
         ...prevHistory.filter((row) => String(row?.measured_at || "").slice(0, 10) !== measureDate),
         measurementSnapshot,
-      ]
-        .sort((a, b) => new Date(a.measured_at) - new Date(b.measured_at))
-        .slice(-180);
+      ]).slice(-180);
+      const latestMeasurementSnapshot = getLatestMeasurementSnapshot(nextHistory) || toMeasurementSnapshot(measurementSnapshot);
       const prefs = {
         ...(profile.preferences || {}),
-        occam_measurements: measurementSnapshot,
+        occam_measurements: latestMeasurementSnapshot,
         occam_measurement_history: nextHistory,
       };
       const up = await upsertUserProfile(user.id, { ...profile, preferences: prefs });
@@ -596,9 +631,7 @@ export default function HealthPage() {
   }, [setsWithSession]);
 
   const morphologyChartData = useMemo(() => {
-    return [...(measurementHistory || [])]
-      .filter((row) => row?.measured_at)
-      .sort((a, b) => new Date(a.measured_at) - new Date(b.measured_at))
+    return sortMeasurementSnapshots(measurementHistory || [])
       .map((row) => {
         const entry = {
           date: String(row.measured_at).slice(0, 10),
@@ -610,6 +643,56 @@ export default function HealthPage() {
         return entry;
       });
   }, [measurementHistory]);
+
+  const latestMeasurementSnapshot = useMemo(
+    () => getLatestMeasurementSnapshot(measurementHistory || []),
+    [measurementHistory]
+  );
+
+  const previousMeasurementSnapshot = useMemo(() => {
+    const sorted = sortMeasurementSnapshots(measurementHistory || []);
+    return sorted.length > 1 ? sorted[sorted.length - 2] : null;
+  }, [measurementHistory]);
+
+  const morphologyProgressCards = useMemo(() => {
+    if (!latestMeasurementSnapshot) return [];
+    return [
+      {
+        label: "Shoulder:waist",
+        value:
+          latestMeasurementSnapshot.shoulders_in != null && latestMeasurementSnapshot.waist_in
+            ? (latestMeasurementSnapshot.shoulders_in / latestMeasurementSnapshot.waist_in).toFixed(2)
+            : "—",
+        detail: "Higher usually suggests a stronger V-taper.",
+      },
+      {
+        label: "Chest:waist",
+        value:
+          latestMeasurementSnapshot.chest_in != null && latestMeasurementSnapshot.waist_in
+            ? (latestMeasurementSnapshot.chest_in / latestMeasurementSnapshot.waist_in).toFixed(2)
+            : "—",
+        detail:
+          previousMeasurementSnapshot &&
+          latestMeasurementSnapshot.chest_in != null &&
+          previousMeasurementSnapshot.chest_in != null
+            ? `Chest ${formatMeasurementDelta(latestMeasurementSnapshot.chest_in - previousMeasurementSnapshot.chest_in)}`
+            : "Compares upper-torso size against waist.",
+      },
+      {
+        label: "Waist change",
+        value:
+          previousMeasurementSnapshot &&
+          latestMeasurementSnapshot.waist_in != null &&
+          previousMeasurementSnapshot.waist_in != null
+            ? formatMeasurementDelta(latestMeasurementSnapshot.waist_in - previousMeasurementSnapshot.waist_in)
+            : "—",
+        detail:
+          latestMeasurementSnapshot.measured_at
+            ? `Latest: ${latestMeasurementSnapshot.measured_at}`
+            : "Save measurements to start tracking.",
+      },
+    ];
+  }, [latestMeasurementSnapshot, previousMeasurementSnapshot]);
 
   const occamExerciseOptions = useMemo(() => {
     const set = new Set();
@@ -954,6 +1037,59 @@ export default function HealthPage() {
                     {savingMeasures ? "Saving…" : "Update measurements"}
                   </button>
                 </div>
+                {latestMeasurementSnapshot && (
+                  <div
+                    style={{
+                      marginTop: 14,
+                      display: "grid",
+                      gap: 10,
+                      gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr))",
+                    }}
+                  >
+                    {morphologyProgressCards.map((card) => (
+                      <div
+                        key={card.label}
+                        style={{
+                          padding: "12px 14px",
+                          borderRadius: 14,
+                          border: "1px solid rgba(212, 175, 55, 0.18)",
+                          background: "rgba(255,255,255,0.55)",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: 11,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.08em",
+                            color: "var(--rs-on-surface-variant)",
+                          }}
+                        >
+                          {card.label}
+                        </div>
+                        <div
+                          style={{
+                            marginTop: 4,
+                            fontSize: "1.1rem",
+                            fontWeight: 700,
+                            color: "var(--rs-on-surface)",
+                          }}
+                        >
+                          {card.value}
+                        </div>
+                        <div
+                          style={{
+                            marginTop: 4,
+                            fontSize: 12,
+                            color: "var(--rs-on-surface-variant)",
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          {card.detail}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {morphologyChartData.length > 0 && (
                   <div style={{ height: 240, marginTop: 16 }}>
                     <ResponsiveContainer width="100%" height="100%">

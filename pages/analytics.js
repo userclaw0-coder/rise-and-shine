@@ -10,15 +10,20 @@ import {
   getPlannerRefinementEventsInRange,
   getWeeklyReview,
   getDailyTemplateTaskIds,
+  getTemplates,
+  getTemplateItems,
   getBacklogTasks,
   getCategoriesWithSubcategories,
   getUserProfile,
   listWeeklyImprovementRuns,
+  setTaskCompletionForDate,
 } from "../lib/db";
 import {
   BarChart,
   Bar,
   LabelList,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -52,6 +57,14 @@ function addDays(d, n) {
   const out = new Date(d);
   out.setDate(out.getDate() + n);
   return out;
+}
+
+function startOfMonth(d) {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+function endOfMonth(d) {
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0);
 }
 
 /** Monday of the given date's week (YYYY-MM-DD). */
@@ -90,6 +103,60 @@ function shortenChartLabel(value, max = 26) {
   const text = String(value || "");
   if (text.length <= max) return text;
   return `${text.slice(0, max - 1)}...`;
+}
+
+function clampPercent(value) {
+  return Math.max(0, Math.min(100, Math.round(value || 0)));
+}
+
+function buildDateRange(startDate, endDate) {
+  const days = [];
+  const cursor = new Date(startDate);
+  while (cursor <= endDate) {
+    days.push(dateStrLocal(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return days;
+}
+
+function buildCurrentStreak(completionSet, todayKey) {
+  let streak = 0;
+  let cursor = new Date(`${todayKey}T12:00:00`);
+  while (completionSet.has(dateStrLocal(cursor))) {
+    streak += 1;
+    cursor = addDays(cursor, -1);
+  }
+  return streak;
+}
+
+function buildBestStreak(completionSet, orderedDates) {
+  let best = 0;
+  let current = 0;
+  orderedDates.forEach((day) => {
+    if (completionSet.has(day)) {
+      current += 1;
+      if (current > best) best = current;
+    } else {
+      current = 0;
+    }
+  });
+  return best;
+}
+
+function progressRing(progress, label, valueLabel, accent) {
+  const pct = clampPercent(progress);
+  return {
+    label,
+    valueLabel,
+    progress: pct,
+    accent,
+    gradient: `conic-gradient(${accent} 0 ${pct}%, rgba(255,255,255,0.1) ${pct}% 100%)`,
+  };
+}
+
+function getDefaultTemplate(items) {
+  const templates = Array.isArray(items) ? items : [];
+  return templates.find((item) => item.is_default) || templates[0] || null;
 }
 
 function MeasuredChart({ height = 220, renderChart }) {
@@ -139,8 +206,6 @@ export default function AnalyticsPage() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [sevenDayData, setSevenDayData] = useState([]);
-  const [thirtyDayData, setThirtyDayData] = useState([]);
   const [hourHistogram, setHourHistogram] = useState([]);
   const [lastCompleted, setLastCompleted] = useState([]);
   const [weeklyStreak, setWeeklyStreak] = useState(0);
@@ -166,6 +231,26 @@ export default function AnalyticsPage() {
   const [completionsByOutcome, setCompletionsByOutcome] = useState([]);
   const [completionsByLifeDomain, setCompletionsByLifeDomain] = useState([]);
   const [improvementLabReport, setImprovementLabReport] = useState(null);
+  const [habitTracker, setHabitTracker] = useState(null);
+  const [habitEditKey, setHabitEditKey] = useState("");
+  const [refreshNonce, setRefreshNonce] = useState(0);
+
+  useEffect(() => {
+    function handleWindowFocus() {
+      setRefreshNonce((value) => value + 1);
+    }
+    function handleVisibility() {
+      if (document.visibilityState === "visible") {
+        setRefreshNonce((value) => value + 1);
+      }
+    }
+    window.addEventListener("focus", handleWindowFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("focus", handleWindowFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -176,15 +261,34 @@ export default function AnalyticsPage() {
       const today = new Date();
       const start7 = addDays(today, -7);
       const start30 = addDays(today, -30);
+      const monthStart = startOfMonth(today);
+      const monthEnd = endOfMonth(today);
+      const habitHistoryStart = addDays(today, -120);
 
       try {
-        const [range7, range30, last, weeks, plannerRefinements, dailyTaskIdsRes, backlogOpen, backlogAll, categoriesRes, profileRes, improvementRunsRes] = await Promise.all([
+        const [
+          range7,
+          range30,
+          habitHistoryRes,
+          last,
+          weeks,
+          plannerRefinements,
+          dailyTaskIdsRes,
+          templatesRes,
+          backlogOpen,
+          backlogAll,
+          categoriesRes,
+          profileRes,
+          improvementRunsRes,
+        ] = await Promise.all([
           getCompletedEventsInRange(user.id, dateStrLocal(start7), dateStrLocal(today)),
           getCompletedEventsInRange(user.id, dateStrLocal(start30), dateStrLocal(today)),
+          getCompletedEventsInRange(user.id, dateStrLocal(habitHistoryStart), dateStrLocal(today)),
           getLastCompletedEventsWithTasks(user.id, 50),
           getWeeklyReviewWeeks(user.id, 52),
           getPlannerRefinementEventsInRange(user.id, dateStr(start30), dateStr(today)),
           getDailyTemplateTaskIds(user.id),
+          getTemplates(),
           getBacklogTasks(user.id, { includeArchived: false }),
           getBacklogTasks(user.id, { includeArchived: true }),
           getCategoriesWithSubcategories(user.id),
@@ -193,52 +297,17 @@ export default function AnalyticsPage() {
         ]);
 
         const dailyTemplateTaskIds = dailyTaskIdsRes.data || new Set();
+        const defaultTemplate = getDefaultTemplate(templatesRes?.data || []);
+        const templateItemsRes = defaultTemplate ? await getTemplateItems(defaultTemplate.id) : { data: [], error: null };
+        if (templateItemsRes.error) setError(templateItemsRes.error.message);
+        const orderedTemplateItems = templateItemsRes.data || [];
         const todayStr = dateStrLocal(today);
         const openTasks = backlogOpen.data || [];
         const allTasks = backlogAll.data || [];
         const tasksById = new Map((allTasks || []).map((t) => [t.id, t]));
 
         if (range7.error) setError(range7.error.message);
-        else {
-          const byDay = {};
-          for (let i = 0; i <= 7; i++) {
-            const d = dateStrLocal(addDays(start7, i));
-            byDay[d] = { date: d, daily: 0, other: 0 };
-          }
-          (range7.data || []).forEach((ev) => {
-            const d = dateStrLocal(new Date(ev.created_at));
-            if (byDay[d]) {
-              if (dailyTemplateTaskIds.has(ev.task_id)) byDay[d].daily += 1;
-              else byDay[d].other += 1;
-            }
-          });
-          setSevenDayData(
-            Object.keys(byDay)
-              .sort()
-              .map((d) => ({ ...byDay[d], count: byDay[d].daily + byDay[d].other }))
-          );
-        }
-
         if (range30.error) setError(range30.error.message);
-        else {
-          const byDay = {};
-          for (let i = 0; i <= 30; i++) {
-            const d = dateStrLocal(addDays(start30, i));
-            byDay[d] = { date: d, daily: 0, other: 0 };
-          }
-          (range30.data || []).forEach((ev) => {
-            const d = dateStrLocal(new Date(ev.created_at));
-            if (byDay[d]) {
-              if (dailyTemplateTaskIds.has(ev.task_id)) byDay[d].daily += 1;
-              else byDay[d].other += 1;
-            }
-          });
-          setThirtyDayData(
-            Object.keys(byDay)
-              .sort()
-              .map((d) => ({ ...byDay[d], count: byDay[d].daily + byDay[d].other }))
-          );
-        }
 
         const allInRange = [...(range7.data || []), ...(range30.data || [])];
         const byHour = Array.from({ length: 24 }, (_, h) => ({ hour: `${h}:00`, count: 0 }));
@@ -313,8 +382,17 @@ export default function AnalyticsPage() {
           const d = dateStrLocal(new Date(ev.created_at));
           return d >= dateStrLocal(start14) && d < dateStrLocal(start7);
         }).length;
-        const dailySize = dailyTemplateTaskIds.size || 1;
-        const totalDailyIn7 = sevenDayData.reduce((s, row) => s + (row.daily || 0), 0);
+        const orderedTemplateTasks = orderedTemplateItems
+          .map((item) => item?.task)
+          .filter((task) => task?.id);
+        const orderedTemplateTaskIds = orderedTemplateTasks.map((task) => String(task.id));
+        const habitTaskIdSet = new Set(
+          orderedTemplateTaskIds.length > 0
+            ? orderedTemplateTaskIds
+            : Array.from(dailyTemplateTaskIds).map((taskId) => String(taskId))
+        );
+        const dailySize = habitTaskIdSet.size || 1;
+        const totalDailyIn7 = (range7.data || []).filter((ev) => habitTaskIdSet.has(String(ev.task_id))).length;
         const maxDailyPossible = dailySize * 7;
         setSummaryMetrics({
           daysActive7: datesWithCompletions7.size,
@@ -322,6 +400,128 @@ export default function AnalyticsPage() {
           thisWeekTotal: totalThisWeek,
           lastWeekTotal,
           dailyHitsRate7: maxDailyPossible > 0 ? Math.round((totalDailyIn7 / maxDailyPossible) * 100) : null,
+        });
+
+        const todayKey = dateStrLocal(today);
+        const monthDays = buildDateRange(monthStart, monthEnd);
+        const visibleMonthDays = monthDays.filter((day) => day <= todayKey);
+        const habitHistoryEvents = habitHistoryRes.data || [];
+        const habitTasks = orderedTemplateTaskIds.length > 0
+          ? orderedTemplateTaskIds.map((taskId) => tasksById.get(taskId)).filter(Boolean)
+          : Array.from(dailyTemplateTaskIds)
+              .map((taskId) => tasksById.get(taskId))
+              .filter(Boolean)
+              .sort((a, b) => String(a.title || "").localeCompare(String(b.title || "")));
+        const habitCompletionsByTask = new Map();
+        habitTasks.forEach((task) => {
+          habitCompletionsByTask.set(String(task.id), new Set());
+        });
+        habitHistoryEvents.forEach((event) => {
+          const taskId = String(event.task_id || "");
+          const bucket = habitCompletionsByTask.get(taskId);
+          if (!bucket) return;
+          bucket.add(dateStrLocal(new Date(event.created_at)));
+        });
+
+        const trendData = visibleMonthDays.map((day) => {
+          let completed = 0;
+          habitCompletionsByTask.forEach((completionSet) => {
+            if (completionSet.has(day)) completed += 1;
+          });
+          const total = habitTasks.length || 1;
+          return {
+            day,
+            label: String(new Date(`${day}T12:00:00`).getDate()),
+            completed,
+            remaining: Math.max(total - completed, 0),
+            rate: clampPercent((completed / total) * 100),
+          };
+        });
+
+        const habitRows = habitTasks.map((task) => {
+          const completionSet = habitCompletionsByTask.get(String(task.id)) || new Set();
+          const completedThisMonth = visibleMonthDays.filter((day) => completionSet.has(day)).length;
+          const currentStreak = buildCurrentStreak(completionSet, todayKey);
+          const bestStreak = buildBestStreak(completionSet, buildDateRange(habitHistoryStart, today));
+          return {
+            id: task.id,
+            title: task.title || "Untitled habit",
+            dates: completionSet,
+            monthCompleted: completedThisMonth,
+            monthRate: visibleMonthDays.length > 0 ? clampPercent((completedThisMonth / visibleMonthDays.length) * 100) : 0,
+            currentStreak,
+            bestStreak,
+            todayDone: completionSet.has(todayKey),
+          };
+        });
+
+        const totalHabitGoalsMonth = habitTasks.length * Math.max(visibleMonthDays.length, 1);
+        const totalCompletedMonth = habitRows.reduce((sum, row) => sum + row.monthCompleted, 0);
+        const todayCompletedHabits = habitRows.filter((row) => row.todayDone).length;
+        const sevenDayHabitCompletions = habitRows.reduce((sum, row) => {
+          const recentDays = buildDateRange(addDays(today, -6), today);
+          return sum + recentDays.filter((day) => row.dates.has(day)).length;
+        }, 0);
+        const fourteenDayTrend = trendData.slice(-14);
+        const momentumRate = fourteenDayTrend.length > 0
+          ? clampPercent(
+              (fourteenDayTrend.reduce((sum, row) => sum + row.completed, 0) /
+                (Math.max(habitTasks.length, 1) * fourteenDayTrend.length)) *
+                100
+            )
+          : 0;
+
+        setHabitTracker({
+          monthLabel: today.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
+          templateName: defaultTemplate?.name || "Daily Hits",
+          totalHabits: habitTasks.length,
+          monthDays,
+          visibleMonthDays,
+          trendData,
+          habitRows,
+          topHabits: [...habitRows]
+            .sort((a, b) => {
+              if (b.monthCompleted !== a.monthCompleted) return b.monthCompleted - a.monthCompleted;
+              return String(a.title).localeCompare(String(b.title));
+            })
+            .slice(0, 6),
+          activeStreaks: [...habitRows]
+            .filter((row) => row.currentStreak > 0)
+            .sort((a, b) => {
+              if (b.currentStreak !== a.currentStreak) return b.currentStreak - a.currentStreak;
+              return b.monthCompleted - a.monthCompleted;
+            })
+            .slice(0, 6),
+          progressRings: [
+            progressRing(momentumRate, "Momentum", `${momentumRate}%`, "#2ec5ff"),
+            progressRing(
+              habitTasks.length > 0 ? (todayCompletedHabits / habitTasks.length) * 100 : 0,
+              "Daily progress",
+              `${todayCompletedHabits}/${habitTasks.length || 0}`,
+              "#20d97a"
+            ),
+            progressRing(
+              habitTasks.length > 0 ? (sevenDayHabitCompletions / (habitTasks.length * 7 || 1)) * 100 : 0,
+              "Weekly progress",
+              `${clampPercent((sevenDayHabitCompletions / (habitTasks.length * 7 || 1)) * 100)}%`,
+              "#27e58d"
+            ),
+            progressRing(
+              totalHabitGoalsMonth > 0 ? (totalCompletedMonth / totalHabitGoalsMonth) * 100 : 0,
+              "Monthly progress",
+              `${clampPercent((totalCompletedMonth / totalHabitGoalsMonth) * 100)}%`,
+              "#96f060"
+            ),
+          ],
+          stats: {
+            startDate: visibleMonthDays[0] || todayKey,
+            endDate: visibleMonthDays[visibleMonthDays.length - 1] || todayKey,
+            daysElapsed: visibleMonthDays.length,
+            goalsThisMonth: totalHabitGoalsMonth,
+            completedThisMonth: totalCompletedMonth,
+            remainingThisMonth: Math.max(totalHabitGoalsMonth - totalCompletedMonth, 0),
+            todayCompleted: todayCompletedHabits,
+          },
         });
 
         const openTodoDoing = openTasks.filter((t) => t.status === "todo" || t.status === "doing");
@@ -428,7 +628,7 @@ export default function AnalyticsPage() {
     }
 
     load();
-  }, [user]);
+  }, [user, refreshNonce]);
 
   if (loading) {
     return (
@@ -441,6 +641,25 @@ export default function AnalyticsPage() {
   const categoryChartHeight = Math.max(280, completionsByCategory.length * 46);
   const outcomeChartHeight = Math.max(280, completionsByOutcome.length * 42);
   const lifeDomainChartHeight = Math.max(260, completionsByLifeDomain.length * 40);
+  const hasHabitTracker = habitTracker && habitTracker.totalHabits > 0;
+
+  async function handleHabitDateToggle(taskId, day, isCompleted) {
+    if (!user || !taskId || !day) return;
+    const todayKey = dateStrLocal(new Date());
+    if (day > todayKey) return;
+    const editKey = `${taskId}:${day}`;
+    setHabitEditKey(editKey);
+    try {
+      const res = await setTaskCompletionForDate(user.id, taskId, day, !isCompleted);
+      if (res.error) {
+        setError(res.error.message || "Failed to update habit history.");
+        return;
+      }
+      setRefreshNonce((value) => value + 1);
+    } finally {
+      setHabitEditKey("");
+    }
+  }
 
   return (
     <DashboardLayout>
@@ -522,8 +741,545 @@ export default function AnalyticsPage() {
 
         <style>{`
           .analytics-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-top: 20px; }
-          @media (max-width: 768px) { .analytics-grid { grid-template-columns: 1fr; } }
+          .analytics-habit-shell {
+            margin-top: 20px;
+            padding: 18px;
+            border-radius: 22px;
+            background: linear-gradient(180deg, #0d2032 0%, #081a2b 100%);
+            color: #f3f8ff;
+            border: 1px solid rgba(98, 139, 182, 0.22);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+          }
+          .analytics-habit-header {
+            display: grid;
+            grid-template-columns: minmax(180px, 1.15fr) minmax(0, 3fr) minmax(200px, 1.15fr);
+            gap: 14px;
+            align-items: stretch;
+          }
+          .analytics-habit-titleCard,
+          .analytics-habit-sideCard,
+          .analytics-habit-panel {
+            background: rgba(8, 20, 33, 0.74);
+            border: 1px solid rgba(110, 148, 189, 0.18);
+            border-radius: 16px;
+          }
+          .analytics-habit-titleCard {
+            padding: 18px;
+          }
+          .analytics-habit-titleCard h2 {
+            margin: 0 0 6px;
+            font-size: 1.9rem;
+            letter-spacing: -0.03em;
+          }
+          .analytics-habit-titleCard p {
+            margin: 0;
+            color: rgba(226, 237, 255, 0.74);
+            font-size: 12px;
+          }
+          .analytics-habit-ringRow {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+          }
+          .analytics-habit-ringCard {
+            padding: 14px 10px 12px;
+            text-align: center;
+          }
+          .analytics-habit-ring {
+            width: 76px;
+            height: 76px;
+            border-radius: 999px;
+            margin: 0 auto 8px;
+            display: grid;
+            place-items: center;
+          }
+          .analytics-habit-ringInner {
+            width: 58px;
+            height: 58px;
+            border-radius: 999px;
+            background: #0b1d2e;
+            display: grid;
+            place-items: center;
+            font-size: 12px;
+            font-weight: 700;
+          }
+          .analytics-habit-ringLabel {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: rgba(220, 233, 255, 0.72);
+          }
+          .analytics-habit-sideCard {
+            padding: 14px;
+          }
+          .analytics-habit-sideTitle {
+            margin: 0 0 10px;
+            font-size: 12px;
+            color: rgba(220, 233, 255, 0.82);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+          }
+          .analytics-habit-bars {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+          }
+          .analytics-habit-barRow {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 36px;
+            gap: 10px;
+            align-items: center;
+          }
+          .analytics-habit-barMeta {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            font-size: 11px;
+            margin-bottom: 3px;
+            color: rgba(228, 238, 255, 0.86);
+          }
+          .analytics-habit-barTrack {
+            height: 10px;
+            border-radius: 999px;
+            overflow: hidden;
+            background: rgba(255,255,255,0.08);
+          }
+          .analytics-habit-barFill {
+            height: 100%;
+            border-radius: 999px;
+          }
+          .analytics-habit-barValue {
+            text-align: right;
+            font-size: 11px;
+            color: rgba(220, 233, 255, 0.78);
+          }
+          .analytics-habit-body {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 240px;
+            gap: 14px;
+            margin-top: 14px;
+          }
+          .analytics-habit-panel {
+            padding: 16px;
+          }
+          .analytics-habit-metrics {
+            display: grid;
+            grid-template-columns: 160px minmax(160px, 1fr);
+            gap: 14px;
+            margin-bottom: 14px;
+          }
+          .analytics-habit-metricStack {
+            display: grid;
+            gap: 10px;
+          }
+          .analytics-habit-metricBox {
+            padding: 14px;
+            border-radius: 14px;
+            background: rgba(12, 30, 48, 0.86);
+            border: 1px solid rgba(110, 148, 189, 0.14);
+          }
+          .analytics-habit-metricLabel {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: rgba(220, 233, 255, 0.72);
+          }
+          .analytics-habit-metricValue {
+            margin-top: 4px;
+            font-size: 1.9rem;
+            font-weight: 700;
+            color: #29df83;
+          }
+          .analytics-habit-metricHint {
+            margin-top: 4px;
+            font-size: 12px;
+            color: rgba(220, 233, 255, 0.7);
+          }
+          .analytics-habit-heatmap {
+            display: grid;
+            gap: 4px;
+            align-items: center;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+          }
+          .analytics-habit-heatmap--mobile {
+            display: none;
+          }
+          .analytics-habit-cell,
+          .analytics-habit-dayCell,
+          .analytics-habit-rowLabel,
+          .analytics-habit-extraCell {
+            min-width: 18px;
+          }
+          .analytics-habit-dayCell {
+            font-size: 10px;
+            color: rgba(218, 232, 255, 0.7);
+            text-align: center;
+            padding-bottom: 4px;
+          }
+          .analytics-habit-rowLabel {
+            padding-right: 8px;
+            font-size: 12px;
+            color: #eef5ff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+          .analytics-habit-cell {
+            height: 18px;
+            border-radius: 4px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.05);
+            padding: 0;
+            appearance: none;
+            -webkit-appearance: none;
+          }
+          .analytics-habit-cell--editable {
+            cursor: pointer;
+            transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+          }
+          .analytics-habit-cell--editable:hover {
+            transform: translateY(-1px);
+            border-color: rgba(255,255,255,0.24);
+            box-shadow: 0 0 0 1px rgba(255,255,255,0.08);
+          }
+          .analytics-habit-cell--done {
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+          }
+          .analytics-habit-cell--future {
+            opacity: 0.3;
+          }
+          .analytics-habit-cell--saving {
+            opacity: 0.65;
+            cursor: wait;
+          }
+          .analytics-habit-extraCell {
+            font-size: 11px;
+            color: rgba(220, 233, 255, 0.78);
+            text-align: right;
+            padding-left: 6px;
+          }
+          .analytics-habit-mobileDays,
+          .analytics-habit-mobileStrip {
+            display: grid;
+            grid-auto-flow: column;
+            grid-auto-columns: 18px;
+            gap: 4px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+          }
+          .analytics-habit-mobileDays {
+            margin-bottom: 8px;
+            padding-bottom: 4px;
+          }
+          .analytics-habit-mobileRow {
+            padding: 10px;
+            border-radius: 12px;
+            background: rgba(12, 30, 48, 0.82);
+            border: 1px solid rgba(110, 148, 189, 0.12);
+          }
+          .analytics-habit-mobileList {
+            display: grid;
+            gap: 8px;
+          }
+          .analytics-habit-mobileRowHead {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 8px;
+          }
+          .analytics-habit-mobileTitle {
+            font-size: 12px;
+            color: #eef5ff;
+            font-weight: 600;
+            min-width: 0;
+          }
+          .analytics-habit-mobileBadges {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            font-size: 10px;
+            color: rgba(220, 233, 255, 0.82);
+          }
+          .analytics-habit-mobileBadge {
+            padding: 3px 6px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.08);
+            white-space: nowrap;
+          }
+          @media (max-width: 1100px) {
+            .analytics-habit-header,
+            .analytics-habit-body,
+            .analytics-habit-metrics,
+            .analytics-habit-ringRow { grid-template-columns: 1fr; }
+          }
+          @media (max-width: 768px) {
+            .analytics-grid { grid-template-columns: 1fr; }
+            .analytics-habit-shell { padding: 14px; border-radius: 18px; }
+            .analytics-habit-titleCard,
+            .analytics-habit-sideCard,
+            .analytics-habit-panel { padding: 12px; }
+            .analytics-habit-titleCard h2 { font-size: 1.55rem; }
+            .analytics-habit-ringRow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .analytics-habit-metrics { grid-template-columns: 1fr; }
+            .analytics-habit-heatmap--desktop { display: none; }
+            .analytics-habit-heatmap--mobile { display: grid; }
+            .analytics-habit-rowLabel { font-size: 11px; }
+            .analytics-habit-dayCell { font-size: 9px; }
+            .analytics-habit-cell { min-width: 20px; height: 20px; }
+          }
         `}</style>
+        <section className="analytics-habit-shell">
+          <div className="analytics-habit-header">
+            <div className="analytics-habit-titleCard">
+              <p>{habitTracker?.monthLabel || "Daily habit tracker"} · {habitTracker?.templateName || "Daily Hits"}</p>
+              <h2>Habit Tracker</h2>
+              <p>
+                Daily Hits completions, streaks, and month-to-date progress in one place.
+              </p>
+              <p style={{ marginTop: 10 }}>
+                Click any past or current day square below to correct a Daily Hit after the fact.
+              </p>
+              {hasHabitTracker && (
+                <div style={{ marginTop: 14, fontSize: 12, color: "rgba(220, 233, 255, 0.82)", display: "grid", gap: 4 }}>
+                  <div>Start date: {habitTracker.stats.startDate}</div>
+                  <div>End date: {habitTracker.stats.endDate}</div>
+                  <div>Daily habits: {habitTracker.totalHabits}</div>
+                  <div>Habit goals: {habitTracker.stats.goalsThisMonth}</div>
+                </div>
+              )}
+            </div>
+
+            <div className="analytics-habit-ringRow">
+              {(habitTracker?.progressRings || []).map((ring) => (
+                <div key={ring.label} className="analytics-habit-titleCard analytics-habit-ringCard">
+                  <div className="analytics-habit-ring" style={{ background: ring.gradient }}>
+                    <div className="analytics-habit-ringInner">{ring.valueLabel}</div>
+                  </div>
+                  <div className="analytics-habit-ringLabel">{ring.label}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="analytics-habit-sideCard">
+              <h3 className="analytics-habit-sideTitle">Top habits</h3>
+              {hasHabitTracker ? (
+                <div className="analytics-habit-bars">
+                  {habitTracker.topHabits.map((row, idx) => (
+                    <div className="analytics-habit-barRow" key={row.id}>
+                      <div>
+                        <div className="analytics-habit-barMeta">
+                          <span>{shortenChartLabel(row.title, 18)}</span>
+                          <span>{row.monthCompleted}</span>
+                        </div>
+                        <div className="analytics-habit-barTrack">
+                          <div
+                            className="analytics-habit-barFill"
+                            style={{
+                              width: `${row.monthRate}%`,
+                              background: ["#2ec5ff", "#2adf86", "#8a74ff", "#f2c94c", "#ff6b8b", "#4dd3a9"][idx % 6],
+                            }}
+                          />
+                        </div>
+                      </div>
+                      <div className="analytics-habit-barValue">{row.monthRate}%</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p style={{ margin: 0, fontSize: 13, color: "rgba(220, 233, 255, 0.72)" }}>
+                  Add Daily Hits on the `Daily Hits` page to populate the tracker.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="analytics-habit-body">
+            <div className="analytics-habit-panel">
+              {hasHabitTracker ? (
+                <>
+                  <div className="analytics-habit-metrics">
+                    <div className="analytics-habit-metricStack">
+                      <div className="analytics-habit-metricBox">
+                        <div className="analytics-habit-metricLabel">Completed</div>
+                        <div className="analytics-habit-metricValue">{habitTracker.stats.completedThisMonth}</div>
+                        <div className="analytics-habit-metricHint">Month to date</div>
+                      </div>
+                      <div className="analytics-habit-metricBox">
+                        <div className="analytics-habit-metricLabel">Remaining</div>
+                        <div className="analytics-habit-metricValue" style={{ color: "#ff6b8b" }}>
+                          {habitTracker.stats.remainingThisMonth}
+                        </div>
+                        <div className="analytics-habit-metricHint">Open habit reps this month</div>
+                      </div>
+                    </div>
+
+                    <div className="analytics-habit-metricBox">
+                      <div className="analytics-habit-metricLabel">Daily progress trend</div>
+                      <div style={{ height: 180, marginTop: 10 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={habitTracker.trendData} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                            <XAxis dataKey="label" tick={{ fontSize: 10, fill: "rgba(220,233,255,0.68)" }} />
+                            <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "rgba(220,233,255,0.68)" }} />
+                            <Tooltip
+                              contentStyle={{ background: "#0c2134", border: "1px solid rgba(110, 148, 189, 0.24)" }}
+                              labelStyle={{ color: "#eef5ff" }}
+                            />
+                            <Line type="monotone" dataKey="completed" stroke="#2adf86" strokeWidth={2.5} dot={false} name="Daily hits completed" />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    className="analytics-habit-heatmap analytics-habit-heatmap--desktop"
+                    style={{
+                      gridTemplateColumns: `190px repeat(${habitTracker.monthDays.length}, minmax(18px, 1fr)) 70px 58px`,
+                    }}
+                  >
+                    <div className="analytics-habit-rowLabel analytics-habit-dayCell">Daily habits</div>
+                    {habitTracker.monthDays.map((day) => (
+                      <div key={`header-${day}`} className="analytics-habit-dayCell">
+                        {new Date(`${day}T12:00:00`).getDate()}
+                      </div>
+                    ))}
+                    <div className="analytics-habit-dayCell">Progress</div>
+                    <div className="analytics-habit-dayCell">Streak</div>
+
+                    {habitTracker.habitRows.map((row, idx) => (
+                      <div key={row.id} style={{ display: "contents" }}>
+                        <div key={`${row.id}-label`} className="analytics-habit-rowLabel" title={row.title}>
+                          {row.title}
+                        </div>
+                        {habitTracker.monthDays.map((day) => {
+                          const isFuture = day > habitTracker.stats.endDate;
+                          const isDone = row.dates.has(day);
+                          const editKey = `${row.id}:${day}`;
+                          const isSaving = habitEditKey === editKey;
+                          const fill = ["#20bdf2", "#24df84", "#8b73ff", "#d8ad2f", "#ff4d7e", "#32c7a0"][idx % 6];
+                          return (
+                            <button
+                              type="button"
+                              key={`${row.id}-${day}`}
+                              className={`analytics-habit-cell${isDone ? " analytics-habit-cell--done" : ""}${isFuture ? " analytics-habit-cell--future" : " analytics-habit-cell--editable"}${isSaving ? " analytics-habit-cell--saving" : ""}`}
+                              style={{ background: isDone ? fill : undefined }}
+                              title={
+                                isFuture
+                                  ? `${row.title} · ${day} (future)`
+                                  : `${row.title} · ${day}${isDone ? " complete" : " incomplete"} · click to toggle`
+                              }
+                              onClick={() => handleHabitDateToggle(row.id, day, isDone)}
+                              disabled={isFuture || isSaving}
+                              aria-label={`${isDone ? "Mark incomplete" : "Mark complete"} for ${row.title} on ${day}`}
+                            />
+                          );
+                        })}
+                        <div key={`${row.id}-progress`} className="analytics-habit-extraCell">
+                          {row.monthCompleted}/{habitTracker.visibleMonthDays.length}
+                        </div>
+                        <div key={`${row.id}-streak`} className="analytics-habit-extraCell">
+                          {row.currentStreak}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="analytics-habit-heatmap--mobile">
+                    <div className="analytics-habit-mobileDays">
+                      {habitTracker.monthDays.map((day) => (
+                        <div key={`mobile-header-${day}`} className="analytics-habit-dayCell">
+                          {new Date(`${day}T12:00:00`).getDate()}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="analytics-habit-mobileList">
+                      {habitTracker.habitRows.map((row, idx) => (
+                        <div key={`mobile-${row.id}`} className="analytics-habit-mobileRow">
+                          <div className="analytics-habit-mobileRowHead">
+                            <div className="analytics-habit-mobileTitle">{row.title}</div>
+                            <div className="analytics-habit-mobileBadges">
+                              <span className="analytics-habit-mobileBadge">
+                                {row.monthCompleted}/{habitTracker.visibleMonthDays.length}
+                              </span>
+                              <span className="analytics-habit-mobileBadge">
+                                {row.currentStreak}d
+                              </span>
+                            </div>
+                          </div>
+                          <div className="analytics-habit-mobileStrip">
+                            {habitTracker.monthDays.map((day) => {
+                              const isFuture = day > habitTracker.stats.endDate;
+                              const isDone = row.dates.has(day);
+                              const editKey = `${row.id}:${day}`;
+                              const isSaving = habitEditKey === editKey;
+                              const fill = ["#20bdf2", "#24df84", "#8b73ff", "#d8ad2f", "#ff4d7e", "#32c7a0"][idx % 6];
+                              return (
+                                <button
+                                  type="button"
+                                  key={`mobile-${row.id}-${day}`}
+                                  className={`analytics-habit-cell${isDone ? " analytics-habit-cell--done" : ""}${isFuture ? " analytics-habit-cell--future" : " analytics-habit-cell--editable"}${isSaving ? " analytics-habit-cell--saving" : ""}`}
+                                  style={{ background: isDone ? fill : undefined }}
+                                  title={
+                                    isFuture
+                                      ? `${row.title} · ${day} (future)`
+                                      : `${row.title} · ${day}${isDone ? " complete" : " incomplete"} · tap to toggle`
+                                  }
+                                  onClick={() => handleHabitDateToggle(row.id, day, isDone)}
+                                  disabled={isFuture || isSaving}
+                                  aria-label={`${isDone ? "Mark incomplete" : "Mark complete"} for ${row.title} on ${day}`}
+                                />
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <p style={{ margin: 0, fontSize: 13, color: "rgba(220, 233, 255, 0.72)" }}>
+                  No Daily Hits are configured yet. Add them on the `Daily Hits` page and they will appear here automatically.
+                </p>
+              )}
+            </div>
+
+            <div className="analytics-habit-sideCard">
+              <h3 className="analytics-habit-sideTitle">Active streaks</h3>
+              {hasHabitTracker && habitTracker.activeStreaks.length > 0 ? (
+                <div className="analytics-habit-bars">
+                  {habitTracker.activeStreaks.map((row, idx) => (
+                    <div className="analytics-habit-barRow" key={row.id}>
+                      <div>
+                        <div className="analytics-habit-barMeta">
+                          <span>{shortenChartLabel(row.title, 18)}</span>
+                          <span>{row.currentStreak}d</span>
+                        </div>
+                        <div className="analytics-habit-barTrack">
+                          <div
+                            className="analytics-habit-barFill"
+                            style={{
+                              width: `${Math.min(row.currentStreak * 10, 100)}%`,
+                              background: ["#2ec5ff", "#2adf86", "#8a74ff", "#f2c94c", "#ff6b8b", "#4dd3a9"][idx % 6],
+                            }}
+                          />
+                        </div>
+                      </div>
+                      <div className="analytics-habit-barValue">{row.currentStreak}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p style={{ margin: 0, fontSize: 13, color: "rgba(220, 233, 255, 0.72)" }}>
+                  Complete a Daily Hit today to start a visible streak.
+                </p>
+              )}
+            </div>
+          </div>
+        </section>
         <div className="analytics-grid">
         <section className="rs-section-card">
           <h2 className="rs-section-card__title" style={{ marginBottom: 4 }}>
@@ -661,50 +1417,6 @@ export default function AnalyticsPage() {
               Generate a weekly improvement coach run to start measuring acceptance and application quality.
             </p>
           )}
-        </section>
-
-        <section className="rs-section-card">
-          <h2 className="rs-section-card__title" style={{ fontSize: "1rem", marginBottom: 4 }}>
-            7-day momentum
-          </h2>
-          <p className="rs-section-card__subtitle" style={{ marginBottom: 8, fontSize: 12 }}>
-            Bottom: daily template tasks. Top: other tasks.
-          </p>
-          <MeasuredChart
-            renderChart={({ width, height }) => (
-              <BarChart width={width} height={height} data={sevenDayData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="daily" name="Daily tasks" stackId="a" fill="#555d1e" radius={[0, 0, 0, 0]} />
-                <Bar dataKey="other" name="Other tasks" stackId="a" fill="#d4af37" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            )}
-          />
-        </section>
-
-        <section className="rs-section-card">
-          <h2 className="rs-section-card__title" style={{ fontSize: "1rem", marginBottom: 4 }}>
-            30-day momentum
-          </h2>
-          <p className="rs-section-card__subtitle" style={{ marginBottom: 8, fontSize: 12 }}>
-            Bottom: daily template tasks. Top: other tasks.
-          </p>
-          <MeasuredChart
-            renderChart={({ width, height }) => (
-              <BarChart width={width} height={height} data={thirtyDayData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="date" tick={{ fontSize: 9 }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="daily" name="Daily tasks" stackId="a" fill="#555d1e" radius={[0, 0, 0, 0]} />
-                <Bar dataKey="other" name="Other tasks" stackId="a" fill="#d4af37" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            )}
-          />
         </section>
 
         <section className="rs-section-card">
