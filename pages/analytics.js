@@ -10,6 +10,8 @@ import {
   getPlannerRefinementEventsInRange,
   getWeeklyReview,
   getDailyTemplateTaskIds,
+  getTemplates,
+  getTemplateItems,
   getBacklogTasks,
   getCategoriesWithSubcategories,
   getUserProfile,
@@ -152,6 +154,11 @@ function progressRing(progress, label, valueLabel, accent) {
   };
 }
 
+function getDefaultTemplate(items) {
+  const templates = Array.isArray(items) ? items : [];
+  return templates.find((item) => item.is_default) || templates[0] || null;
+}
+
 function MeasuredChart({ height = 220, renderChart }) {
   const containerRef = useRef(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -229,6 +236,23 @@ export default function AnalyticsPage() {
   const [refreshNonce, setRefreshNonce] = useState(0);
 
   useEffect(() => {
+    function handleWindowFocus() {
+      setRefreshNonce((value) => value + 1);
+    }
+    function handleVisibility() {
+      if (document.visibilityState === "visible") {
+        setRefreshNonce((value) => value + 1);
+      }
+    }
+    window.addEventListener("focus", handleWindowFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("focus", handleWindowFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!user) return;
 
     async function load() {
@@ -250,6 +274,7 @@ export default function AnalyticsPage() {
           weeks,
           plannerRefinements,
           dailyTaskIdsRes,
+          templatesRes,
           backlogOpen,
           backlogAll,
           categoriesRes,
@@ -263,6 +288,7 @@ export default function AnalyticsPage() {
           getWeeklyReviewWeeks(user.id, 52),
           getPlannerRefinementEventsInRange(user.id, dateStr(start30), dateStr(today)),
           getDailyTemplateTaskIds(user.id),
+          getTemplates(),
           getBacklogTasks(user.id, { includeArchived: false }),
           getBacklogTasks(user.id, { includeArchived: true }),
           getCategoriesWithSubcategories(user.id),
@@ -271,6 +297,10 @@ export default function AnalyticsPage() {
         ]);
 
         const dailyTemplateTaskIds = dailyTaskIdsRes.data || new Set();
+        const defaultTemplate = getDefaultTemplate(templatesRes?.data || []);
+        const templateItemsRes = defaultTemplate ? await getTemplateItems(defaultTemplate.id) : { data: [], error: null };
+        if (templateItemsRes.error) setError(templateItemsRes.error.message);
+        const orderedTemplateItems = templateItemsRes.data || [];
         const todayStr = dateStrLocal(today);
         const openTasks = backlogOpen.data || [];
         const allTasks = backlogAll.data || [];
@@ -352,8 +382,17 @@ export default function AnalyticsPage() {
           const d = dateStrLocal(new Date(ev.created_at));
           return d >= dateStrLocal(start14) && d < dateStrLocal(start7);
         }).length;
-        const dailySize = dailyTemplateTaskIds.size || 1;
-        const totalDailyIn7 = (range7.data || []).filter((ev) => dailyTemplateTaskIds.has(ev.task_id)).length;
+        const orderedTemplateTasks = orderedTemplateItems
+          .map((item) => item?.task)
+          .filter((task) => task?.id);
+        const orderedTemplateTaskIds = orderedTemplateTasks.map((task) => String(task.id));
+        const habitTaskIdSet = new Set(
+          orderedTemplateTaskIds.length > 0
+            ? orderedTemplateTaskIds
+            : Array.from(dailyTemplateTaskIds).map((taskId) => String(taskId))
+        );
+        const dailySize = habitTaskIdSet.size || 1;
+        const totalDailyIn7 = (range7.data || []).filter((ev) => habitTaskIdSet.has(String(ev.task_id))).length;
         const maxDailyPossible = dailySize * 7;
         setSummaryMetrics({
           daysActive7: datesWithCompletions7.size,
@@ -367,10 +406,12 @@ export default function AnalyticsPage() {
         const monthDays = buildDateRange(monthStart, monthEnd);
         const visibleMonthDays = monthDays.filter((day) => day <= todayKey);
         const habitHistoryEvents = habitHistoryRes.data || [];
-        const habitTasks = Array.from(dailyTemplateTaskIds)
-          .map((taskId) => tasksById.get(taskId))
-          .filter(Boolean)
-          .sort((a, b) => String(a.title || "").localeCompare(String(b.title || "")));
+        const habitTasks = orderedTemplateTaskIds.length > 0
+          ? orderedTemplateTaskIds.map((taskId) => tasksById.get(taskId)).filter(Boolean)
+          : Array.from(dailyTemplateTaskIds)
+              .map((taskId) => tasksById.get(taskId))
+              .filter(Boolean)
+              .sort((a, b) => String(a.title || "").localeCompare(String(b.title || "")));
         const habitCompletionsByTask = new Map();
         habitTasks.forEach((task) => {
           habitCompletionsByTask.set(String(task.id), new Set());
@@ -432,6 +473,7 @@ export default function AnalyticsPage() {
 
         setHabitTracker({
           monthLabel: today.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
+          templateName: defaultTemplate?.name || "Daily Hits",
           totalHabits: habitTasks.length,
           monthDays,
           visibleMonthDays,
@@ -858,6 +900,10 @@ export default function AnalyticsPage() {
             gap: 4px;
             align-items: center;
             overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+          }
+          .analytics-habit-heatmap--mobile {
+            display: none;
           }
           .analytics-habit-cell,
           .analytics-habit-dayCell,
@@ -913,18 +959,82 @@ export default function AnalyticsPage() {
             text-align: right;
             padding-left: 6px;
           }
+          .analytics-habit-mobileDays,
+          .analytics-habit-mobileStrip {
+            display: grid;
+            grid-auto-flow: column;
+            grid-auto-columns: 18px;
+            gap: 4px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+          }
+          .analytics-habit-mobileDays {
+            margin-bottom: 8px;
+            padding-bottom: 4px;
+          }
+          .analytics-habit-mobileRow {
+            padding: 10px;
+            border-radius: 12px;
+            background: rgba(12, 30, 48, 0.82);
+            border: 1px solid rgba(110, 148, 189, 0.12);
+          }
+          .analytics-habit-mobileList {
+            display: grid;
+            gap: 8px;
+          }
+          .analytics-habit-mobileRowHead {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 8px;
+          }
+          .analytics-habit-mobileTitle {
+            font-size: 12px;
+            color: #eef5ff;
+            font-weight: 600;
+            min-width: 0;
+          }
+          .analytics-habit-mobileBadges {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            font-size: 10px;
+            color: rgba(220, 233, 255, 0.82);
+          }
+          .analytics-habit-mobileBadge {
+            padding: 3px 6px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.08);
+            white-space: nowrap;
+          }
           @media (max-width: 1100px) {
             .analytics-habit-header,
             .analytics-habit-body,
             .analytics-habit-metrics,
             .analytics-habit-ringRow { grid-template-columns: 1fr; }
           }
-          @media (max-width: 768px) { .analytics-grid { grid-template-columns: 1fr; } }
+          @media (max-width: 768px) {
+            .analytics-grid { grid-template-columns: 1fr; }
+            .analytics-habit-shell { padding: 14px; border-radius: 18px; }
+            .analytics-habit-titleCard,
+            .analytics-habit-sideCard,
+            .analytics-habit-panel { padding: 12px; }
+            .analytics-habit-titleCard h2 { font-size: 1.55rem; }
+            .analytics-habit-ringRow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .analytics-habit-metrics { grid-template-columns: 1fr; }
+            .analytics-habit-heatmap--desktop { display: none; }
+            .analytics-habit-heatmap--mobile { display: grid; }
+            .analytics-habit-rowLabel { font-size: 11px; }
+            .analytics-habit-dayCell { font-size: 9px; }
+            .analytics-habit-cell { min-width: 20px; height: 20px; }
+          }
         `}</style>
         <section className="analytics-habit-shell">
           <div className="analytics-habit-header">
             <div className="analytics-habit-titleCard">
-              <p>{habitTracker?.monthLabel || "Daily habit tracker"}</p>
+              <p>{habitTracker?.monthLabel || "Daily habit tracker"} · {habitTracker?.templateName || "Daily Hits"}</p>
               <h2>Habit Tracker</h2>
               <p>
                 Daily Hits completions, streaks, and month-to-date progress in one place.
@@ -1026,7 +1136,7 @@ export default function AnalyticsPage() {
                   </div>
 
                   <div
-                    className="analytics-habit-heatmap"
+                    className="analytics-habit-heatmap analytics-habit-heatmap--desktop"
                     style={{
                       gridTemplateColumns: `190px repeat(${habitTracker.monthDays.length}, minmax(18px, 1fr)) 70px 58px`,
                     }}
@@ -1076,6 +1186,58 @@ export default function AnalyticsPage() {
                         </div>
                       </div>
                     ))}
+                  </div>
+
+                  <div className="analytics-habit-heatmap--mobile">
+                    <div className="analytics-habit-mobileDays">
+                      {habitTracker.monthDays.map((day) => (
+                        <div key={`mobile-header-${day}`} className="analytics-habit-dayCell">
+                          {new Date(`${day}T12:00:00`).getDate()}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="analytics-habit-mobileList">
+                      {habitTracker.habitRows.map((row, idx) => (
+                        <div key={`mobile-${row.id}`} className="analytics-habit-mobileRow">
+                          <div className="analytics-habit-mobileRowHead">
+                            <div className="analytics-habit-mobileTitle">{row.title}</div>
+                            <div className="analytics-habit-mobileBadges">
+                              <span className="analytics-habit-mobileBadge">
+                                {row.monthCompleted}/{habitTracker.visibleMonthDays.length}
+                              </span>
+                              <span className="analytics-habit-mobileBadge">
+                                {row.currentStreak}d
+                              </span>
+                            </div>
+                          </div>
+                          <div className="analytics-habit-mobileStrip">
+                            {habitTracker.monthDays.map((day) => {
+                              const isFuture = day > habitTracker.stats.endDate;
+                              const isDone = row.dates.has(day);
+                              const editKey = `${row.id}:${day}`;
+                              const isSaving = habitEditKey === editKey;
+                              const fill = ["#20bdf2", "#24df84", "#8b73ff", "#d8ad2f", "#ff4d7e", "#32c7a0"][idx % 6];
+                              return (
+                                <button
+                                  type="button"
+                                  key={`mobile-${row.id}-${day}`}
+                                  className={`analytics-habit-cell${isDone ? " analytics-habit-cell--done" : ""}${isFuture ? " analytics-habit-cell--future" : " analytics-habit-cell--editable"}${isSaving ? " analytics-habit-cell--saving" : ""}`}
+                                  style={{ background: isDone ? fill : undefined }}
+                                  title={
+                                    isFuture
+                                      ? `${row.title} · ${day} (future)`
+                                      : `${row.title} · ${day}${isDone ? " complete" : " incomplete"} · tap to toggle`
+                                  }
+                                  onClick={() => handleHabitDateToggle(row.id, day, isDone)}
+                                  disabled={isFuture || isSaving}
+                                  aria-label={`${isDone ? "Mark incomplete" : "Mark complete"} for ${row.title} on ${day}`}
+                                />
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </>
               ) : (
