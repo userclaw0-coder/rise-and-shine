@@ -1106,7 +1106,7 @@ export default function AnalyticsPage() {
                           />
                         </div>
                       </div>
-                      <div className="analytics-habit-barValue">{row.bestStreak}</div>
+                      <div className="analytics-habit-barValue">{row.currentStreak}</div>
                     </div>
                   ))}
                 </div>
