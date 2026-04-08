@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../hooks/useAuth";
 import { BrandMarkIcon, BrandMarkLockup } from "./BrandMark";
 import OccamNotificationManager from "./OccamNotificationManager";
+import ChatPanel from "./ChatPanel";
 
 function useLocalDateTime() {
   const [dateTime, setDateTime] = useState("");
@@ -38,6 +39,7 @@ const NAV_LINKS = [
   { href: "/health", label: "Occam Workout", icon: "fitness_center" },
   { href: "/vision", label: "Vision", icon: "visibility" },
   { href: "/weekly-review", label: "Weekly review", icon: "calendar_month" },
+  { href: "/chat", label: "Jarvis", icon: "smart_toy" },
 ];
 
 const ACCOUNT_LINK = { href: "/account", label: "Account", icon: "person" };
@@ -48,6 +50,7 @@ export default function DashboardLayout({ children }) {
   const { user } = useAuth();
   const localDateTime = useLocalDateTime();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
 
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
   const openSidebar = useCallback(() => setSidebarOpen(true), []);
@@ -200,6 +203,25 @@ export default function DashboardLayout({ children }) {
         <main className="main-content rs-main-inner">{children}</main>
       </div>
       <OccamNotificationManager />
+
+      {/* Jarvis FAB — hidden on /chat page */}
+      {path !== "/chat" && (
+        <button
+          type="button"
+          className="jarvis-fab"
+          onClick={() => setChatOpen(true)}
+          aria-label="Open Jarvis chat"
+        >
+          <span className="material-symbols-outlined">smart_toy</span>
+        </button>
+      )}
+
+      {/* Jarvis overlay panel */}
+      <ChatPanel
+        isOverlay
+        isOpen={chatOpen}
+        onClose={() => setChatOpen(false)}
+      />
     </div>
   );
 }
