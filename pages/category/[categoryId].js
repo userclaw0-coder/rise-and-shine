@@ -6,6 +6,9 @@ import BacklogStrategicTaskCard from "../../components/BacklogStrategicTaskCard"
 import DashboardLayout from "../../components/DashboardLayout";
 import Modal from "../../components/Modal";
 import PageHeader from "../../components/PageHeader";
+import ProjectKnowledgeBase from "../../components/ProjectKnowledgeBase";
+import ProjectPlanView from "../../components/ProjectPlanView";
+import SectionCard from "../../components/SectionCard";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabaseClient";
 import {
@@ -112,6 +115,7 @@ export default function StrategicProjectWorkspacePage() {
   const [profile, setProfile] = useState(null);
   const [tags, setTags] = useState([]);
 
+  const [knowledgeBase, setKnowledgeBase] = useState("");
   const [mantra, setMantra] = useState("");
   const [narrative, setNarrative] = useState("");
   const [efficiencyTip, setEfficiencyTip] = useState("");
@@ -182,6 +186,7 @@ export default function StrategicProjectWorkspacePage() {
         ...defaultProjectWorkspace(),
         ...(data.workspace || {}),
       };
+      setKnowledgeBase(data.knowledge_base || "");
       setMantra(ws.mantra || "");
       setNarrative(ws.narrative || "");
       setEfficiencyTip(ws.efficiency_tip || "");
@@ -466,6 +471,7 @@ export default function StrategicProjectWorkspacePage() {
       await saveCollaborativeProjectWorkspace(categoryId, {
         mantra: mantra.trim(),
         narrative: narrative.trim(),
+        knowledge_base: knowledgeBase,
         efficiency_tip: efficiencyTip.trim(),
         suggested_moves: suggestedMoves.filter((s) => String(s).trim()),
         resources: resources.filter((r) => r.url?.trim() || r.label?.trim()),
@@ -870,6 +876,36 @@ export default function StrategicProjectWorkspacePage() {
             </div>
           </div>
         </section>
+
+        {/* Knowledge Base + Resources */}
+        <ProjectKnowledgeBase
+          knowledgeBase={knowledgeBase}
+          onKnowledgeBaseChange={setKnowledgeBase}
+          resources={resources}
+          onResourcesChange={setResources}
+          projectName={category?.name || ""}
+          mantra={mantra}
+          onSave={persistFullWorkspace}
+          saving={savingWorkspace}
+        />
+
+        {/* Plan of Attack */}
+        <SectionCard title="Plan of Attack">
+          <ProjectPlanView
+            tasks={rootTasks}
+            childrenByParent={childrenByParent}
+            completionMap={{}}
+            onToggleCompletion={(taskId) => handleStatusChange({ id: taskId }, "done")}
+            onSubtaskCompletion={(taskId) => handleStatusChange({ id: taskId }, "done")}
+            onJarvisBreakDown={(task) => {
+              if (typeof window !== "undefined") {
+                const msg = `Break down "${task.title}" in project "${category?.name || ""}" into 5-7 bite-size subtasks. Consider the project knowledge base and current context.`;
+                window.open(`/chat?message=${encodeURIComponent(msg)}`, "_self");
+              }
+            }}
+            todayStr={new Date().toISOString().slice(0, 10)}
+          />
+        </SectionCard>
 
         <div className="rs-project-workspace__grid">
           <div className="rs-project-workspace__main-col">

@@ -67,7 +67,7 @@ export default function ProjectPlanView({
         const isDone = task.status === "done" || task.status === "archived";
         const isActive = task.id === activeTaskId && !isDone;
         const expanded = isExpanded(task.id);
-        const subtasks = childrenByParent?.[task.id] || [];
+        const subtasks = (childrenByParent instanceof Map ? childrenByParent.get(task.id) : childrenByParent?.[task.id]) || [];
         const doneSubtasks = subtasks.filter((s) => s.status === "done").length;
         const hasSubtasks = subtasks.length > 0;
 
