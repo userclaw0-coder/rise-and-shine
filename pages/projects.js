@@ -5,102 +5,89 @@ import DashboardLayout from "../components/DashboardLayout";
 import PageHeader from "../components/PageHeader";
 import { useAuth } from "../hooks/useAuth";
 import { loadCollaborativeProjects } from "../lib/collaborationClient";
-import { computeProjectTileMetrics } from "../lib/projectDashboardMetrics";
-import {
-  isTaskNeedingAlignment,
-  isTaskNeedingSubtasks,
-  isStaleDoingTask,
-} from "../lib/weeklyImprovementContext";
+import { BASE_CATEGORY_WEIGHTS } from "../lib/scoring";
 
-function ProjectTile({ category, metrics, featured, badges }) {
+function ProjectTile({ category, taskStats, mantra, nextAction, weight }) {
   const href = `/category/${category.id}`;
-  const cls = `rs-project-tile${featured ? " rs-project-tile--featured" : ""}`;
-  const memberPreview = Array.isArray(category._memberPreview) ? category._memberPreview : [];
-  const roleLabel = category?._access?.role || "viewer";
+  const { total, done, overdue, doing } = taskStats;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const allDone = total > 0 && done === total;
+
+  // Status: complete, active (has doing tasks), stale (overdue), idle
+  const status = allDone ? "complete" : overdue > 0 ? "attention" : doing > 0 ? "active" : "idle";
+  const statusColors = {
+    complete: { bg: "rgba(34, 197, 94, 0.1)", border: "rgba(34, 197, 94, 0.3)", dot: "#22c55e" },
+    active: { bg: "rgba(184, 134, 11, 0.06)", border: "rgba(184, 134, 11, 0.2)", dot: "#b8860b" },
+    attention: { bg: "rgba(239, 68, 68, 0.06)", border: "rgba(239, 68, 68, 0.2)", dot: "#ef4444" },
+    idle: { bg: "var(--rs-card-bg, #faf9f6)", border: "var(--rs-border, #e5e1d8)", dot: "#d1d5db" },
+  };
+  const sc = statusColors[status];
 
   return (
-    <Link href={href} className={cls}>
-      <div className="rs-project-tile__top">
-        <span className="material-symbols-outlined rs-project-tile__pulse" aria-hidden>
-          {metrics.totalRootCount > 0 ? "bolt" : "nest_clock_farsight_analog"}
-        </span>
-        <span className="rs-project-tile__activity">{metrics.activityLabel}</span>
+    <Link
+      href={href}
+      className="rs-project-tile"
+      style={{ background: sc.bg, borderColor: sc.border }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+        <span style={{ width: 8, height: 8, borderRadius: "50%", background: sc.dot, flexShrink: 0 }} />
+        <h2 className="rs-project-tile__title" style={{ margin: 0 }}>{category.name}</h2>
       </div>
 
-      <div className={featured ? "rs-project-tile__featured-body" : undefined}>
-        <div className="rs-project-tile__main">
-          <h2 className="rs-project-tile__title">{category.name}</h2>
-          <div className="rs-project-tile__members">
-            <span>{category._memberCount || 1} collaborator{category._memberCount === 1 ? "" : "s"}</span>
-            <span aria-hidden>·</span>
-            <span>{roleLabel}</span>
-            {memberPreview.length > 0 && (
-              <>
-                <span aria-hidden>·</span>
-                <span>{memberPreview.map((member) => member.email || "member").join(", ")}</span>
-              </>
-            )}
-          </div>
-          <div className="rs-project-tile__insight">
-            <span className="rs-project-tile__insight-label">AI insight</span>
-            <p className="rs-project-tile__insight-text">{metrics.insight}</p>
-          </div>
-          {badges.length > 0 && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
-              {badges.map((badge) => (
-                <span
-                  key={badge.label}
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: "0.08em",
-                    textTransform: "uppercase",
-                    padding: "5px 9px",
-                    borderRadius: 999,
-                    background: "rgba(240, 215, 140, 0.28)",
-                    border: "1px solid rgba(212, 175, 55, 0.38)",
-                    color: "var(--rs-primary-strong)",
-                  }}
-                >
-                  {badge.label}
-                </span>
-              ))}
-            </div>
-          )}
+      {mantra && (
+        <p style={{ fontSize: 12, color: "var(--rs-text-muted, #8a8478)", margin: "0 0 8px", lineHeight: 1.4, fontStyle: "italic" }}>
+          {mantra}
+        </p>
+      )}
 
-          {!featured && (
-            <div className="rs-project-tile__health-block">
-              <div className="rs-project-tile__health-row">
-                <span>Health score</span>
-                <span className="rs-project-tile__health-pct">{metrics.health}%</span>
-              </div>
-              <div
-                className="rs-project-tile__bar"
-                role="progressbar"
-                aria-valuenow={metrics.health}
-                aria-valuemin={0}
-                aria-valuemax={100}
-              >
-                <span className="rs-project-tile__bar-fill" style={{ width: `${metrics.health}%` }} />
-              </div>
-            </div>
-          )}
+      {/* Progress bar */}
+      <div style={{ marginBottom: 8 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--rs-text-muted, #8a8478)", marginBottom: 3 }}>
+          <span>{done} of {total} tasks done</span>
+          <span>{pct}%</span>
         </div>
-
-        {featured && (
-          <div className="rs-project-tile__momentum" aria-hidden>
-            <div
-              className="rs-project-tile__momentum-ring"
-              style={{ "--p": metrics.health }}
-            >
-              <div className="rs-project-tile__momentum-inner">
-                <span className="rs-project-tile__momentum-val">{metrics.health}%</span>
-                <span className="rs-project-tile__momentum-lbl">Momentum</span>
-              </div>
-            </div>
-          </div>
-        )}
+        <div
+          style={{
+            height: 4,
+            borderRadius: 2,
+            background: "var(--rs-border, #e5e1d8)",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              height: "100%",
+              width: `${pct}%`,
+              borderRadius: 2,
+              background: allDone ? "#22c55e" : "var(--rs-accent, #b8860b)",
+              transition: "width 0.3s",
+            }}
+          />
+        </div>
       </div>
+
+      {/* Next action */}
+      {nextAction && !allDone && (
+        <div style={{ fontSize: 12, color: "var(--rs-text, #3e3a33)", display: "flex", alignItems: "flex-start", gap: 4 }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 14, marginTop: 1, color: "var(--rs-accent, #b8860b)" }}>
+            arrow_forward
+          </span>
+          <span style={{ lineHeight: 1.3 }}>{nextAction}</span>
+        </div>
+      )}
+
+      {allDone && total > 0 && (
+        <div style={{ fontSize: 12, color: "#22c55e", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>check_circle</span>
+          All tasks complete
+        </div>
+      )}
+
+      {overdue > 0 && (
+        <div style={{ fontSize: 11, color: "var(--rs-danger, #c0392b)", marginTop: 4, fontWeight: 500 }}>
+          {overdue} overdue
+        </div>
+      )}
     </Link>
   );
 }
@@ -137,36 +124,50 @@ export default function ProjectsPage() {
 
   const tiles = useMemo(() => {
     const q = filterQ.trim().toLowerCase();
+    const today = new Date().toISOString().slice(0, 10);
+    const priorityOrder = { Critical: 0, High: 1, Medium: 2, Low: 3 };
+
     return (categories || [])
       .filter((c) => !q || String(c.name || "").toLowerCase().includes(q))
       .map((cat) => {
         const tasksInCat = (tasks || []).filter((t) => String(t.category_id) === String(cat.id));
-        const metrics = computeProjectTileMetrics(tasksInCat, profile);
         const roots = tasksInCat.filter((t) => !t.parent_task_id);
-        const badges = [];
-        const unalignedCount = roots.filter(isTaskNeedingAlignment).length;
-        const splitCount = roots.filter(isTaskNeedingSubtasks).length;
-        const staleDoingCount = roots.filter(isStaleDoingTask).length;
-        if (unalignedCount > 0) badges.push({ label: `${unalignedCount} need alignment` });
-        if (splitCount > 0) badges.push({ label: `${splitCount} need split` });
-        if (staleDoingCount > 0) badges.push({ label: `${staleDoingCount} stale doing` });
-        return { category: cat, metrics, badges: badges.slice(0, 3) };
-      })
-      .sort((a, b) => String(a.category.name).localeCompare(String(b.category.name)));
-  }, [categories, tasks, profile, filterQ]);
+        const total = roots.length;
+        const done = roots.filter((t) => t.status === "done" || t.status === "archived").length;
+        const doing = roots.filter((t) => t.status === "doing").length;
+        const overdue = roots.filter(
+          (t) => t.due_date && t.due_date < today && t.status !== "done" && t.status !== "archived"
+        ).length;
 
-  const featuredId = useMemo(() => {
-    if (tiles.length === 0) return null;
-    let bestId = tiles[0].category.id;
-    let best = -1;
-    for (const t of tiles) {
-      if (t.metrics.featuredScore > best) {
-        best = t.metrics.featuredScore;
-        bestId = t.category.id;
-      }
-    }
-    return bestId;
-  }, [tiles]);
+        // Find next action: top undone root task by priority
+        const undone = roots
+          .filter((t) => t.status !== "done" && t.status !== "archived")
+          .sort((a, b) => (priorityOrder[a.priority] ?? 2) - (priorityOrder[b.priority] ?? 2));
+        const nextAction = undone[0]?.title || null;
+
+        // Get mantra from workspace preferences
+        const ws = profile?.preferences?.project_workspaces?.[cat.id];
+        const mantra = ws?.mantra || "";
+
+        const weight = BASE_CATEGORY_WEIGHTS[cat.name] || 1;
+
+        return {
+          category: cat,
+          taskStats: { total, done, doing, overdue },
+          nextAction,
+          mantra,
+          weight,
+        };
+      })
+      .sort((a, b) => {
+        // Active projects first (have undone tasks), complete at bottom
+        const aComplete = a.taskStats.total > 0 && a.taskStats.done === a.taskStats.total;
+        const bComplete = b.taskStats.total > 0 && b.taskStats.done === b.taskStats.total;
+        if (aComplete !== bComplete) return aComplete ? 1 : -1;
+        // Then by category weight descending
+        return b.weight - a.weight;
+      });
+  }, [categories, tasks, profile, filterQ]);
 
   if (isCheckingAuth || (!user && !loading)) {
     return (
@@ -187,9 +188,9 @@ export default function ProjectsPage() {
   return (
     <DashboardLayout>
       <PageHeader
-        eyebrow="Vision · strategic workspaces"
-        title="Project strategic initiatives"
-        subtitle="A curated overview of your active ecosystems, growth cycles, and long-term legacy assets. Each tile opens that project’s full workspace."
+        eyebrow="Projects"
+        title="Projects"
+        subtitle="Your active projects, ordered by priority. Each tile opens the full project workspace."
         right={
           <div className="rs-projects-filter">
             <span className="material-symbols-outlined" aria-hidden>
@@ -223,20 +224,21 @@ export default function ProjectsPage() {
         <p className="rs-page-muted">No projects match your filter.</p>
       ) : (
         <div className="rs-projects-grid">
-          {tiles.map(({ category, metrics, badges }) => (
+          {tiles.map(({ category, taskStats, nextAction, mantra, weight }) => (
             <ProjectTile
               key={category.id}
               category={category}
-              metrics={metrics}
-              badges={badges}
-              featured={String(category.id) === String(featuredId)}
+              taskStats={taskStats}
+              nextAction={nextAction}
+              mantra={mantra}
+              weight={weight}
             />
           ))}
           <Link href="/backlog#rs-backlog-add-category" className="rs-project-tile rs-project-tile--new">
             <span className="material-symbols-outlined rs-project-tile--new__icon" aria-hidden>
               add
             </span>
-            <span className="rs-project-tile--new__label">Initiate new strategy</span>
+            <span className="rs-project-tile--new__label">New project</span>
             <span className="rs-project-tile--new__hint">Add a category on Action Items</span>
           </Link>
         </div>
