@@ -518,6 +518,76 @@ export default function TodayPage() {
     [profilePrefs, categoryIdToName]
   );
 
+  // --- Next Actions: one best task per project, ordered by project priority ---
+  const projectNextActions = useMemo(() => {
+    if (!backlogTasks || backlogTasks.length === 0) return [];
+
+    const dailyIds = new Set(dailyTemplateTaskIds);
+
+    // Group open tasks by category
+    const byCategory = {};
+    for (const task of backlogTasks) {
+      if (task.status === "archived" || task.status === "done") continue;
+      if (dailyIds.has(task.id)) continue; // exclude daily hits
+      const catId = task.category_id || "__none__";
+      if (!byCategory[catId]) byCategory[catId] = [];
+      byCategory[catId].push(task);
+    }
+
+    // For each category, pick the best "next action" — prefer subtasks, low effort, high priority
+    const priorityScores = { Critical: 4, High: 3, Medium: 2, Low: 1 };
+    const result = [];
+    for (const [catId, tasks] of Object.entries(byCategory)) {
+      const catName = categoryIdToName[catId] || "Uncategorized";
+      const catWeight = effectiveCategoryWeights[catName] || 1;
+
+      // Score tasks within this category to find the best next action
+      const scored = tasks.map((task) => {
+        const tags = Array.isArray(task.tags)
+          ? task.tags.map((t) => (typeof t === "string" ? t : t?.tag?.name || t?.name)).filter(Boolean)
+          : [];
+        const isBlocked = tags.some((t) => ["blocked", "waiting"].includes(t.toLowerCase()));
+        if (isBlocked) return null;
+
+        let score = 0;
+        // Prefer subtasks (they're already broken down)
+        if (task.parent_task_id) score += 10;
+        // Prefer higher priority
+        score += (priorityScores[task.priority] || 2) * 3;
+        // Prefer lower effort (bite-size)
+        const effort = task.effort_hours || 1;
+        score += Math.max(0, 8 - effort * 2);
+        // Prefer quick-wins
+        if (tags.includes("quick-win") || tags.includes("easy-win")) score += 5;
+        // Prefer "doing" over "todo"
+        if (task.status === "doing") score += 4;
+        // Overdue boost
+        if (task.due_date && task.due_date < todayStr) score += 8;
+        // Due today boost
+        if (task.due_date === todayStr) score += 6;
+
+        return { task, score, tags };
+      }).filter(Boolean);
+
+      if (scored.length === 0) continue;
+      scored.sort((a, b) => b.score - a.score);
+
+      const best = scored[0];
+      result.push({
+        task: best.task,
+        tags: best.tags,
+        category: catName,
+        categoryId: catId,
+        categoryWeight: catWeight,
+        remainingInProject: scored.length,
+      });
+    }
+
+    // Sort by category weight descending
+    result.sort((a, b) => b.categoryWeight - a.categoryWeight);
+    return result;
+  }, [backlogTasks, dailyTemplateTaskIds, categoryIdToName, effectiveCategoryWeights, todayStr]);
+
   const queueTaskIds = useMemo(
     () => queueEntries.map((e) => e.task_id || e.task?.id).filter(Boolean),
     [queueEntries]
@@ -1361,118 +1431,108 @@ export default function TodayPage() {
         </div>
         <div>
       <SectionCard
-        title="Next 3 Actions"
-        subtitle={
-          dailyPlan != null ? (
-            <>
-              Finish all 3 to unlock your next set · Refilled{" "}
-              {dailyPlan.refilled_count ?? 0} time(s) today.
-              <span style={{ display: "block", marginTop: 4, fontWeight: 500 }}>
-                Queue stays the same until all 3 are done or you tap Refresh.
-              </span>
-            </>
-          ) : (
-            "Load or create your daily plan to see the queue."
-          )
-        }
+        title="Next Actions"
+        subtitle="One next action per project, ordered by project priority."
       >
-        {queueEntries.length === 0 && (
+        {projectNextActions.length === 0 && (
           <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
-            No tasks available for the queue. Add tasks on the Action Items page, then
-            refresh the queue here.
+            No open tasks found. Add tasks on the Action Items page.
           </p>
         )}
-        <ol style={{ paddingLeft: 18, margin: 0, fontSize: 14 }}>
-          {queueEntries.map((entry, idx) => (
-            <li key={entry.task.id} style={{ marginBottom: 10 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 14 }}>
+          {projectNextActions.map((entry) => {
+            const isDone = !!completionMap[entry.task.id];
+            return (
               <div
+                key={entry.task.id}
                 style={{
                   display: "flex",
                   alignItems: "flex-start",
-                  gap: 8,
+                  gap: 10,
+                  padding: "10px 12px",
+                  borderRadius: "var(--rs-radius-sm, 8px)",
+                  background: isDone
+                    ? "rgba(34, 197, 94, 0.06)"
+                    : "var(--rs-surface, #f0ede6)",
+                  border: isDone
+                    ? "1px solid rgba(34, 197, 94, 0.2)"
+                    : "1px solid var(--rs-border, #e5e1d8)",
+                  opacity: isDone ? 0.7 : 1,
+                  transition: "opacity 0.2s, background 0.2s",
                 }}
               >
                 <input
                   type="checkbox"
-                  checked={!!completionMap[entry.task.id]}
+                  checked={isDone}
                   onChange={() => toggleTaskCompletion(entry.task.id)}
                   aria-label={`Mark "${entry.task.title}" complete`}
-                  style={{ marginTop: 4, flexShrink: 0 }}
+                  style={{ marginTop: 3, flexShrink: 0, width: 18, height: 18, cursor: "pointer" }}
                 />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div
                     style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "baseline",
-                      gap: 8,
+                      fontWeight: 600,
+                      textDecoration: isDone ? "line-through" : "none",
+                      color: isDone ? "var(--rs-text-muted, #8a8478)" : "var(--rs-text, #3e3a33)",
                     }}
                   >
-                    <div>
-                      <div style={{ fontWeight: 500 }}>{entry.task.title}</div>
-                      <div
-                        style={{
-                          fontSize: 12,
-                          color: "#6b7280",
-                        }}
-                      >
-                        {entry.slotType || `#${idx + 1}`} • Priority{" "}
-                        {entry.task.priority || "n/a"}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 12,
-                          color: "var(--rs-on-surface)",
-                          marginTop: 4,
-                          padding: "8px 10px",
-                          background: "rgba(245, 206, 83, 0.12)",
-                          borderRadius: "var(--rs-radius-sm)",
-                          borderLeft: "3px solid var(--rs-accent-gold)",
-                          lineHeight: 1.45,
-                        }}
-                      >
-                        <span style={{ fontWeight: 700, color: "var(--rs-primary-strong)" }}>
-                          Why now:
-                        </span>{" "}
-                        {displayReasonByTaskId.get(entry.task.id) || "Top-scored task for your current focus"}
-                      </div>
-                      {(() => {
-                        const hint = getNextActionHint(entry.task.id, queueEntries, completionMap);
-                        if (!hint) return null;
-                        const s = HINT_STYLES[hint.style] || HINT_STYLES.done;
-                        return (
-                          <div
-                            style={{
-                              fontSize: 11,
-                              fontWeight: 600,
-                              marginTop: 4,
-                              padding: "2px 8px",
-                              borderRadius: 6,
-                              background: s.background,
-                              color: s.color,
-                              border: `1px solid ${s.border}`,
-                              display: "inline-block",
-                            }}
-                          >
-                            {hint.text}
-                          </div>
-                        );
-                      })()}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 12,
-                        color: "#6b7280",
-                      }}
-                    >
-                      #{idx + 1}
-                    </div>
+                    {entry.task.title}
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      marginTop: 3,
+                      fontSize: 12,
+                      color: "var(--rs-text-muted, #8a8478)",
+                    }}
+                  >
+                    <span style={{
+                      fontWeight: 600,
+                      color: "var(--rs-accent, #b8860b)",
+                    }}>
+                      {entry.category}
+                    </span>
+                    <span>•</span>
+                    <span>{entry.task.priority || "Medium"}</span>
+                    {entry.task.effort_hours ? (
+                      <>
+                        <span>•</span>
+                        <span>{entry.task.effort_hours < 1
+                          ? `${Math.round(entry.task.effort_hours * 60)}m`
+                          : `${entry.task.effort_hours}h`
+                        }</span>
+                      </>
+                    ) : null}
+                    {entry.task.parent_task_id && (
+                      <>
+                        <span>•</span>
+                        <span style={{ fontSize: 11, opacity: 0.8 }}>subtask</span>
+                      </>
+                    )}
+                    {entry.task.due_date && (
+                      <>
+                        <span>•</span>
+                        <span style={{
+                          color: entry.task.due_date < todayStr ? "var(--rs-danger, #c0392b)" : undefined,
+                          fontWeight: entry.task.due_date <= todayStr ? 600 : 400,
+                        }}>
+                          {entry.task.due_date === todayStr ? "Due today" :
+                           entry.task.due_date < todayStr ? "Overdue" :
+                           `Due ${entry.task.due_date}`}
+                        </span>
+                      </>
+                    )}
+                    <span style={{ marginLeft: "auto", fontSize: 11, opacity: 0.6 }}>
+                      {entry.remainingInProject} in project
+                    </span>
                   </div>
                 </div>
               </div>
-            </li>
-          ))}
-        </ol>
+            );
+          })}
+        </div>
       </SectionCard>
 
       <SectionCard
