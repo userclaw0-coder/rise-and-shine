@@ -81,12 +81,17 @@ export default function ChatPanel({ isOverlay = false, isOpen = true, onClose })
     loadHistory();
   }, [getToken]);
 
-  // Auto-scroll to bottom on new messages
+  // Auto-scroll to bottom on new messages, history load, or panel open
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      // Use requestAnimationFrame to ensure DOM has rendered
+      requestAnimationFrame(() => {
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+      });
     }
-  }, [messages]);
+  }, [messages, isOpen, isLoadingHistory]);
 
   // Auto-greeting pickup: after history loads, if no messages found, greet
   useEffect(() => {
