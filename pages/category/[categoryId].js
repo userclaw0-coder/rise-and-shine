@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
+import { DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 import BacklogStrategicTaskCard from "../../components/BacklogStrategicTaskCard";
 import DashboardLayout from "../../components/DashboardLayout";
@@ -75,6 +78,40 @@ function AutoHeightTextarea({ value, onChange, rows = 2, className, placeholder,
   );
 }
 
+function SortableTaskCard({ id, children }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : undefined,
+    position: "relative",
+  };
+  return (
+    <div ref={setNodeRef} style={style}>
+      <div
+        {...attributes}
+        {...listeners}
+        style={{
+          position: "absolute",
+          left: -4,
+          top: 12,
+          cursor: "grab",
+          color: "var(--rs-text-muted, #8a8478)",
+          opacity: 0.35,
+          zIndex: 2,
+          touchAction: "none",
+          padding: "4px 2px",
+        }}
+      >
+        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>drag_indicator</span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
 function lifeDomainLabel(key, profile) {
   return getHumanNeedStrategyLabel(key);
 }
@@ -142,6 +179,11 @@ export default function StrategicProjectWorkspacePage() {
   const [expandedSimpleCards, setExpandedSimpleCards] = useState({});
 
   const [orderIds, setOrderIds] = useState([]);
+  const [subtaskOrderIds, setSubtaskOrderIds] = useState({});
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
+  );
 
   const [expandedSubtasksByParent, setExpandedSubtasksByParent] = useState({});
   const [expandedTagPillsByTask, setExpandedTagPillsByTask] = useState({});
@@ -194,6 +236,7 @@ export default function StrategicProjectWorkspacePage() {
       setResources(ws.resources?.length ? ws.resources : []);
       setHealthNeeds({ ...defaultProjectWorkspace().health_needs, ...(ws.health_needs || {}) });
       setOrderIds((data.task_order_ids || []).filter(Boolean));
+      setSubtaskOrderIds(data.subtask_order_ids || {});
 
       getAllTags(user.id).then((tRes) => {
         if (!tRes.error) setTags(tRes.data || []);
@@ -1000,56 +1043,75 @@ export default function StrategicProjectWorkspacePage() {
                 </datalist>
               ))}
 
-              <div className="rs-backlog-card-list" style={{ marginTop: 16 }}>
-                {sortedRootTasks.length === 0 ? (
-                  <p className="rs-section-card__subtitle">
-                    {taskStatusScope === "open"
-                      ? "No todo or doing initiatives match this project right now."
-                      : "No initiatives in this project yet."}
-                  </p>
-                ) : (
-                  sortedRootTasks.map((t) => {
-                    const kids = (childrenByParent.get(t.id) || [])
-                      .filter(taskMatchesScope)
-                      .slice()
-                      .sort((a, b) => String(a.title || "").localeCompare(String(b.title || ""), undefined, {
-                        sensitivity: "base",
-                      }));
-                    return (
-                      <div key={t.id}>
-                        <BacklogStrategicTaskCard
-                          task={t}
-                          sortedChildren={kids}
-                          categories={categories}
-                          memberOptions={members}
-                          profile={profile}
-                          lifeDomainLabel={lifeDomainLabel}
-                          LIFE_DOMAIN_KEYS={LIFE_DOMAIN_KEYS}
-                          expandedSubtasks={!!expandedSubtasksByParent[t.id]}
-                          onToggleSubtasksExpanded={() =>
-                            setExpandedSubtasksByParent((p) => ({ ...p, [t.id]: !p[t.id] }))
-                          }
-                          expandedTagPills={!!expandedTagPillsByTask[t.id]}
-                          onToggleTagPills={() =>
-                            setExpandedTagPillsByTask((p) => ({ ...p, [t.id]: !p[t.id] }))
-                          }
-                          updateTaskLocal={updateTaskLocal}
-                          handleInlineSave={handleInlineSave}
-                          handleStatusChange={handleStatusChange}
-                          handleSubcategorySave={handleSubcategorySave}
-                          handleTagsSave={handleTagsSave}
-                          handleAddSubtask={handleAddSubtask}
-                          handleAssignTask={handleAssignTask}
-                          tagText={t._tagsText ?? makeTagText(t)}
-                          simplified={taskViewMode === "simplified"}
-                          expanded={!!expandedSimpleCards[t.id]}
-                          onToggleExpanded={() => toggleSimpleCard(t.id)}
-                        />
-                      </div>
-                    );
-                  })
-                )}
-              </div>
+              <DndContext
+                sensors={dndSensors}
+                collisionDetection={closestCenter}
+                onDragEnd={(event) => {
+                  const { active, over } = event;
+                  if (!over || active.id === over.id) return;
+                  const oldIndex = sortedRootTasks.findIndex((t) => t.id === active.id);
+                  const newIndex = sortedRootTasks.findIndex((t) => t.id === over.id);
+                  if (oldIndex < 0 || newIndex < 0) return;
+                  const newOrder = arrayMove(sortedRootTasks, oldIndex, newIndex).map((t) => t.id);
+                  setOrderIds(newOrder);
+                  saveCollaborativeProjectWorkspace(categoryId, { task_order_ids: newOrder });
+                }}
+              >
+                <SortableContext items={sortedRootTasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+                  <div className="rs-backlog-card-list" style={{ marginTop: 16 }}>
+                    {sortedRootTasks.length === 0 ? (
+                      <p className="rs-section-card__subtitle">
+                        {taskStatusScope === "open"
+                          ? "No todo or doing initiatives match this project right now."
+                          : "No initiatives in this project yet."}
+                      </p>
+                    ) : (
+                      sortedRootTasks.map((t) => {
+                        const subOrder = subtaskOrderIds[t.id] || [];
+                        const allKids = (childrenByParent.get(t.id) || []).filter(taskMatchesScope);
+                        // Apply subtask ordering
+                        const kidMap = new Map(allKids.map((k) => [k.id, k]));
+                        const orderedKids = [
+                          ...subOrder.map((id) => kidMap.get(id)).filter(Boolean),
+                          ...allKids.filter((k) => !subOrder.includes(k.id)),
+                        ];
+                        return (
+                          <SortableTaskCard key={t.id} id={t.id}>
+                            <BacklogStrategicTaskCard
+                              task={t}
+                              sortedChildren={orderedKids}
+                              categories={categories}
+                              memberOptions={members}
+                              profile={profile}
+                              lifeDomainLabel={lifeDomainLabel}
+                              LIFE_DOMAIN_KEYS={LIFE_DOMAIN_KEYS}
+                              expandedSubtasks={!!expandedSubtasksByParent[t.id]}
+                              onToggleSubtasksExpanded={() =>
+                                setExpandedSubtasksByParent((p) => ({ ...p, [t.id]: !p[t.id] }))
+                              }
+                              expandedTagPills={!!expandedTagPillsByTask[t.id]}
+                              onToggleTagPills={() =>
+                                setExpandedTagPillsByTask((p) => ({ ...p, [t.id]: !p[t.id] }))
+                              }
+                              updateTaskLocal={updateTaskLocal}
+                              handleInlineSave={handleInlineSave}
+                              handleStatusChange={handleStatusChange}
+                              handleSubcategorySave={handleSubcategorySave}
+                              handleTagsSave={handleTagsSave}
+                              handleAddSubtask={handleAddSubtask}
+                              handleAssignTask={handleAssignTask}
+                              tagText={t._tagsText ?? makeTagText(t)}
+                              simplified={taskViewMode === "simplified"}
+                              expanded={!!expandedSimpleCards[t.id]}
+                              onToggleExpanded={() => toggleSimpleCard(t.id)}
+                            />
+                          </SortableTaskCard>
+                        );
+                      })
+                    )}
+                  </div>
+                </SortableContext>
+              </DndContext>
             </section>
           </div>
 

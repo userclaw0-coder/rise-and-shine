@@ -23,6 +23,7 @@ import {
 } from "../lib/db";
 import {
   loadCollaborativeBacklog,
+  loadWorkspaceOrders,
   toggleCollaborativeTaskCompletion,
 } from "../lib/collaborationClient";
 import {
@@ -188,6 +189,8 @@ export default function TodayPage() {
   const [dailyHitsCompleted, setDailyHitsCompleted] = useState(0);
   const [otherCompletedToday, setOtherCompletedToday] = useState(0);
   const [completedTodayTasks, setCompletedTodayTasks] = useState([]);
+
+  const [workspaceOrders, setWorkspaceOrders] = useState({});
 
   const [dailyPlan, setDailyPlan] = useState(null);
   const [queueEntries, setQueueEntries] = useState([]);
@@ -388,13 +391,15 @@ export default function TodayPage() {
           setCompletionMap({});
         }
 
-        const [tasksData, lastRes, planRes] = await Promise.all([
+        const [tasksData, lastRes, planRes, ordersData] = await Promise.all([
           loadCollaborativeBacklog(false),
           getLastCompletedEventsForUser(user.id),
           getOrCreateDailyPlan(user.id, todayStr, mode),
+          loadWorkspaceOrders().catch(() => ({ orders: {} })),
         ]);
 
         setBacklogTasks(tasksData.tasks || []);
+        setWorkspaceOrders(ordersData.orders || {});
 
         if (!lastRes.error) {
           setLastCompletedMap(buildLastCompletedMap(lastRes.data || []));
@@ -536,6 +541,8 @@ export default function TodayPage() {
   );
 
   // --- Next Actions: one best task per project, ordered by project priority ---
+  // Respects manual ordering (task_order_ids) when set, falls back to scoring.
+  // Skips tasks tagged as blocked or blocked-by:*.
   const projectNextActions = useMemo(() => {
     if (!backlogTasks || backlogTasks.length === 0) return [];
 
@@ -545,65 +552,85 @@ export default function TodayPage() {
     const byCategory = {};
     for (const task of backlogTasks) {
       if (task.status === "archived" || task.status === "done") continue;
-      if (dailyIds.has(task.id)) continue; // exclude daily hits
+      if (dailyIds.has(task.id)) continue;
       const catId = task.category_id || "__none__";
       if (!byCategory[catId]) byCategory[catId] = [];
       byCategory[catId].push(task);
     }
 
-    // For each category, pick the best "next action" — prefer subtasks, low effort, high priority
     const priorityScores = { Critical: 4, High: 3, Medium: 2, Low: 1 };
     const result = [];
+
     for (const [catId, tasks] of Object.entries(byCategory)) {
       const catName = categoryIdToName[catId] || "Uncategorized";
       const catWeight = effectiveCategoryWeights[catName] || 1;
+      const projectOrder = workspaceOrders[catId]?.task_order_ids || [];
 
-      // Score tasks within this category to find the best next action
-      const scored = tasks.map((task) => {
+      // Filter out blocked tasks
+      const eligible = tasks.filter((task) => {
         const tags = Array.isArray(task.tags)
           ? task.tags.map((t) => (typeof t === "string" ? t : t?.tag?.name || t?.name)).filter(Boolean)
           : [];
-        const isBlocked = tags.some((t) => ["blocked", "waiting"].includes(t.toLowerCase()));
-        if (isBlocked) return null;
+        const isBlocked = tags.some((t) =>
+          t.toLowerCase() === "blocked" ||
+          t.toLowerCase() === "waiting" ||
+          t.toLowerCase().startsWith("blocked-by:")
+        );
+        return !isBlocked;
+      });
 
-        let score = 0;
-        // Prefer subtasks (they're already broken down)
-        if (task.parent_task_id) score += 10;
-        // Prefer higher priority
-        score += (priorityScores[task.priority] || 2) * 3;
-        // Prefer lower effort (bite-size)
-        const effort = task.effort_hours || 1;
-        score += Math.max(0, 8 - effort * 2);
-        // Prefer quick-wins
-        if (tags.includes("quick-win") || tags.includes("easy-win")) score += 5;
-        // Prefer "doing" over "todo"
-        if (task.status === "doing") score += 4;
-        // Overdue boost
-        if (task.due_date && task.due_date < todayStr) score += 8;
-        // Due today boost
-        if (task.due_date === todayStr) score += 6;
+      if (eligible.length === 0) continue;
 
-        return { task, score, tags };
-      }).filter(Boolean);
+      // If manual order exists, use the first eligible task in that order
+      let best = null;
+      if (projectOrder.length > 0) {
+        const eligibleIds = new Set(eligible.map((t) => t.id));
+        const firstInOrder = projectOrder.find((id) => eligibleIds.has(id));
+        if (firstInOrder) {
+          best = eligible.find((t) => t.id === firstInOrder);
+        }
+      }
 
-      if (scored.length === 0) continue;
-      scored.sort((a, b) => b.score - a.score);
+      // Fall back to scoring-based selection
+      if (!best) {
+        const scored = eligible.map((task) => {
+          const tags = Array.isArray(task.tags)
+            ? task.tags.map((t) => (typeof t === "string" ? t : t?.tag?.name || t?.name)).filter(Boolean)
+            : [];
+          let score = 0;
+          if (task.parent_task_id) score += 10;
+          score += (priorityScores[task.priority] || 2) * 3;
+          const effort = task.effort_hours || 1;
+          score += Math.max(0, 8 - effort * 2);
+          if (tags.includes("quick-win") || tags.includes("easy-win")) score += 5;
+          if (task.status === "doing") score += 4;
+          if (task.due_date && task.due_date < todayStr) score += 8;
+          if (task.due_date === todayStr) score += 6;
+          return { task, score };
+        });
+        scored.sort((a, b) => b.score - a.score);
+        best = scored[0]?.task;
+      }
 
-      const best = scored[0];
+      if (!best) continue;
+
+      const tags = Array.isArray(best.tags)
+        ? best.tags.map((t) => (typeof t === "string" ? t : t?.tag?.name || t?.name)).filter(Boolean)
+        : [];
+
       result.push({
-        task: best.task,
-        tags: best.tags,
+        task: best,
+        tags,
         category: catName,
         categoryId: catId,
         categoryWeight: catWeight,
-        remainingInProject: scored.length,
+        remainingInProject: eligible.length,
       });
     }
 
-    // Sort by category weight descending
     result.sort((a, b) => b.categoryWeight - a.categoryWeight);
     return result;
-  }, [backlogTasks, dailyTemplateTaskIds, categoryIdToName, effectiveCategoryWeights, todayStr]);
+  }, [backlogTasks, dailyTemplateTaskIds, categoryIdToName, effectiveCategoryWeights, todayStr, workspaceOrders]);
 
   const queueTaskIds = useMemo(
     () => queueEntries.map((e) => e.task_id || e.task?.id).filter(Boolean),
