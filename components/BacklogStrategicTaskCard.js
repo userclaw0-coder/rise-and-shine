@@ -55,8 +55,8 @@ function extractTagNames(task) {
 }
 
 const inputBase = {
-  fontFamily: "var(--rs-font-body)",
-  fontSize: 13,
+  fontFamily: "system-ui, -apple-system, sans-serif",
+  fontSize: 14,
   padding: "8px 10px",
   borderRadius: "var(--rs-radius-sm)",
   border: "1px solid rgba(186, 177, 159, 0.22)",
