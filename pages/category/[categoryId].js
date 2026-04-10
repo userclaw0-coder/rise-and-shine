@@ -1092,6 +1092,11 @@ export default function StrategicProjectWorkspacePage() {
                               handleTagsSave={handleTagsSave}
                               handleAddSubtask={handleAddSubtask}
                               handleAssignTask={handleAssignTask}
+                              onReorderSubtasks={(parentId, newSubIds) => {
+                                const next = { ...subtaskOrderIds, [parentId]: newSubIds };
+                                setSubtaskOrderIds(next);
+                                saveCollaborativeProjectWorkspace(categoryId, { subtask_order_ids: next });
+                              }}
                               tagText={t._tagsText ?? makeTagText(t)}
                               simplified={taskViewMode === "simplified"}
                               expanded={!!expandedSimpleCards[t.id]}

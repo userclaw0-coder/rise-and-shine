@@ -3,6 +3,10 @@
  * Subtasks: preview + expand; tags: pill preview + expand.
  */
 
+import { DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+
 const SUBTASK_PREVIEW = 2;
 const TAG_PILL_PREVIEW = 4;
 
@@ -79,6 +83,7 @@ export default function BacklogStrategicTaskCard({
   handleTagsSave,
   handleAddSubtask,
   handleAssignTask,
+  onReorderSubtasks,
   tagText,
   simplified = false,
   expanded = true,
@@ -225,58 +230,15 @@ export default function BacklogStrategicTaskCard({
       {sortedChildren.length > 0 && (
         <div className="rs-backlog-card__subtasks-wrap">
           <div className="rs-backlog-card__subtasks-label">Subtasks</div>
-          <ul className="rs-backlog-card__subtasks">
-            {visibleChildren.map((child) => {
-              const cDone = child.status === "done";
-              return (
-                <li key={child.id} className="rs-backlog-card__subtask">
-                  <input
-                    type="checkbox"
-                    checked={cDone}
-                    onChange={(e) =>
-                      handleStatusChange(child, e.target.checked ? "done" : "todo")
-                    }
-                    disabled={!(child._permissions?.can_change_status ?? permissions.can_change_status)}
-                    style={{
-                      width: 18,
-                      height: 18,
-                      marginTop: 4,
-                      accentColor: "var(--rs-accent-gold)",
-                      cursor: "pointer",
-                      flexShrink: 0,
-                    }}
-                    aria-label={`Complete ${child.title}`}
-                  />
-                  <input
-                    type="text"
-                    value={child.title || ""}
-                    onChange={(e) => updateTaskLocal(child.id, { title: e.target.value })}
-                    onBlur={(e) => handleInlineSave(child.id, { title: e.target.value })}
-                    disabled={!(child._permissions?.can_edit ?? permissions.can_edit)}
-                    className="rs-backlog-card__subtask-title"
-                    style={{
-                      ...inputBase,
-                      flex: 1,
-                      minWidth: 0,
-                      textDecoration: cDone ? "line-through" : "none",
-                      opacity: cDone ? 0.8 : 1,
-                    }}
-                  />
-                  <select
-                    value={child.status || "todo"}
-                    onChange={(e) => handleStatusChange(child, e.target.value)}
-                    disabled={!(child._permissions?.can_change_status ?? permissions.can_change_status)}
-                    style={{ ...inputBase, width: "auto", minWidth: 100, fontSize: 12 }}
-                  >
-                    <option value="todo">Todo</option>
-                    <option value="doing">Doing</option>
-                    <option value="done">Done</option>
-                    <option value="archived">Archived</option>
-                  </select>
-                </li>
-              );
-            })}
-          </ul>
+          <SubtaskDndList
+            visibleChildren={visibleChildren}
+            task={task}
+            permissions={permissions}
+            handleStatusChange={handleStatusChange}
+            updateTaskLocal={updateTaskLocal}
+            handleInlineSave={handleInlineSave}
+            onReorderSubtasks={onReorderSubtasks}
+          />
           {hiddenSubCount > 0 && (
             <button
               type="button"
@@ -544,5 +506,115 @@ export default function BacklogStrategicTaskCard({
         />
       </div>
     </article>
+  );
+}
+
+function SubtaskDndList({ visibleChildren, task, permissions, handleStatusChange, updateTaskLocal, handleInlineSave, onReorderSubtasks }) {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
+  );
+
+  const handleDragEnd = (event) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIdx = visibleChildren.findIndex((c) => c.id === active.id);
+    const newIdx = visibleChildren.findIndex((c) => c.id === over.id);
+    if (oldIdx < 0 || newIdx < 0) return;
+    const newOrder = arrayMove(visibleChildren, oldIdx, newIdx).map((c) => c.id);
+    onReorderSubtasks?.(task.id, newOrder);
+  };
+
+  return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <SortableContext items={visibleChildren.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+        <ul className="rs-backlog-card__subtasks">
+          {visibleChildren.map((child) => (
+            <SortableSubtaskRow
+              key={child.id}
+              child={child}
+              permissions={permissions}
+              handleStatusChange={handleStatusChange}
+              updateTaskLocal={updateTaskLocal}
+              handleInlineSave={handleInlineSave}
+            />
+          ))}
+        </ul>
+      </SortableContext>
+    </DndContext>
+  );
+}
+
+function SortableSubtaskRow({ child, permissions, handleStatusChange, updateTaskLocal, handleInlineSave }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: child.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+  const cDone = child.status === "done";
+
+  return (
+    <li ref={setNodeRef} style={style} className="rs-backlog-card__subtask">
+      <div
+        {...attributes}
+        {...listeners}
+        style={{
+          cursor: "grab",
+          color: "var(--rs-text-muted, #8a8478)",
+          opacity: 0.3,
+          flexShrink: 0,
+          display: "flex",
+          alignItems: "center",
+          touchAction: "none",
+          padding: "0 2px",
+        }}
+        title="Drag to reorder"
+      >
+        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>drag_indicator</span>
+      </div>
+      <input
+        type="checkbox"
+        checked={cDone}
+        onChange={(e) => handleStatusChange(child, e.target.checked ? "done" : "todo")}
+        disabled={!(child._permissions?.can_change_status ?? permissions.can_change_status)}
+        style={{
+          width: 18,
+          height: 18,
+          marginTop: 4,
+          accentColor: "var(--rs-accent-gold)",
+          cursor: "pointer",
+          flexShrink: 0,
+        }}
+        aria-label={`Complete ${child.title}`}
+      />
+      <input
+        type="text"
+        value={child.title || ""}
+        onChange={(e) => updateTaskLocal(child.id, { title: e.target.value })}
+        onBlur={(e) => handleInlineSave(child.id, { title: e.target.value })}
+        disabled={!(child._permissions?.can_edit ?? permissions.can_edit)}
+        className="rs-backlog-card__subtask-title"
+        style={{
+          ...inputBase,
+          flex: 1,
+          minWidth: 0,
+          textDecoration: cDone ? "line-through" : "none",
+          opacity: cDone ? 0.8 : 1,
+        }}
+      />
+      <select
+        value={child.status || "todo"}
+        onChange={(e) => handleStatusChange(child, e.target.value)}
+        disabled={!(child._permissions?.can_change_status ?? permissions.can_change_status)}
+        style={{ ...inputBase, width: "auto", minWidth: 100, fontSize: 12 }}
+      >
+        <option value="todo">Todo</option>
+        <option value="doing">Doing</option>
+        <option value="done">Done</option>
+        <option value="archived">Archived</option>
+      </select>
+    </li>
   );
 }

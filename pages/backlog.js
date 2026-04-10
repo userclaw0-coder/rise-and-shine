@@ -2937,6 +2937,17 @@ export default function BacklogPage() {
                           handleTagsSave={handleTagsSave}
                           handleAddSubtask={handleAddSubtask}
                           handleAssignTask={handleAssignTask}
+                          onReorderSubtasks={(parentId, newSubIds) => {
+                            const catId = t.category_id;
+                            if (!catId) return;
+                            const prev = workspaceOrders[catId]?.subtask_order_ids || {};
+                            const next = { ...prev, [parentId]: newSubIds };
+                            setWorkspaceOrders((wo) => ({
+                              ...wo,
+                              [catId]: { ...wo[catId], subtask_order_ids: next },
+                            }));
+                            saveCollaborativeProjectWorkspace(catId, { subtask_order_ids: next });
+                          }}
                           memberOptions={categories.find((c) => c.id === t.category_id)?._members || []}
                           tagText={t._tagsText ?? makeTagText(t)}
                         />
