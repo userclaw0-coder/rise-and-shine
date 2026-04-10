@@ -41,6 +41,7 @@ export default async function handler(req, res) {
         knowledge_base: saved.knowledge_base || "",
         legacy_links: saved.legacy_links || "",
         task_order_ids: Array.isArray(saved.task_order_ids) ? saved.task_order_ids : [],
+        subtask_order_ids: saved.subtask_order_ids || {},
       });
     }
 

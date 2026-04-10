@@ -5494,3 +5494,70 @@ a.pkb__resource-label:hover {
   color: var(--rs-text-muted, #8a8478);
   padding: 2px 0;
 }
+
+/* ===== Sortable Task List (Action Items DnD) ===== */
+
+.stl {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stl__root-item {
+  border: 1px solid var(--rs-border, #e5e1d8);
+  border-radius: var(--rs-radius-sm, 8px);
+  background: var(--rs-card-bg, #faf9f6);
+  overflow: hidden;
+}
+
+.stl__root-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.stl__drag-handle {
+  cursor: grab;
+  color: var(--rs-text-muted, #8a8478);
+  opacity: 0.35;
+  flex-shrink: 0;
+  padding: 10px 4px 10px 8px;
+  display: flex;
+  align-items: center;
+  touch-action: none;
+}
+
+.stl__drag-handle:hover { opacity: 0.8; }
+.stl__drag-handle:active { cursor: grabbing; }
+
+.stl__task-content {
+  padding: 8px 8px 8px 0;
+}
+
+.stl__subtasks {
+  padding: 4px 12px 8px 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-top: 1px solid var(--rs-border, #e5e1d8);
+  background: rgba(0, 0, 0, 0.015);
+}
+
+.stl__sub-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+.stl__sub-drag {
+  cursor: grab;
+  color: var(--rs-text-muted, #8a8478);
+  opacity: 0.3;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  touch-action: none;
+}
+
+.stl__sub-drag:hover { opacity: 0.7; }
