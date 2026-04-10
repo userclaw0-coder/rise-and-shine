@@ -172,7 +172,7 @@ export default function StrategicProjectWorkspacePage() {
 
   const [orderIds, setOrderIds] = useState([]);
   const [subtaskOrderIds, setSubtaskOrderIds] = useState({});
-  const [planViewScope, setPlanViewScope] = useState("open");
+  const [actionItemsView, setActionItemsView] = useState("plan");
   const dndSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
@@ -253,6 +253,8 @@ export default function StrategicProjectWorkspacePage() {
       const storedView = window.localStorage.getItem("project-workspace-task-view");
       if (storedScope === "open" || storedScope === "all") setTaskStatusScope(storedScope);
       if (storedView === "full" || storedView === "simplified") setTaskViewMode(storedView);
+      const storedAiView = window.localStorage.getItem("project-workspace-action-items-view");
+      if (storedAiView === "plan" || storedAiView === "detail") setActionItemsView(storedAiView);
     } catch {
       // ignore storage errors
     }
@@ -263,6 +265,7 @@ export default function StrategicProjectWorkspacePage() {
     try {
       window.localStorage.setItem("project-workspace-task-scope", taskStatusScope);
       window.localStorage.setItem("project-workspace-task-view", taskViewMode);
+      window.localStorage.setItem("project-workspace-action-items-view", actionItemsView);
     } catch {
       // ignore storage errors
     }
@@ -331,17 +334,17 @@ export default function StrategicProjectWorkspacePage() {
     return sorted;
   }, [visibleScoredRoots, orderIds, sortKey, sortDir]);
 
-  // Plan of Attack ordering: manual order via orderIds, done tasks at bottom
-  const planOfAttackTasks = useMemo(() => {
+  // Plan view ordering: manual order via orderIds, done tasks at bottom
+  const planViewTasks = useMemo(() => {
     const byId = new Map(rootTasks.map((t) => [t.id, t]));
     const inOrder = (orderIds || []).map((id) => byId.get(id)).filter(Boolean);
     const remaining = rootTasks.filter((t) => !(orderIds || []).includes(t.id));
     const all = [...inOrder, ...remaining];
     const undone = all.filter((t) => t.status !== "done" && t.status !== "archived");
     const done = all.filter((t) => t.status === "done" || t.status === "archived");
-    if (planViewScope === "open") return undone;
+    if (taskStatusScope === "open") return undone;
     return [...undone, ...done];
-  }, [rootTasks, orderIds, planViewScope]);
+  }, [rootTasks, orderIds, taskStatusScope]);
 
   const alignmentPct = useMemo(
     () => computeProjectAlignment(rootTasks, mantra, narrative),
@@ -939,51 +942,6 @@ export default function StrategicProjectWorkspacePage() {
           saving={savingWorkspace}
         />
 
-        {/* Plan of Attack */}
-        <SectionCard
-          title="Plan of Attack"
-          subtitle={
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <select
-                className="rs-select-compact"
-                value={planViewScope}
-                onChange={(e) => setPlanViewScope(e.target.value)}
-                style={{ fontSize: 12 }}
-              >
-                <option value="open">Todo + Doing</option>
-                <option value="all">All tasks</option>
-              </select>
-            </div>
-          }
-        >
-          <ProjectPlanView
-            tasks={planOfAttackTasks}
-            childrenByParent={childrenByParent}
-            completionMap={{}}
-            onToggleCompletion={(taskId) => handleStatusChange({ id: taskId }, "done")}
-            onSubtaskCompletion={(taskId) => handleStatusChange({ id: taskId }, "done")}
-            onReorderRoots={(newIds) => {
-              setOrderIds(newIds);
-              // Auto-save order
-              saveCollaborativeProjectWorkspace(categoryId, { task_order_ids: newIds });
-            }}
-            onReorderSubtasks={(parentId, newSubIds) => {
-              // Subtask order is stored as updated_at ordering; for now just update each subtask's updated_at
-              // A more robust approach would use a subtask_order field, but this works for MVP
-              newSubIds.forEach((id, idx) => {
-                updateCollaborativeTask(id, { _reorder_index: idx });
-              });
-            }}
-            onJarvisBreakDown={(task) => {
-              if (typeof window !== "undefined") {
-                const msg = `Break down "${task.title}" in project "${category?.name || ""}" into 5-7 bite-size subtasks. Consider the project knowledge base and current context.`;
-                window.open(`/chat?message=${encodeURIComponent(msg)}`, "_self");
-              }
-            }}
-            todayStr={new Date().toISOString().slice(0, 10)}
-          />
-        </SectionCard>
-
         <div className="rs-project-workspace__grid">
           <div className="rs-project-workspace__main-col">
             <section className="rs-section-card">
@@ -993,12 +951,45 @@ export default function StrategicProjectWorkspacePage() {
                     Action items
                   </h2>
                   <p className="rs-section-card__subtitle" style={{ margin: 0 }}>
-                    {sortedRootTasks.length} visible root initiative{sortedRootTasks.length === 1 ? "" : "s"} ·{" "}
-                    {taskStatusScope === "open" ? "showing todo + doing by default" : "showing all statuses"} ·
-                    strategic priority from scoring model
+                    {(actionItemsView === "plan" ? planViewTasks : sortedRootTasks).length} task{(actionItemsView === "plan" ? planViewTasks : sortedRootTasks).length === 1 ? "" : "s"} ·{" "}
+                    {taskStatusScope === "open" ? "todo + doing" : "all statuses"}
                   </p>
                 </div>
                 <div className="rs-project-sort">
+                  {/* View toggle */}
+                  <div style={{ display: "flex", borderRadius: 6, overflow: "hidden", border: "1px solid var(--rs-border, #e5e1d8)" }}>
+                    <button
+                      type="button"
+                      onClick={() => setActionItemsView("plan")}
+                      style={{
+                        padding: "4px 12px",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        border: "none",
+                        cursor: "pointer",
+                        background: actionItemsView === "plan" ? "var(--rs-accent, #b8860b)" : "var(--rs-bg, #fff)",
+                        color: actionItemsView === "plan" ? "#fff" : "var(--rs-text-muted, #8a8478)",
+                      }}
+                    >
+                      Plan
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActionItemsView("detail")}
+                      style={{
+                        padding: "4px 12px",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        border: "none",
+                        borderLeft: "1px solid var(--rs-border, #e5e1d8)",
+                        cursor: "pointer",
+                        background: actionItemsView === "detail" ? "var(--rs-accent, #b8860b)" : "var(--rs-bg, #fff)",
+                        color: actionItemsView === "detail" ? "#fff" : "var(--rs-text-muted, #8a8478)",
+                      }}
+                    >
+                      Detail
+                    </button>
+                  </div>
                   <label>
                     Show
                     <select
@@ -1010,36 +1001,40 @@ export default function StrategicProjectWorkspacePage() {
                       <option value="all">All tasks</option>
                     </select>
                   </label>
-                  <label>
-                    View
-                    <select
-                      className="rs-select-compact"
-                      value={taskViewMode}
-                      onChange={(e) => setTaskViewMode(e.target.value)}
-                    >
-                      <option value="full">Full</option>
-                      <option value="simplified">Simplified</option>
-                    </select>
-                  </label>
-                  <label>
-                    Sort
-                    <select
-                      className="rs-select-compact"
-                      value={sortKey}
-                      onChange={(e) => setSortKey(e.target.value)}
-                    >
-                      <option value="score">Strategic score</option>
-                      <option value="due">Due date</option>
-                      <option value="title">Title</option>
-                    </select>
-                  </label>
-                  <button
-                    type="button"
-                    className="rs-btn-ghost rs-btn-ghost--small"
-                    onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
-                  >
-                    {sortDir === "desc" ? "High → low" : "Low → high"}
-                  </button>
+                  {actionItemsView === "detail" && (
+                    <>
+                      <label>
+                        View
+                        <select
+                          className="rs-select-compact"
+                          value={taskViewMode}
+                          onChange={(e) => setTaskViewMode(e.target.value)}
+                        >
+                          <option value="full">Full</option>
+                          <option value="simplified">Simplified</option>
+                        </select>
+                      </label>
+                      <label>
+                        Sort
+                        <select
+                          className="rs-select-compact"
+                          value={sortKey}
+                          onChange={(e) => setSortKey(e.target.value)}
+                        >
+                          <option value="score">Strategic score</option>
+                          <option value="due">Due date</option>
+                          <option value="title">Title</option>
+                        </select>
+                      </label>
+                      <button
+                        type="button"
+                        className="rs-btn-ghost rs-btn-ghost--small"
+                        onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+                      >
+                        {sortDir === "desc" ? "High → low" : "Low → high"}
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -1051,6 +1046,37 @@ export default function StrategicProjectWorkspacePage() {
                 </datalist>
               ))}
 
+              {/* Plan View */}
+              {actionItemsView === "plan" && (
+                <div style={{ marginTop: 16 }}>
+                  <ProjectPlanView
+                    tasks={planViewTasks}
+                    childrenByParent={childrenByParent}
+                    completionMap={{}}
+                    onToggleCompletion={(taskId) => handleStatusChange({ id: taskId }, "done")}
+                    onSubtaskCompletion={(taskId) => handleStatusChange({ id: taskId }, "done")}
+                    onReorderRoots={(newIds) => {
+                      setOrderIds(newIds);
+                      saveCollaborativeProjectWorkspace(categoryId, { task_order_ids: newIds });
+                    }}
+                    onReorderSubtasks={(parentId, newSubIds) => {
+                      const next = { ...subtaskOrderIds, [parentId]: newSubIds };
+                      setSubtaskOrderIds(next);
+                      saveCollaborativeProjectWorkspace(categoryId, { subtask_order_ids: next });
+                    }}
+                    onJarvisBreakDown={(task) => {
+                      if (typeof window !== "undefined") {
+                        const msg = `Break down "${task.title}" in project "${category?.name || ""}" into 5-7 bite-size subtasks. Consider the project knowledge base and current context.`;
+                        window.open(`/chat?message=${encodeURIComponent(msg)}`, "_self");
+                      }
+                    }}
+                    todayStr={new Date().toISOString().slice(0, 10)}
+                  />
+                </div>
+              )}
+
+              {/* Detail View */}
+              {actionItemsView === "detail" && (
               <DndContext
                 sensors={dndSensors}
                 collisionDetection={closestCenter}
@@ -1125,6 +1151,7 @@ export default function StrategicProjectWorkspacePage() {
                   </div>
                 </SortableContext>
               </DndContext>
+              )}
             </section>
           </div>
 
