@@ -314,10 +314,10 @@ export default function StrategicProjectWorkspacePage() {
     const byId = new Map(visibleScoredRoots.map((t) => [t.id, t]));
     const inOrder = (orderIds || []).map((id) => byId.get(id)).filter(Boolean);
     const remaining = visibleScoredRoots.filter((t) => !(orderIds || []).includes(t.id));
-    let list = [...inOrder, ...remaining];
 
+    // Sort only the unordered remainder — manual order takes precedence
     const dir = sortDir === "asc" ? 1 : -1;
-    const sorted = [...list].sort((a, b) => {
+    const sortedRemaining = [...remaining].sort((a, b) => {
       let cmp = 0;
       if (sortKey === "score") cmp = (a._aiPriorityScore ?? 0) - (b._aiPriorityScore ?? 0);
       else if (sortKey === "title") {
@@ -331,7 +331,8 @@ export default function StrategicProjectWorkspacePage() {
       }
       return cmp * dir;
     });
-    return sorted;
+
+    return [...inOrder, ...sortedRemaining];
   }, [visibleScoredRoots, orderIds, sortKey, sortDir]);
 
   // Plan view ordering: manual order via orderIds, done tasks at bottom

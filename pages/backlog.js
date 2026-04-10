@@ -568,10 +568,28 @@ export default function BacklogPage() {
   }
 
   const sortedRootTasks = useMemo(() => {
-    const list = [...filteredRootTasks];
-    list.sort(compareTasksForSort);
-    return list;
-  }, [filteredRootTasks, comfortableSortKey, comfortableSortDir, categories]);
+    // Group by category, apply per-project manual order, then sort unordered remainder
+    const ordered = [];
+    const unordered = [];
+
+    for (const t of filteredRootTasks) {
+      const catId = t.category_id;
+      const projectOrder = catId ? (workspaceOrders[catId]?.task_order_ids || []) : [];
+      const idx = projectOrder.indexOf(t.id);
+      if (idx >= 0) {
+        ordered.push({ task: t, orderIdx: idx, catId });
+      } else {
+        unordered.push(t);
+      }
+    }
+
+    // Manually ordered tasks first (by their position in project order)
+    ordered.sort((a, b) => a.orderIdx - b.orderIdx);
+    // Unordered tasks sorted by the selected sort key
+    unordered.sort(compareTasksForSort);
+
+    return [...ordered.map((o) => o.task), ...unordered];
+  }, [filteredRootTasks, comfortableSortKey, comfortableSortDir, categories, workspaceOrders]);
 
   const [collapsedParents, setCollapsedParents] = useState({});
   /** Strategic view: expand all subtasks on a parent card */
