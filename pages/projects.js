@@ -4,10 +4,9 @@ import Link from "next/link";
 import DashboardLayout from "../components/DashboardLayout";
 import PageHeader from "../components/PageHeader";
 import { useAuth } from "../hooks/useAuth";
-import { loadCollaborativeProjects } from "../lib/collaborationClient";
-import { BASE_CATEGORY_WEIGHTS } from "../lib/scoring";
+import { loadCollaborativeProjects, loadWorkspaceOrders } from "../lib/collaborationClient";
 
-function ProjectTile({ category, taskStats, mantra, nextAction, weight }) {
+function ProjectTile({ category, taskStats, mantra, nextAction }) {
   const href = `/category/${category.id}`;
   const { total, done, overdue, doing } = taskStats;
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
@@ -100,16 +99,21 @@ export default function ProjectsPage() {
   const [tasks, setTasks] = useState([]);
   const [profile, setProfile] = useState(null);
   const [filterQ, setFilterQ] = useState("");
+  const [workspaceOrders, setWorkspaceOrders] = useState({});
 
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     setError("");
     try {
-      const data = await loadCollaborativeProjects();
+      const [data, ordersData] = await Promise.all([
+        loadCollaborativeProjects(),
+        loadWorkspaceOrders().catch(() => ({ orders: {} })),
+      ]);
       setCategories(data.categories || []);
       setTasks(data.tasks || []);
       setProfile(data.profile || null);
+      setWorkspaceOrders(ordersData.orders || {});
     } catch (e) {
       setError(e.message || "Failed to load projects.");
     } finally {
@@ -125,9 +129,9 @@ export default function ProjectsPage() {
   const tiles = useMemo(() => {
     const q = filterQ.trim().toLowerCase();
     const today = new Date().toISOString().slice(0, 10);
-    const priorityOrder = { Critical: 0, High: 1, Medium: 2, Low: 3 };
+    const categoryOrderIds = profile?.preferences?.category_order_ids || [];
 
-    return (categories || [])
+    const filtered = (categories || [])
       .filter((c) => !q || String(c.name || "").toLowerCase().includes(q))
       .map((cat) => {
         const tasksInCat = (tasks || []).filter((t) => String(t.category_id) === String(cat.id));
@@ -139,35 +143,64 @@ export default function ProjectsPage() {
           (t) => t.due_date && t.due_date < today && t.status !== "done" && t.status !== "archived"
         ).length;
 
-        // Find next action: top undone root task by priority
-        const undone = roots
-          .filter((t) => t.status !== "done" && t.status !== "archived")
-          .sort((a, b) => (priorityOrder[a.priority] ?? 2) - (priorityOrder[b.priority] ?? 2));
-        const nextAction = undone[0]?.title || null;
+        // Find next action: use task_order_ids if set, else fall back to priority
+        const taskOrderIds = workspaceOrders[cat.id]?.task_order_ids || [];
+        const eligible = roots.filter((t) => {
+          if (t.status === "done" || t.status === "archived") return false;
+          const tags = Array.isArray(t.tags)
+            ? t.tags.map((tg) => (typeof tg === "string" ? tg : tg?.tag?.name || tg?.name)).filter(Boolean)
+            : [];
+          return !tags.some((tag) => tag.toLowerCase() === "blocked" || tag.toLowerCase() === "waiting" || tag.toLowerCase().startsWith("blocked-by:"));
+        });
+
+        let nextAction = null;
+        if (taskOrderIds.length > 0) {
+          const eligibleIds = new Set(eligible.map((t) => t.id));
+          const firstOrdered = taskOrderIds.find((id) => eligibleIds.has(id));
+          if (firstOrdered) {
+            nextAction = eligible.find((t) => t.id === firstOrdered)?.title || null;
+          }
+        }
+        if (!nextAction && eligible.length > 0) {
+          const priorityOrder = { Critical: 0, High: 1, Medium: 2, Low: 3 };
+          eligible.sort((a, b) => (priorityOrder[a.priority] ?? 2) - (priorityOrder[b.priority] ?? 2));
+          nextAction = eligible[0]?.title || null;
+        }
 
         // Get mantra from workspace preferences
         const ws = profile?.preferences?.project_workspaces?.[cat.id];
         const mantra = ws?.mantra || "";
-
-        const weight = BASE_CATEGORY_WEIGHTS[cat.name] || 1;
 
         return {
           category: cat,
           taskStats: { total, done, doing, overdue },
           nextAction,
           mantra,
-          weight,
         };
-      })
-      .sort((a, b) => {
-        // Active projects first (have undone tasks), complete at bottom
+      });
+
+    // Sort by category_order_ids from backlog page (user's manual project priority)
+    if (categoryOrderIds.length > 0) {
+      const orderMap = new Map(categoryOrderIds.map((id, i) => [id, i]));
+      filtered.sort((a, b) => {
         const aComplete = a.taskStats.total > 0 && a.taskStats.done === a.taskStats.total;
         const bComplete = b.taskStats.total > 0 && b.taskStats.done === b.taskStats.total;
         if (aComplete !== bComplete) return aComplete ? 1 : -1;
-        // Then by category weight descending
-        return b.weight - a.weight;
+        const aIdx = orderMap.has(a.category.id) ? orderMap.get(a.category.id) : 999;
+        const bIdx = orderMap.has(b.category.id) ? orderMap.get(b.category.id) : 999;
+        return aIdx - bIdx;
       });
-  }, [categories, tasks, profile, filterQ]);
+    } else {
+      filtered.sort((a, b) => {
+        const aComplete = a.taskStats.total > 0 && a.taskStats.done === a.taskStats.total;
+        const bComplete = b.taskStats.total > 0 && b.taskStats.done === b.taskStats.total;
+        if (aComplete !== bComplete) return aComplete ? 1 : -1;
+        return String(a.category.name).localeCompare(String(b.category.name));
+      });
+    }
+
+    return filtered;
+  }, [categories, tasks, profile, filterQ, workspaceOrders]);
 
   if (isCheckingAuth || (!user && !loading)) {
     return (
@@ -224,14 +257,13 @@ export default function ProjectsPage() {
         <p className="rs-page-muted">No projects match your filter.</p>
       ) : (
         <div className="rs-projects-grid">
-          {tiles.map(({ category, taskStats, nextAction, mantra, weight }) => (
+          {tiles.map(({ category, taskStats, nextAction, mantra }) => (
             <ProjectTile
               key={category.id}
               category={category}
               taskStats={taskStats}
               nextAction={nextAction}
               mantra={mantra}
-              weight={weight}
             />
           ))}
           <Link href="/backlog#rs-backlog-add-category" className="rs-project-tile rs-project-tile--new">
