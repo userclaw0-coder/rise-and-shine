@@ -358,6 +358,36 @@ export default async function handler(req, res) {
       .single();
     if (updateRunErr) throw updateRunErr;
 
+    // Auto-log to project knowledge base
+    if (nextApplied.length > 0 && run.category_id) {
+      try {
+        const dateStr = new Date().toISOString().slice(0, 10);
+        const sourceModel = run.source_model || "external AI";
+        const logEntry = `\n\n[IMPORT LOG ${dateStr}] Applied ${nextApplied.length} action(s) from ${sourceModel} planning session. Accepted: ${nextAccepted.length}, Rejected: ${nextRejected.length}.`;
+
+        const { data: wsRow } = await supabase
+          .from("shared_project_workspaces")
+          .select("knowledge_base")
+          .eq("category_id", run.category_id)
+          .maybeSingle();
+
+        const currentKB = wsRow?.knowledge_base || "";
+        await supabase
+          .from("shared_project_workspaces")
+          .upsert(
+            {
+              category_id: run.category_id,
+              owner_user_id: userId,
+              knowledge_base: currentKB + logEntry,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "category_id" }
+          );
+      } catch {
+        // Non-critical — don't fail the import if KB log fails
+      }
+    }
+
     return res.json({
       ok: true,
       run: updatedRun,
