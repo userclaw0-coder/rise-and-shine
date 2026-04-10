@@ -368,6 +368,8 @@ export default function StrategicProjectWorkspacePage() {
           efficiencyTip,
           suggestedMoves,
           legacyLinksText: projectLinks,
+          taskOrderIds: orderIds,
+          subtaskOrderIds,
         },
         { provider: aiProvider }
       ),
@@ -385,6 +387,8 @@ export default function StrategicProjectWorkspacePage() {
       resources,
       suggestedMoves,
       tasks,
+      orderIds,
+      subtaskOrderIds,
     ]
   );
 

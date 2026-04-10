@@ -203,7 +203,17 @@ export default async function handler(req, res) {
       if (!action?.apply_patch) continue;
 
       if (action.apply_patch.workspace && run.category_id) {
-        const patch = action.apply_patch.workspace || {};
+        const patch = { ...(action.apply_patch.workspace || {}) };
+        // Handle knowledge_base_append by merging with existing KB
+        if (patch.knowledge_base_append) {
+          const { data: kbRow } = await supabase
+            .from("shared_project_workspaces")
+            .select("knowledge_base")
+            .eq("category_id", run.category_id)
+            .maybeSingle();
+          patch.knowledge_base = (kbRow?.knowledge_base || "") + "\n\n" + patch.knowledge_base_append;
+          delete patch.knowledge_base_append;
+        }
         await saveSharedProjectWorkspace(userId, run.category_id, patch);
         appliedActionIds.push(actionId);
         continue;
@@ -323,6 +333,65 @@ export default async function handler(req, res) {
         profile = applyVisionPatch(profile, { id: action.id, ...action.apply_patch.vision }, run.category_id);
         profileDirty = true;
         appliedActionIds.push(actionId);
+        continue;
+      }
+
+      // Reorder root tasks
+      if (action.apply_patch.reorder_tasks && run.category_id) {
+        const orderIds = (action.apply_patch.reorder_tasks || []).map(String).filter(Boolean);
+        await saveSharedProjectWorkspace(userId, run.category_id, { task_order_ids: orderIds });
+        appliedActionIds.push(actionId);
+        continue;
+      }
+
+      // Reorder subtasks
+      if (action.apply_patch.reorder_subtasks && action.parent_task_id && run.category_id) {
+        const subIds = (action.apply_patch.reorder_subtasks || []).map(String).filter(Boolean);
+        const { data: wsRow } = await supabase
+          .from("shared_project_workspaces")
+          .select("subtask_order_ids")
+          .eq("category_id", run.category_id)
+          .maybeSingle();
+        const current = wsRow?.subtask_order_ids || {};
+        current[action.parent_task_id] = subIds;
+        await saveSharedProjectWorkspace(userId, run.category_id, { subtask_order_ids: current });
+        appliedActionIds.push(actionId);
+        continue;
+      }
+
+      // Set dependency (blocked-by tag)
+      if (action.apply_patch.set_dependency && action.task_id && action.apply_patch.blocked_by_task_id) {
+        const depTag = `blocked-by:${action.apply_patch.blocked_by_task_id}`;
+        await mergeCollaborativeTagNames(userId, action.task_id, [depTag]);
+        await logTaskEvent(userId, action.task_id, {
+          source: EXTERNAL_PROJECT_IMPORT_SOURCE,
+          action: "dependency_set",
+          action_id: actionId,
+          blocked_by: action.apply_patch.blocked_by_task_id,
+        });
+        appliedActionIds.push(actionId);
+        continue;
+      }
+
+      // Knowledge base append
+      if (action.apply_patch.knowledge_base_append && run.category_id) {
+        const { data: kbRow } = await supabase
+          .from("shared_project_workspaces")
+          .select("knowledge_base")
+          .eq("category_id", run.category_id)
+          .maybeSingle();
+        const currentKB = kbRow?.knowledge_base || "";
+        const appendText = String(action.apply_patch.knowledge_base_append || "").trim();
+        if (appendText) {
+          await supabase
+            .from("shared_project_workspaces")
+            .upsert(
+              { category_id: run.category_id, owner_user_id: userId, knowledge_base: currentKB + "\n\n" + appendText, updated_at: new Date().toISOString() },
+              { onConflict: "category_id" }
+            );
+        }
+        appliedActionIds.push(actionId);
+        continue;
       }
     }
 
