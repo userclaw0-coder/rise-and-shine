@@ -544,18 +544,46 @@ export default function TodayPage() {
     [profilePrefs, categoryIdToName]
   );
 
-  // --- Next Actions: one best task per project, ordered by project priority ---
-  // Respects manual ordering (task_order_ids) when set, falls back to scoring.
-  // Skips tasks tagged as blocked or blocked-by:*.
+  // --- Next Actions: one bite-size subtask per project, ordered by project priority ---
+  // For each project: find the top root task (manual order or scoring),
+  // then drill into its subtasks to find the first undone one.
+  // Shows the subtask as the action with the parent task as context.
   const projectNextActions = useMemo(() => {
     if (!backlogTasks || backlogTasks.length === 0) return [];
 
     const dailyIds = new Set(dailyTemplateTaskIds);
 
-    // Group open tasks by category
+    function getTaskTags(task) {
+      return Array.isArray(task.tags)
+        ? task.tags.map((t) => (typeof t === "string" ? t : t?.tag?.name || t?.name)).filter(Boolean)
+        : [];
+    }
+
+    function isBlocked(task) {
+      const tags = getTaskTags(task);
+      return tags.some((t) =>
+        t.toLowerCase() === "blocked" ||
+        t.toLowerCase() === "waiting" ||
+        t.toLowerCase().startsWith("blocked-by:")
+      );
+    }
+
+    // Build parent→children map for subtask lookup
+    const childrenByParent = {};
+    const taskById = {};
+    for (const task of backlogTasks) {
+      taskById[task.id] = task;
+      if (task.parent_task_id) {
+        if (!childrenByParent[task.parent_task_id]) childrenByParent[task.parent_task_id] = [];
+        childrenByParent[task.parent_task_id].push(task);
+      }
+    }
+
+    // Group open ROOT tasks by category
     const byCategory = {};
     for (const task of backlogTasks) {
       if (task.status === "archived" || task.status === "done") continue;
+      if (task.parent_task_id) continue; // only root tasks
       if (dailyIds.has(task.id)) continue;
       const catId = task.category_id || "__none__";
       if (!byCategory[catId]) byCategory[catId] = [];
@@ -565,70 +593,73 @@ export default function TodayPage() {
     const priorityScores = { Critical: 4, High: 3, Medium: 2, Low: 1 };
     const result = [];
 
-    for (const [catId, tasks] of Object.entries(byCategory)) {
+    for (const [catId, rootTasks] of Object.entries(byCategory)) {
       const catName = categoryIdToName[catId] || "Uncategorized";
       const catWeight = effectiveCategoryWeights[catName] || 1;
       const projectOrder = workspaceOrders[catId]?.task_order_ids || [];
+      const subtaskOrders = workspaceOrders[catId]?.subtask_order_ids || {};
 
-      // Filter out blocked tasks
-      const eligible = tasks.filter((task) => {
-        const tags = Array.isArray(task.tags)
-          ? task.tags.map((t) => (typeof t === "string" ? t : t?.tag?.name || t?.name)).filter(Boolean)
-          : [];
-        const isBlocked = tags.some((t) =>
-          t.toLowerCase() === "blocked" ||
-          t.toLowerCase() === "waiting" ||
-          t.toLowerCase().startsWith("blocked-by:")
-        );
-        return !isBlocked;
-      });
+      // Filter out blocked root tasks
+      const eligibleRoots = rootTasks.filter((t) => !isBlocked(t));
+      if (eligibleRoots.length === 0) continue;
 
-      if (eligible.length === 0) continue;
-
-      // If manual order exists, use the first eligible task in that order
-      let best = null;
+      // Find the top root task (manual order first, then scoring)
+      let topRoot = null;
       if (projectOrder.length > 0) {
-        const eligibleIds = new Set(eligible.map((t) => t.id));
+        const eligibleIds = new Set(eligibleRoots.map((t) => t.id));
         const firstInOrder = projectOrder.find((id) => eligibleIds.has(id));
-        if (firstInOrder) {
-          best = eligible.find((t) => t.id === firstInOrder);
-        }
+        if (firstInOrder) topRoot = eligibleRoots.find((t) => t.id === firstInOrder);
       }
-
-      // Fall back to scoring-based selection
-      if (!best) {
-        const scored = eligible.map((task) => {
-          const tags = Array.isArray(task.tags)
-            ? task.tags.map((t) => (typeof t === "string" ? t : t?.tag?.name || t?.name)).filter(Boolean)
-            : [];
-          let score = 0;
-          if (task.parent_task_id) score += 10;
-          score += (priorityScores[task.priority] || 2) * 3;
-          const effort = task.effort_hours || 1;
-          score += Math.max(0, 8 - effort * 2);
-          if (tags.includes("quick-win") || tags.includes("easy-win")) score += 5;
+      if (!topRoot) {
+        const scored = eligibleRoots.map((task) => {
+          const tags = getTaskTags(task);
+          let score = (priorityScores[task.priority] || 2) * 3;
           if (task.status === "doing") score += 4;
           if (task.due_date && task.due_date < todayStr) score += 8;
           if (task.due_date === todayStr) score += 6;
           return { task, score };
         });
         scored.sort((a, b) => b.score - a.score);
-        best = scored[0]?.task;
+        topRoot = scored[0]?.task;
+      }
+      if (!topRoot) continue;
+
+      // Now drill into subtasks of the top root task
+      const subs = (childrenByParent[topRoot.id] || [])
+        .filter((s) => s.status !== "done" && s.status !== "archived" && !isBlocked(s));
+
+      let actionTask = null;
+      let parentTitle = null;
+
+      if (subs.length > 0) {
+        // Apply subtask ordering
+        const subOrder = subtaskOrders[topRoot.id] || [];
+        let orderedSubs = subs;
+        if (subOrder.length > 0) {
+          const subMap = new Map(subs.map((s) => [s.id, s]));
+          const ordered = subOrder.map((id) => subMap.get(id)).filter(Boolean);
+          const rest = subs.filter((s) => !subOrder.includes(s.id));
+          orderedSubs = [...ordered, ...rest];
+        }
+        actionTask = orderedSubs[0];
+        parentTitle = topRoot.title;
+      } else {
+        // No subtasks — the root task itself is the action
+        actionTask = topRoot;
+        parentTitle = null;
       }
 
-      if (!best) continue;
-
-      const tags = Array.isArray(best.tags)
-        ? best.tags.map((t) => (typeof t === "string" ? t : t?.tag?.name || t?.name)).filter(Boolean)
-        : [];
+      const tags = getTaskTags(actionTask);
+      const allOpen = eligibleRoots.length;
 
       result.push({
-        task: best,
+        task: actionTask,
+        parentTitle,
         tags,
         category: catName,
         categoryId: catId,
         categoryWeight: catWeight,
-        remainingInProject: eligible.length,
+        remainingInProject: allOpen,
       });
     }
 
@@ -1478,7 +1509,7 @@ export default function TodayPage() {
         <div>
       <SectionCard
         title="Next Actions"
-        subtitle="One next action per project, ordered by project priority."
+        subtitle="Next bite-size action per project, ordered by project priority."
       >
         {projectNextActions.length === 0 && (
           <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
@@ -1515,6 +1546,19 @@ export default function TodayPage() {
                   style={{ marginTop: 3, flexShrink: 0, width: 18, height: 18, cursor: "pointer" }}
                 />
                 <div style={{ flex: 1, minWidth: 0 }}>
+                  {entry.parentTitle && (
+                    <div style={{
+                      fontSize: 11,
+                      color: "var(--rs-text-muted, #8a8478)",
+                      marginBottom: 2,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                    }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 12 }}>subdirectory_arrow_right</span>
+                      {entry.parentTitle}
+                    </div>
+                  )}
                   <div
                     style={{
                       fontWeight: 600,
@@ -1556,7 +1600,7 @@ export default function TodayPage() {
                         }</span>
                       </>
                     ) : null}
-                    {entry.task.parent_task_id && (
+                    {entry.parentTitle && (
                       <>
                         <span>•</span>
                         <span style={{ fontSize: 11, opacity: 0.8 }}>subtask</span>
