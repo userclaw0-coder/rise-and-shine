@@ -326,13 +326,26 @@ export default function TodayPage() {
         setLoading(true);
         setError("");
 
-        const tRes = await getTemplates();
+        // Start ALL heavy calls immediately in parallel — don't wait for templates
+        const heavyPromise = Promise.all([
+          loadCollaborativeBacklog(false),
+          getLastCompletedEventsForUser(user.id),
+          getOrCreateDailyPlan(user.id, todayStr, mode),
+          loadWorkspaceOrders().catch(() => ({ orders: {} })),
+          getUserProfile(user.id),
+          getLiftingSetsWithSession(user.id, 500),
+          getTemplates(),
+        ]);
+
+        const [tasksData, lastRes, planRes, ordersData, profRes, liftSetsRes, tRes] =
+          await heavyPromise;
+
+        // Templates
         if (tRes.error) {
           setError(tRes.error.message);
           setLoading(false);
           return;
         }
-
         const allTemplates = tRes.data || [];
         setTemplates(allTemplates);
 
@@ -355,10 +368,7 @@ export default function TodayPage() {
           setItems(loadedItems);
         }
 
-        const [profRes, liftSetsRes] = await Promise.all([
-          getUserProfile(user.id),
-          getLiftingSetsWithSession(user.id, 500),
-        ]);
+        // Workout
         const profileForOccam = profRes.data?.profile;
         const wp = getWorkoutPlanForDate(todayStr, {
           preferences: profileForOccam?.preferences,
@@ -391,13 +401,7 @@ export default function TodayPage() {
           setCompletionMap({});
         }
 
-        const [tasksData, lastRes, planRes, ordersData] = await Promise.all([
-          loadCollaborativeBacklog(false),
-          getLastCompletedEventsForUser(user.id),
-          getOrCreateDailyPlan(user.id, todayStr, mode),
-          loadWorkspaceOrders().catch(() => ({ orders: {} })),
-        ]);
-
+        // Backlog + orders (already loaded above)
         setBacklogTasks(tasksData.tasks || []);
         setWorkspaceOrders(ordersData.orders || {});
 
