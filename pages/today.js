@@ -1,12 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import AiPlannerGuidance from "../components/AiPlannerGuidance";
 import DashboardLayout from "../components/DashboardLayout";
 import PageHeader from "../components/PageHeader";
 import ProgressToOutcome from "../components/ProgressToOutcome";
-import QueueBehaviorHelper from "../components/QueueBehaviorHelper";
 import SectionCard from "../components/SectionCard";
-import SubtaskOrchestrator from "../components/SubtaskOrchestrator";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabaseClient";
 import {
@@ -190,6 +187,7 @@ export default function TodayPage() {
   const [lastCompletedMap, setLastCompletedMap] = useState({});
   const [dailyHitsCompleted, setDailyHitsCompleted] = useState(0);
   const [otherCompletedToday, setOtherCompletedToday] = useState(0);
+  const [completedTodayTasks, setCompletedTodayTasks] = useState([]);
 
   const [dailyPlan, setDailyPlan] = useState(null);
   const [queueEntries, setQueueEntries] = useState([]);
@@ -484,6 +482,25 @@ export default function TodayPage() {
           ).size;
           setDailyHitsCompleted(dailyHitsDone);
           setOtherCompletedToday(otherDone);
+
+          // Build completed tasks list for Today's Actions summary
+          const completedTaskIds = [...new Set(events.map((e) => e.task_id))];
+          if (completedTaskIds.length > 0) {
+            const taskMap = {};
+            for (const t of (tasksData.tasks || [])) {
+              taskMap[t.id] = t;
+            }
+            setCompletedTodayTasks(
+              completedTaskIds
+                .map((id) => taskMap[id])
+                .filter(Boolean)
+                .map((t) => ({
+                  id: t.id,
+                  title: t.title,
+                  category: typeof t.category === "string" ? t.category : t.category?.name || "",
+                }))
+            );
+          }
         }
       } catch (e) {
         setError(e.message || "Failed to load today view.");
@@ -1391,8 +1408,6 @@ export default function TodayPage() {
         )}
       </div>
 
-      <QueueBehaviorHelper />
-
       <div className="today-two-col">
         <div>
           <SectionCard
@@ -1488,12 +1503,17 @@ export default function TodayPage() {
                       color: "var(--rs-text-muted, #8a8478)",
                     }}
                   >
-                    <span style={{
-                      fontWeight: 600,
-                      color: "var(--rs-accent, #b8860b)",
-                    }}>
+                    <Link
+                      href={`/category/${entry.categoryId}`}
+                      style={{
+                        fontWeight: 600,
+                        color: "var(--rs-accent, #b8860b)",
+                        textDecoration: "none",
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       {entry.category}
-                    </span>
+                    </Link>
                     <span>•</span>
                     <span>{entry.task.priority || "Medium"}</span>
                     {entry.task.effort_hours ? (
@@ -1535,246 +1555,47 @@ export default function TodayPage() {
         </div>
       </SectionCard>
 
+      {/* Today's Actions — completed tasks summary */}
       <SectionCard
-        title="AI Planner"
-        subtitle="Suggestions stay optional and approval-based. Nothing is applied automatically."
+        title="Today's Actions"
+        subtitle={`${completedTodayTasks.length} task${completedTodayTasks.length !== 1 ? "s" : ""} completed today`}
       >
-        <AiPlannerGuidance
-          aiLoading={aiLoading}
-          aiError={aiError}
-          aiStatus={aiStatus}
-          aiSuggestions={aiSuggestions}
-          queueReady={queueEntries.length === 3}
-          appliedMessage={appliedMessage}
-          appliedSuccessVisible={appliedSuccessVisible}
-          appliedDetails={appliedDetails}
-          nextActionLabel={nextActionLabel}
-          isMorningFirstBlock={isMorningFirstBlock}
-          isLateMorningExecution={isLateMorningExecution}
-          isAfterLunchExecution={isAfterLunchExecution}
-          isLateAfternoonExecution={isLateAfternoonExecution}
-        />
-        <div style={{ marginBottom: 12 }}>
-          <button
-            type="button"
-            className="rs-btn-primary"
-            onClick={handleRefineWithAi}
-            disabled={aiLoading || queueEntries.length !== 3}
-            style={{
-              fontSize: 13,
-              cursor: aiLoading || queueEntries.length !== 3 ? "not-allowed" : "pointer",
-            }}
-          >
-            {aiLoading ? "Refining…" : "Refine these 3 with AI"}
-          </button>
-          {queueEntries.length !== 3 && (
-            <span style={{ marginLeft: 8, fontSize: 12, color: "var(--rs-on-surface-variant)" }}>
-              Queue must have 3 tasks to refine.
-            </span>
-          )}
-        </div>
-        {appliedMessage && appliedMessage.toLowerCase().includes("failed") && (
-          <p style={{ fontSize: 13, color: "#b91c1c", margin: "0 0 10px", fontWeight: 500 }}>
-            {appliedMessage}
+        {completedTodayTasks.length === 0 ? (
+          <p style={{ fontSize: 13, color: "var(--rs-text-muted, #8a8478)", margin: 0 }}>
+            No tasks completed yet today. Check off items above to see them here.
           </p>
-        )}
-        {aiCached && aiSuggestions && (
-          <p style={{ fontSize: 12, color: "#059669", margin: "0 0 10px" }}>
-            AI suggestions loaded from cache
-          </p>
-        )}
-        {aiError && !String(aiStatus || "").startsWith("fallback:") && (
-          <p style={{ fontSize: 13, color: "#b91c1c", margin: "0 0 10px" }}>
-            {aiError}
-          </p>
-        )}
-        {aiSuggestions && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {aiSuggestions.task_refinements && aiSuggestions.task_refinements.length > 0 && (
-              <div>
-                <h3 style={{ fontSize: 14, fontWeight: 600, margin: "0 0 4px", color: "#374151" }}>
-                  Task refinements
-                </h3>
-                <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 8px" }}>
-                  Approve updates the task title, tags, or effort in place for that one task only. Dismiss or ignore leaves both the task and the rest of your plan unchanged.
-                </p>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {(aiSuggestions.task_refinements || []).map((item, idx) => (
-                    <div
-                      key={`ref-${item.task_id}-${idx}`}
-                      style={{
-                        padding: 12,
-                        borderRadius: 12,
-                        border: "1px solid #e5e7eb",
-                        background: "#f9fafb",
-                      }}
-                    >
-                      <div style={{ fontSize: 13, marginBottom: 4 }}>
-                        <strong>Title:</strong> {item.suggested_title ?? "—"}
-                      </div>
-                      {item.why_this_task_now && (
-                        <div
-                          style={{
-                            fontSize: 12,
-                            color: "#059669",
-                            marginBottom: 6,
-                            padding: "4px 8px",
-                            background: "#f0fdf4",
-                            borderRadius: 6,
-                            borderLeft: "3px solid #86efac",
-                          }}
-                        >
-                          <strong>Why now:</strong> {item.why_this_task_now}
-                        </div>
-                      )}
-                      {(item.suggested_tags_add?.length > 0) && (
-                        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>
-                          Tags to add: {item.suggested_tags_add.join(", ")}
-                        </div>
-                      )}
-                      {item.suggested_effort_minutes != null && (
-                        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>
-                          Effort: {item.suggested_effort_minutes} min
-                        </div>
-                      )}
-                      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                        <button
-                          type="button"
-                          onClick={() => handleApproveRefinement(item, idx)}
-                          style={{
-                            fontSize: 12,
-                            padding: "4px 10px",
-                            borderRadius: 999,
-                            border: "1px solid #059669",
-                            background: "#ecfdf5",
-                            color: "#059669",
-                            cursor: "pointer",
-                          }}
-                        >
-                          Approve
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => dismissRefinement(idx, item)}
-                          style={{
-                            fontSize: 12,
-                            padding: "4px 10px",
-                            borderRadius: 999,
-                            border: "1px solid #e5e7eb",
-                            background: "#fff",
-                            color: "#6b7280",
-                            cursor: "pointer",
-                          }}
-                        >
-                          Dismiss
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {completedTodayTasks.map((task) => (
+              <div
+                key={task.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "6px 10px",
+                  borderRadius: 6,
+                  background: "rgba(34, 197, 94, 0.06)",
+                  fontSize: 13,
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 16, color: "#22c55e" }}>
+                  check_circle
+                </span>
+                <span style={{ flex: 1, textDecoration: "line-through", color: "var(--rs-text-muted, #8a8478)" }}>
+                  {task.title}
+                </span>
+                {task.category && (
+                  <span style={{ fontSize: 11, color: "var(--rs-text-muted, #8a8478)" }}>
+                    {task.category}
+                  </span>
+                )}
               </div>
-            )}
-            {aiSuggestions.suggested_subtasks_to_create && aiSuggestions.suggested_subtasks_to_create.length > 0 && (
-              <SubtaskOrchestrator
-                subtasks={aiSuggestions.suggested_subtasks_to_create}
-                parentTitleById={taskTitleById}
-                onApply={handleApplyOrchestrated}
-                onDismissAll={handleDismissAllSubtasks}
-                applying={subtaskApplying}
-                applyError={subtaskApplyError}
-              />
-            )}
-            {aiSuggestions.automation_opportunities && aiSuggestions.automation_opportunities.length > 0 && (
-              <div>
-                <h3 style={{ fontSize: 14, fontWeight: 600, margin: "0 0 8px", color: "#374151" }}>
-                  Automation opportunities
-                </h3>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {(aiSuggestions.automation_opportunities || []).map((item, idx) => (
-                    <div
-                      key={`auto-${idx}`}
-                      style={{
-                        padding: 12,
-                        borderRadius: 12,
-                        border: "1px solid #e5e7eb",
-                        background: "#f9fafb",
-                      }}
-                    >
-                      <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
-                        {item.title ?? "Automation"}
-                      </div>
-                      {item.what_it_does && (
-                        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>
-                          {item.what_it_does}
-                        </div>
-                      )}
-                      {item.benefit && (
-                        <div style={{ fontSize: 12, color: "#059669", marginBottom: 4 }}>
-                          Benefit: {item.benefit}
-                        </div>
-                      )}
-                      {(item.recommended_tooling?.length > 0) && (
-                        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>
-                          Tools: {item.recommended_tooling.join(", ")}
-                        </div>
-                      )}
-                      {(item.permissions_needed?.length > 0) && (
-                        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>
-                          Permissions: {item.permissions_needed.join(", ")}
-                        </div>
-                      )}
-                      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                        <button
-                          type="button"
-                          onClick={() => handleExploreAutomation(idx)}
-                          style={{
-                            fontSize: 12,
-                            padding: "4px 10px",
-                            borderRadius: 999,
-                            border: "1px solid #2563eb",
-                            background: "#eff6ff",
-                            color: "#2563eb",
-                            cursor: "pointer",
-                          }}
-                        >
-                          Explore automation
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => dismissAutomation(idx)}
-                          style={{
-                            fontSize: 12,
-                            padding: "4px 10px",
-                            borderRadius: 999,
-                            border: "1px solid #e5e7eb",
-                            background: "#fff",
-                            color: "#6b7280",
-                            cursor: "pointer",
-                          }}
-                        >
-                          Dismiss
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {aiSuggestions &&
-              ((aiSuggestions.task_refinements?.length || 0) +
-                (aiSuggestions.suggested_subtasks_to_create?.length || 0) +
-                (aiSuggestions.automation_opportunities?.length || 0)) === 0 ? (
-                <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
-                  Nothing new to review this time. That means the planner completed, found no worthwhile changes, and kept your tasks exactly as they were.
-                </p>
-              ) : (
-                <p style={{ fontSize: 11, color: "#9ca3af", margin: "8px 0 0" }}>
-                  You can dismiss everything safely — that only hides suggestions. Your tasks and queue only change when you approve.
-                </p>
-              )}
+            ))}
           </div>
         )}
       </SectionCard>
+
         </div>
       </div>
     </DashboardLayout>
