@@ -10,6 +10,7 @@ import { CSS } from "@dnd-kit/utilities";
 export default function ProjectPlanView({
   tasks,
   childrenByParent,
+  subtaskOrderIds,
   completionMap,
   onToggleCompletion,
   onSubtaskCompletion,
@@ -77,7 +78,16 @@ export default function ProjectPlanView({
             const isDone = task.status === "done" || task.status === "archived";
             const isActive = task.id === activeTaskId && !isDone;
             const expanded = isExpanded(task.id);
-            const subtasks = (childrenByParent instanceof Map ? childrenByParent.get(task.id) : childrenByParent?.[task.id]) || [];
+            const rawSubs = (childrenByParent instanceof Map ? childrenByParent.get(task.id) : childrenByParent?.[task.id]) || [];
+            // Apply subtask ordering from subtaskOrderIds
+            const subOrder = subtaskOrderIds?.[task.id] || [];
+            let subtasks = rawSubs;
+            if (subOrder.length > 0) {
+              const subMap = new Map(rawSubs.map((s) => [s.id, s]));
+              const ordered = subOrder.map((id) => subMap.get(id)).filter(Boolean);
+              const rest = rawSubs.filter((s) => !subOrder.includes(s.id));
+              subtasks = [...ordered, ...rest];
+            }
 
             return (
               <SortableRootTask

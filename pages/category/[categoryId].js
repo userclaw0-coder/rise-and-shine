@@ -1053,6 +1053,7 @@ export default function StrategicProjectWorkspacePage() {
                   <ProjectPlanView
                     tasks={planViewTasks}
                     childrenByParent={childrenByParent}
+                    subtaskOrderIds={subtaskOrderIds}
                     completionMap={{}}
                     onToggleCompletion={(taskId) => handleStatusChange({ id: taskId }, "done")}
                     onSubtaskCompletion={(taskId) => handleStatusChange({ id: taskId }, "done")}

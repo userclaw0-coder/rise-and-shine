@@ -2930,7 +2930,18 @@ export default function BacklogPage() {
               >
                 <SortableContext items={sortedRootTasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
                   {sortedRootTasks.map((t) => {
-                    const kids = (childrenByParent.get(t.id) || []).slice().sort(compareTasksForSort);
+                    const rawKids = (childrenByParent.get(t.id) || []);
+                    const catId = t.category_id;
+                    const subOrder = catId ? (workspaceOrders[catId]?.subtask_order_ids?.[t.id] || []) : [];
+                    let kids;
+                    if (subOrder.length > 0) {
+                      const kidMap = new Map(rawKids.map((k) => [k.id, k]));
+                      const ordered = subOrder.map((id) => kidMap.get(id)).filter(Boolean);
+                      const rest = rawKids.filter((k) => !subOrder.includes(k.id)).sort(compareTasksForSort);
+                      kids = [...ordered, ...rest];
+                    } else {
+                      kids = rawKids.slice().sort(compareTasksForSort);
+                    }
                     return (
                       <SortableBacklogCard key={t.id} id={t.id}>
                         <BacklogStrategicTaskCard
