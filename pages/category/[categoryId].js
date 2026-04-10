@@ -86,28 +86,20 @@ function SortableTaskCard({ id, children }) {
     transition,
     opacity: isDragging ? 0.5 : 1,
     zIndex: isDragging ? 10 : undefined,
-    position: "relative",
   };
   return (
-    <div ref={setNodeRef} style={style}>
+    <div ref={setNodeRef} style={style} className="sortable-task-card">
       <div
         {...attributes}
         {...listeners}
-        style={{
-          position: "absolute",
-          left: -4,
-          top: 12,
-          cursor: "grab",
-          color: "var(--rs-text-muted, #8a8478)",
-          opacity: 0.35,
-          zIndex: 2,
-          touchAction: "none",
-          padding: "4px 2px",
-        }}
+        className="sortable-task-card__handle"
+        title="Drag to reorder"
       >
-        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>drag_indicator</span>
+        <span className="material-symbols-outlined">drag_indicator</span>
       </div>
-      {children}
+      <div className="sortable-task-card__content">
+        {children}
+      </div>
     </div>
   );
 }

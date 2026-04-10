@@ -5561,3 +5561,45 @@ a.pkb__resource-label:hover {
 }
 
 .stl__sub-drag:hover { opacity: 0.7; }
+
+/* ===== Sortable Task Card (Action Items DnD wrapper) ===== */
+
+.sortable-task-card {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  margin-bottom: 8px;
+}
+
+.sortable-task-card__handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  flex-shrink: 0;
+  cursor: grab;
+  color: var(--rs-text-muted, #8a8478);
+  opacity: 0.3;
+  touch-action: none;
+  border-radius: 8px 0 0 8px;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.sortable-task-card__handle:hover {
+  opacity: 0.7;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.sortable-task-card__handle:active {
+  cursor: grabbing;
+  opacity: 1;
+}
+
+.sortable-task-card__handle .material-symbols-outlined {
+  font-size: 20px;
+}
+
+.sortable-task-card__content {
+  flex: 1;
+  min-width: 0;
+}

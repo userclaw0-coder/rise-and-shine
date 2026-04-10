@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
+import { DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import BacklogStrategicTaskCard from "../components/BacklogStrategicTaskCard";
 import DashboardLayout from "../components/DashboardLayout";
 import Modal from "../components/Modal";
@@ -18,6 +21,8 @@ import {
   createCollaborativeTask,
   ensureCollaborativeSubcategory,
   loadCollaborativeBacklog,
+  loadWorkspaceOrders,
+  saveCollaborativeProjectWorkspace,
   updateCollaborativeTask,
   updateCollaborativeTaskStatus,
   setCollaborativeTaskTags,
@@ -104,6 +109,27 @@ function makeTagText(task) {
   return names.join(", ");
 }
 
+function SortableBacklogCard({ id, children }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : undefined,
+  };
+  return (
+    <div ref={setNodeRef} style={style} className="sortable-task-card">
+      <div {...attributes} {...listeners} className="sortable-task-card__handle" title="Drag to reorder">
+        <span className="material-symbols-outlined">drag_indicator</span>
+      </div>
+      <div className="sortable-task-card__content">
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function parseTagText(text) {
   return (text || "")
     .split(",")
@@ -139,6 +165,11 @@ export default function BacklogPage() {
   const [categories, setCategories] = useState([]);
   const [categoryOrder, setCategoryOrder] = useState([]);
   const [tags, setTags] = useState([]);
+  const [workspaceOrders, setWorkspaceOrders] = useState({});
+  const backlogSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
+  );
   const [profile, setProfile] = useState(null);
 
   const [search, setSearch] = useState("");
@@ -178,7 +209,11 @@ export default function BacklogPage() {
       try {
         setLoading(true);
         setError("");
-        const data = await loadCollaborativeBacklog(true);
+        const [data, ordersData] = await Promise.all([
+          loadCollaborativeBacklog(true),
+          loadWorkspaceOrders().catch(() => ({ orders: {} })),
+        ]);
+        setWorkspaceOrders(ordersData.orders || {});
         const enriched =
           (data.tasks || []).map((t) => ({
             ...t,
@@ -2851,37 +2886,65 @@ export default function BacklogPage() {
                 No tasks match your filters.
               </p>
             ) : (
-              sortedRootTasks.map((t) => {
-                const kids = (childrenByParent.get(t.id) || []).slice().sort(compareTasksForSort);
-                return (
-                  <BacklogStrategicTaskCard
-                    key={t.id}
-                    task={t}
-                    sortedChildren={kids}
-                    categories={categories}
-                    profile={profile}
-                    lifeDomainLabel={lifeDomainLabel}
-                    LIFE_DOMAIN_KEYS={LIFE_DOMAIN_KEYS}
-                    expandedSubtasks={!!expandedSubtasksByParent[t.id]}
-                    onToggleSubtasksExpanded={() =>
-                      setExpandedSubtasksByParent((p) => ({ ...p, [t.id]: !p[t.id] }))
-                    }
-                    expandedTagPills={!!expandedTagPillsByTask[t.id]}
-                    onToggleTagPills={() =>
-                      setExpandedTagPillsByTask((p) => ({ ...p, [t.id]: !p[t.id] }))
-                    }
-                    updateTaskLocal={updateTaskLocal}
-                    handleInlineSave={handleInlineSave}
-                    handleStatusChange={handleStatusChange}
-                    handleSubcategorySave={handleSubcategorySave}
-                    handleTagsSave={handleTagsSave}
-                    handleAddSubtask={handleAddSubtask}
-                    handleAssignTask={handleAssignTask}
-                    memberOptions={categories.find((c) => c.id === t.category_id)?._members || []}
-                    tagText={t._tagsText ?? makeTagText(t)}
-                  />
-                );
-              })
+              <DndContext
+                sensors={backlogSensors}
+                collisionDetection={closestCenter}
+                onDragEnd={(event) => {
+                  const { active, over } = event;
+                  if (!over || active.id === over.id) return;
+                  // Find which category these tasks belong to and reorder within it
+                  const activeTask = sortedRootTasks.find((t) => t.id === active.id);
+                  if (!activeTask?.category_id) return;
+                  const catId = activeTask.category_id;
+                  const catTasks = sortedRootTasks.filter((t) => t.category_id === catId);
+                  const oldIdx = catTasks.findIndex((t) => t.id === active.id);
+                  const overTask = sortedRootTasks.find((t) => t.id === over.id);
+                  if (!overTask || overTask.category_id !== catId) return;
+                  const newIdx = catTasks.findIndex((t) => t.id === over.id);
+                  if (oldIdx < 0 || newIdx < 0) return;
+                  const newOrder = arrayMove(catTasks, oldIdx, newIdx).map((t) => t.id);
+                  setWorkspaceOrders((prev) => ({
+                    ...prev,
+                    [catId]: { ...prev[catId], task_order_ids: newOrder },
+                  }));
+                  saveCollaborativeProjectWorkspace(catId, { task_order_ids: newOrder });
+                }}
+              >
+                <SortableContext items={sortedRootTasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+                  {sortedRootTasks.map((t) => {
+                    const kids = (childrenByParent.get(t.id) || []).slice().sort(compareTasksForSort);
+                    return (
+                      <SortableBacklogCard key={t.id} id={t.id}>
+                        <BacklogStrategicTaskCard
+                          task={t}
+                          sortedChildren={kids}
+                          categories={categories}
+                          profile={profile}
+                          lifeDomainLabel={lifeDomainLabel}
+                          LIFE_DOMAIN_KEYS={LIFE_DOMAIN_KEYS}
+                          expandedSubtasks={!!expandedSubtasksByParent[t.id]}
+                          onToggleSubtasksExpanded={() =>
+                            setExpandedSubtasksByParent((p) => ({ ...p, [t.id]: !p[t.id] }))
+                          }
+                          expandedTagPills={!!expandedTagPillsByTask[t.id]}
+                          onToggleTagPills={() =>
+                            setExpandedTagPillsByTask((p) => ({ ...p, [t.id]: !p[t.id] }))
+                          }
+                          updateTaskLocal={updateTaskLocal}
+                          handleInlineSave={handleInlineSave}
+                          handleStatusChange={handleStatusChange}
+                          handleSubcategorySave={handleSubcategorySave}
+                          handleTagsSave={handleTagsSave}
+                          handleAddSubtask={handleAddSubtask}
+                          handleAssignTask={handleAssignTask}
+                          memberOptions={categories.find((c) => c.id === t.category_id)?._members || []}
+                          tagText={t._tagsText ?? makeTagText(t)}
+                        />
+                      </SortableBacklogCard>
+                    );
+                  })}
+                </SortableContext>
+              </DndContext>
             )}
           </div>
         )}
