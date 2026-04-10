@@ -172,6 +172,7 @@ export default function StrategicProjectWorkspacePage() {
 
   const [orderIds, setOrderIds] = useState([]);
   const [subtaskOrderIds, setSubtaskOrderIds] = useState({});
+  const [planViewScope, setPlanViewScope] = useState("open");
   const dndSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
@@ -336,11 +337,11 @@ export default function StrategicProjectWorkspacePage() {
     const inOrder = (orderIds || []).map((id) => byId.get(id)).filter(Boolean);
     const remaining = rootTasks.filter((t) => !(orderIds || []).includes(t.id));
     const all = [...inOrder, ...remaining];
-    // Split done vs undone, keep manual order within each group
     const undone = all.filter((t) => t.status !== "done" && t.status !== "archived");
     const done = all.filter((t) => t.status === "done" || t.status === "archived");
+    if (planViewScope === "open") return undone;
     return [...undone, ...done];
-  }, [rootTasks, orderIds]);
+  }, [rootTasks, orderIds, planViewScope]);
 
   const alignmentPct = useMemo(
     () => computeProjectAlignment(rootTasks, mantra, narrative),
@@ -939,7 +940,22 @@ export default function StrategicProjectWorkspacePage() {
         />
 
         {/* Plan of Attack */}
-        <SectionCard title="Plan of Attack">
+        <SectionCard
+          title="Plan of Attack"
+          subtitle={
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <select
+                className="rs-select-compact"
+                value={planViewScope}
+                onChange={(e) => setPlanViewScope(e.target.value)}
+                style={{ fontSize: 12 }}
+              >
+                <option value="open">Todo + Doing</option>
+                <option value="all">All tasks</option>
+              </select>
+            </div>
+          }
+        >
           <ProjectPlanView
             tasks={planOfAttackTasks}
             childrenByParent={childrenByParent}
