@@ -295,6 +295,18 @@ export default function StrategicProjectWorkspacePage() {
     return sorted;
   }, [visibleScoredRoots, orderIds, sortKey, sortDir]);
 
+  // Plan of Attack ordering: manual order via orderIds, done tasks at bottom
+  const planOfAttackTasks = useMemo(() => {
+    const byId = new Map(rootTasks.map((t) => [t.id, t]));
+    const inOrder = (orderIds || []).map((id) => byId.get(id)).filter(Boolean);
+    const remaining = rootTasks.filter((t) => !(orderIds || []).includes(t.id));
+    const all = [...inOrder, ...remaining];
+    // Split done vs undone, keep manual order within each group
+    const undone = all.filter((t) => t.status !== "done" && t.status !== "archived");
+    const done = all.filter((t) => t.status === "done" || t.status === "archived");
+    return [...undone, ...done];
+  }, [rootTasks, orderIds]);
+
   const alignmentPct = useMemo(
     () => computeProjectAlignment(rootTasks, mantra, narrative),
     [rootTasks, mantra, narrative]
@@ -894,11 +906,23 @@ export default function StrategicProjectWorkspacePage() {
         {/* Plan of Attack */}
         <SectionCard title="Plan of Attack">
           <ProjectPlanView
-            tasks={rootTasks}
+            tasks={planOfAttackTasks}
             childrenByParent={childrenByParent}
             completionMap={{}}
             onToggleCompletion={(taskId) => handleStatusChange({ id: taskId }, "done")}
             onSubtaskCompletion={(taskId) => handleStatusChange({ id: taskId }, "done")}
+            onReorderRoots={(newIds) => {
+              setOrderIds(newIds);
+              // Auto-save order
+              saveCollaborativeProjectWorkspace(categoryId, { task_order_ids: newIds });
+            }}
+            onReorderSubtasks={(parentId, newSubIds) => {
+              // Subtask order is stored as updated_at ordering; for now just update each subtask's updated_at
+              // A more robust approach would use a subtask_order field, but this works for MVP
+              newSubIds.forEach((id, idx) => {
+                updateCollaborativeTask(id, { _reorder_index: idx });
+              });
+            }}
             onJarvisBreakDown={(task) => {
               if (typeof window !== "undefined") {
                 const msg = `Break down "${task.title}" in project "${category?.name || ""}" into 5-7 bite-size subtasks. Consider the project knowledge base and current context.`;
