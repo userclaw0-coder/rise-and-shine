@@ -335,7 +335,7 @@ export default function BacklogPage() {
   async function handleDeleteCategoryClicked(id) {
     if (!user || !id) return;
     const confirmed = window.confirm(
-      "Delete this category? Tasks will keep their category id; you can reassign them later."
+      "Delete this project and ALL its tasks (including archived)? This cannot be undone."
     );
     if (!confirmed) return;
     setSavingCategories(true);
