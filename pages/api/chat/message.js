@@ -10,7 +10,7 @@
 //   { type: "error", message: "..." }
 
 import { getAuthenticatedUserId } from "../../../lib/api-auth";
-import { chatCompletion, getProviderInfo } from "../../../lib/ai-provider";
+import { chatCompletion } from "../../../lib/ai-provider";
 import { getToolDefinitions, executeTool } from "../../../lib/jarvis-tools";
 import { buildSystemPrompt } from "../../../lib/jarvis-system-prompt";
 import {
@@ -21,6 +21,7 @@ import {
 } from "../../../lib/jarvis-context";
 
 const MAX_TOOL_ROUNDS = 5;
+const REQUEST_TIMEOUT_MS = 90000;
 
 export const config = {
   api: {
@@ -29,7 +30,13 @@ export const config = {
 };
 
 function sendEvent(res, data) {
-  res.write(`data: ${JSON.stringify(data)}\n\n`);
+  try {
+    if (!res.writableEnded) {
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    }
+  } catch {
+    // Connection already closed
+  }
 }
 
 export default async function handler(req, res) {
@@ -57,30 +64,40 @@ export default async function handler(req, res) {
     "X-Accel-Buffering": "no",
   });
 
-  try {
-    // 1. Persist user message
-    await persistMessage(userId, { role: "user", content: userMessage });
+  // Request-level timeout
+  const requestTimer = setTimeout(() => {
+    sendEvent(res, { type: "error", message: "Request timed out. Please try again." });
+    sendEvent(res, { type: "done", message_id: null });
+    if (!res.writableEnded) res.end();
+  }, REQUEST_TIMEOUT_MS);
 
-    // 2. Load conversation history
+  try {
+    // 1. Load conversation history (BEFORE persisting user message)
     const history = await getConversationWindow(userId);
     const messages = formatForProvider(history);
 
-    // 3. Build system prompt with live context
-    const system = await buildSystemPrompt(userId);
+    // Add the current user message to the conversation (not yet persisted)
+    messages.push({ role: "user", content: userMessage });
 
-    // 4. Get tool definitions
+    // 2. Build system prompt with live context (with timeout protection)
+    let system;
+    try {
+      system = await buildSystemPrompt(userId);
+    } catch (promptErr) {
+      console.warn("[jarvis] System prompt build failed, using fallback:", promptErr.message);
+      system = "You are Jarvis, the Rise & Shine execution coach. Help the user with their tasks and projects. Use your tools to look up data before answering.";
+    }
+
+    // 3. Get tool definitions
     const tools = getToolDefinitions();
 
-    // 5. Run the agentic loop (streaming with tool calls)
+    // 4. Run the agentic loop (streaming with tool calls)
     let currentMessages = [...messages];
     let finalContent = "";
-    let finalToolCalls = null;
     let rounds = 0;
 
     while (rounds < MAX_TOOL_ROUNDS) {
       rounds++;
-      let roundContent = "";
-      let roundToolCalls = null;
 
       const result = await chatCompletion({
         system,
@@ -99,8 +116,8 @@ export default async function handler(req, res) {
         },
       });
 
-      roundContent = result.content;
-      roundToolCalls = result.toolCalls;
+      const roundContent = result.content;
+      const roundToolCalls = result.toolCalls;
 
       // If no tool calls, we're done
       if (!roundToolCalls || roundToolCalls.length === 0) {
@@ -109,7 +126,6 @@ export default async function handler(req, res) {
       }
 
       // Process tool calls
-      // Add assistant message with tool calls to conversation
       const assistantMsg = {
         role: "assistant",
         content: roundContent,
@@ -117,11 +133,15 @@ export default async function handler(req, res) {
       };
       currentMessages.push(assistantMsg);
 
-      // Execute each tool and add results
+      // Execute each tool — wrapped in try-catch so a tool failure doesn't crash the request
       const toolMessages = [];
       for (const tc of roundToolCalls) {
-        const toolResult = await executeTool(tc.name, tc.args, userId);
-        const resultStr = JSON.stringify(toolResult);
+        let toolResult;
+        try {
+          toolResult = await executeTool(tc.name, tc.args, userId);
+        } catch (toolErr) {
+          toolResult = { error: `Tool execution failed: ${toolErr.message || toolErr}` };
+        }
 
         sendEvent(res, {
           type: "tool_result",
@@ -132,46 +152,53 @@ export default async function handler(req, res) {
         const toolResultMsg = {
           role: "tool_result",
           tool_use_id: tc.id,
-          content: resultStr,
+          content: JSON.stringify(toolResult),
         };
         currentMessages.push(toolResultMsg);
         toolMessages.push(toolResultMsg);
       }
 
-      // Persist the tool call + result messages
-      await persistMessages(userId, [
-        {
-          role: "tool_call",
-          tool_calls: roundToolCalls,
-        },
-        ...toolMessages.map((tm) => ({
-          role: "tool_result",
-          content: tm.content,
-          tool_call_id: tm.tool_use_id,
-        })),
-      ]);
+      // Persist tool call + result messages (non-critical — don't crash on failure)
+      try {
+        await persistMessages(userId, [
+          { role: "tool_call", tool_calls: roundToolCalls },
+          ...toolMessages.map((tm) => ({
+            role: "tool_result",
+            content: tm.content,
+            tool_call_id: tm.tool_use_id,
+          })),
+        ]);
+      } catch (persistErr) {
+        console.warn("[jarvis] Failed to persist tool messages:", persistErr.message);
+      }
 
       // If the model says end_turn with tool calls, continue to get the text response
       if (result.stopReason === "end_turn") {
         finalContent = roundContent;
         break;
       }
-
-      // Otherwise loop — the model wants to make more tool calls or generate a response
     }
 
-    // 6. Persist final assistant message
-    const { id: messageId } = await persistMessage(userId, {
-      role: "assistant",
-      content: finalContent || "",
-    });
+    // 5. Persist user message + final assistant message TOGETHER (atomic — both or neither)
+    let messageId = null;
+    try {
+      const persisted = await persistMessages(userId, [
+        { role: "user", content: userMessage },
+        { role: "assistant", content: finalContent || "" },
+      ]);
+      messageId = persisted?.[1]?.id || null;
+    } catch (persistErr) {
+      console.warn("[jarvis] Failed to persist messages:", persistErr.message);
+    }
 
-    // 7. Send done event
+    // 6. Send done event
     sendEvent(res, { type: "done", message_id: messageId });
   } catch (err) {
     console.error("[jarvis chat error]", err);
     sendEvent(res, { type: "error", message: err.message || "An unexpected error occurred." });
+    sendEvent(res, { type: "done", message_id: null });
   } finally {
-    res.end();
+    clearTimeout(requestTimer);
+    if (!res.writableEnded) res.end();
   }
 }

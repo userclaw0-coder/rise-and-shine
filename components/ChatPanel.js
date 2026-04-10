@@ -16,6 +16,7 @@ export default function ChatPanel({ isOverlay = false, isOpen = true, onClose })
   const abortRef = useRef(null);
   const historyLoadedRef = useRef(false);
   const pendingGreetRef = useRef(false);
+  const lastSentTextRef = useRef(null);
 
   const getToken = useCallback(async () => {
     let { data: sessionData } = await supabase.auth.getSession();
@@ -123,6 +124,7 @@ export default function ChatPanel({ isOverlay = false, isOpen = true, onClose })
   const sendText = useCallback(async (text, { hidden = false } = {}) => {
     if (!text || isStreaming) return;
     setError(null);
+    lastSentTextRef.current = hidden ? null : text;
 
     if (!hidden) {
       const userMsg = { role: "user", content: text };
@@ -230,13 +232,33 @@ export default function ChatPanel({ isOverlay = false, isOpen = true, onClose })
           }
 
           if (event.type === "error") {
-            setError(event.message);
+            setError(event.message || "Something went wrong. Please try again.");
+            // Remove empty assistant placeholder on error
+            setMessages((prev) => {
+              const last = prev[prev.length - 1];
+              if (last?.role === "assistant" && !last.content && (!last.toolCalls || last.toolCalls.length === 0)) {
+                return prev.slice(0, -1);
+              }
+              return prev;
+            });
+          }
+
+          if (event.type === "done") {
+            // Clean exit — streaming will be set to false in finally
           }
         }
       }
     } catch (err) {
       if (err.name !== "AbortError") {
-        setError(err.message);
+        setError(err.message || "Connection lost. Please try again.");
+        // Remove empty assistant placeholder on error
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last?.role === "assistant" && !last.content && (!last.toolCalls || last.toolCalls.length === 0)) {
+            return prev.slice(0, -1);
+          }
+          return prev;
+        });
       }
     } finally {
       setIsStreaming(false);
@@ -317,7 +339,20 @@ export default function ChatPanel({ isOverlay = false, isOpen = true, onClose })
           {error && (
             <div className="jarvis-error">
               <span className="material-symbols-outlined">error</span>
-              {error}
+              <span style={{ flex: 1 }}>{error}</span>
+              {lastSentTextRef.current && !isStreaming && (
+                <button
+                  type="button"
+                  className="jarvis-error__retry"
+                  onClick={() => {
+                    const retryText = lastSentTextRef.current;
+                    setError(null);
+                    if (retryText) sendText(retryText);
+                  }}
+                >
+                  Retry
+                </button>
+              )}
             </div>
           )}
         </div>

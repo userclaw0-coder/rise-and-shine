@@ -4907,6 +4907,22 @@ body.rs-drawer-open {
   font-size: 18px;
 }
 
+.jarvis-error__retry {
+  flex-shrink: 0;
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--rs-danger, #c0392b);
+  background: #fff;
+  color: var(--rs-danger, #c0392b);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.jarvis-error__retry:hover {
+  background: rgba(192, 57, 43, 0.08);
+}
+
 /* Input area */
 .jarvis-input-area {
   display: flex;
