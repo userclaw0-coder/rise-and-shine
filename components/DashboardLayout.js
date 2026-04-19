@@ -52,6 +52,10 @@ export default function DashboardLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [nudgeCount, setNudgeCount] = useState(0);
+  const [isPublic, setIsPublic] = useState(false);
+  const [visibilityLoaded, setVisibilityLoaded] = useState(false);
+  const [visibilityBusy, setVisibilityBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   // Check for nudges on mount
   useEffect(() => {
@@ -72,6 +76,73 @@ export default function DashboardLayout({ children }) {
       }
     }
     checkNudges();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    async function loadVisibility() {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        if (!token) return;
+        const res = await fetch("/api/profile/visibility", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        setIsPublic(!!data.is_public);
+        setVisibilityLoaded(true);
+      } catch {
+        // silent
+      }
+    }
+    loadVisibility();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  const toggleVisibility = useCallback(async () => {
+    if (!user || visibilityBusy) return;
+    setVisibilityBusy(true);
+    const next = !isPublic;
+    setIsPublic(next);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      const res = await fetch("/api/profile/visibility", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ is_public: next }),
+      });
+      if (!res.ok) {
+        setIsPublic(!next);
+      } else {
+        const data = await res.json();
+        setIsPublic(!!data.is_public);
+      }
+    } catch {
+      setIsPublic(!next);
+    } finally {
+      setVisibilityBusy(false);
+    }
+  }, [user, isPublic, visibilityBusy]);
+
+  const copyShareLink = useCallback(async () => {
+    if (!user?.id || typeof window === "undefined") return;
+    const url = `${window.location.origin}/share/${user.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      window.prompt("Copy share link:", url);
+    }
   }, [user]);
 
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
@@ -198,6 +269,38 @@ export default function DashboardLayout({ children }) {
               {localDateTime && (
                 <div className="rs-sidebar-status__time">
                   {localDateTime}
+                </div>
+              )}
+              {user && (
+                <div className="rs-sidebar-visibility">
+                  <button
+                    type="button"
+                    className={`rs-sidebar-visibility__toggle${isPublic ? " rs-sidebar-visibility__toggle--on" : ""}`}
+                    onClick={toggleVisibility}
+                    disabled={visibilityBusy || !visibilityLoaded}
+                    role="switch"
+                    aria-checked={isPublic}
+                    aria-label={isPublic ? "Set profile to private" : "Set profile to public"}
+                  >
+                    <span className="rs-sidebar-visibility__label">
+                      {isPublic ? "Public" : "Private"}
+                    </span>
+                    <span className="rs-sidebar-visibility__track" aria-hidden>
+                      <span className="rs-sidebar-visibility__thumb" />
+                    </span>
+                  </button>
+                  {isPublic && (
+                    <button
+                      type="button"
+                      className="rs-sidebar-visibility__copy"
+                      onClick={copyShareLink}
+                    >
+                      <span className="material-symbols-outlined" aria-hidden style={{ fontSize: 14 }}>
+                        {copied ? "check" : "link"}
+                      </span>
+                      <span>{copied ? "Copied" : "Copy share link"}</span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>
