@@ -48,7 +48,9 @@ export default async function handler(req, res) {
   const currentOutcomeIds = Array.isArray(req.body?.current_outcome_ids)
     ? req.body.current_outcome_ids
     : [];
-  const currentDomain = req.body?.current_primary_life_domain || null;
+  const currentDomains = Array.isArray(req.body?.current_life_domains)
+    ? req.body.current_life_domains
+    : [];
 
   try {
     const [catRes, tasksRes, profileRes, workspaceRes] = await Promise.all([
@@ -97,7 +99,7 @@ export default async function handler(req, res) {
       project: project.name,
       mantra,
       current_outcome_ids: currentOutcomeIds,
-      current_primary_life_domain: currentDomain,
+      current_life_domains: currentDomains,
       identity: (profile.identity_attributes || []).slice(0, 6),
       thrive_goals: (profile.thrive_goals || []).slice(0, 4),
       open_task_titles: tasks
@@ -109,12 +111,12 @@ export default async function handler(req, res) {
     const system = `You are the Rise & Shine project-DNA coach. A project has TWO DNA tags that cascade to every task under it:
 
 1. outcome_ids: which 1-3 desired outcomes this whole project serves. Pick by outcome id.
-2. primary_life_domain: exactly one of the six human-need keys (business/finances/health/relationships/lifestyle/growth). Which need does working on this project feed?
+2. life_domains: up to three human-need keys (business/finances/health/relationships/lifestyle/growth) the project most clearly feeds, listed primary-first. One is usually right; use 2-3 only when the project genuinely sits at the intersection.
 
 This is a PROPOSAL the user will accept or reject. Be specific — anchor choices in the project's name, mantra, and what the open tasks actually look like, not generic thinking.
 
 Return strict JSON:
-{"outcome_ids":[…],"primary_life_domain":"…","rationale":"one short sentence tying the picks to the project's reality"}
+{"outcome_ids":[…],"life_domains":["…"],"rationale":"one short sentence tying the picks to the project's reality"}
 No prose outside JSON.`;
 
     const userPrompt = `Project & user context (JSON):
@@ -137,15 +139,20 @@ Propose DNA and return JSON only.`;
     if (!parsed) return res.status(502).json({ error: "AI returned invalid JSON." });
 
     const allowedOutcomeIds = new Set(allOutcomes.map((o) => o.id));
+    const lifeDomainsRaw = Array.isArray(parsed.life_domains)
+      ? parsed.life_domains
+      : parsed.primary_life_domain
+      ? [parsed.primary_life_domain]
+      : [];
+    const lifeDomains = lifeDomainsRaw
+      .filter((k) => HUMAN_NEED_STRATEGY_KEYS.includes(k))
+      .slice(0, 3);
     const proposed = {
       outcome_ids: Array.isArray(parsed.outcome_ids)
         ? parsed.outcome_ids.filter((id) => allowedOutcomeIds.has(id))
         : [],
-      primary_life_domain: HUMAN_NEED_STRATEGY_KEYS.includes(
-        parsed.primary_life_domain
-      )
-        ? parsed.primary_life_domain
-        : null,
+      life_domains: lifeDomains,
+      primary_life_domain: lifeDomains[0] || null,
       rationale: String(parsed.rationale || "").slice(0, 400),
     };
 

@@ -93,6 +93,7 @@ export default function ProjectPage() {
   const [projectWorkspace, setProjectWorkspace] = useState(null);
   const [projectOutcomeIds, setProjectOutcomeIds] = useState([]);
   const [projectPrimaryDomain, setProjectPrimaryDomain] = useState(null);
+  const [projectLifeDomains, setProjectLifeDomains] = useState([]);
   const [kbSaving, setKbSaving] = useState(false);
   const [kbError, setKbError] = useState("");
   const [editingMantra, setEditingMantra] = useState(false);
@@ -168,6 +169,9 @@ export default function ProjectPage() {
         setMantra(wsObj.mantra || "");
         setProjectOutcomeIds(wsObj.outcome_ids || []);
         setProjectPrimaryDomain(wsObj.primary_life_domain || null);
+        setProjectLifeDomains(
+          Array.isArray(wsObj.life_domains) ? wsObj.life_domains : []
+        );
       } catch {
         // silent — shared_project_workspaces row may not exist yet
       }
@@ -566,6 +570,7 @@ export default function ProjectPage() {
           <ProjectDnaEditor
             categoryId={categoryId}
             initialOutcomeIds={projectOutcomeIds}
+            initialLifeDomains={projectLifeDomains}
             initialPrimaryLifeDomain={projectPrimaryDomain}
             workspace={projectWorkspace}
             resources={resources}

@@ -11,9 +11,12 @@ import { saveCollaborativeProjectWorkspace } from "../lib/collaborationClient";
  * the choices to every non-archived task under the category so all
  * tasks inherit the project's DNA.
  */
+const MAX_NEEDS = 3;
+
 export default function ProjectDnaEditor({
   categoryId,
   initialOutcomeIds,
+  initialLifeDomains,
   initialPrimaryLifeDomain,
   workspace,
   resources,
@@ -21,19 +24,31 @@ export default function ProjectDnaEditor({
 }) {
   const [desiredOutcomes, setDesiredOutcomes] = useState([]);
   const [outcomeIds, setOutcomeIds] = useState([]);
-  const [primaryLifeDomain, setPrimaryLifeDomain] = useState(null);
+  const [lifeDomains, setLifeDomains] = useState([]);
   const [proposed, setProposed] = useState(null);
   const [suggesting, setSuggesting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [lastSaved, setLastSaved] = useState("");
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     setOutcomeIds(initialOutcomeIds || []);
-    setPrimaryLifeDomain(initialPrimaryLifeDomain || null);
+    // Hydrate life_domains from the explicit array if present, else
+    // fall back to the single primary field so legacy data still works.
+    if (
+      Array.isArray(initialLifeDomains) &&
+      initialLifeDomains.length > 0
+    ) {
+      setLifeDomains(initialLifeDomains.slice(0, MAX_NEEDS));
+    } else if (initialPrimaryLifeDomain) {
+      setLifeDomains([initialPrimaryLifeDomain]);
+    } else {
+      setLifeDomains([]);
+    }
     setProposed(null);
     setError("");
-  }, [initialOutcomeIds, initialPrimaryLifeDomain]);
+  }, [initialOutcomeIds, initialLifeDomains, initialPrimaryLifeDomain]);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,7 +100,7 @@ export default function ProjectDnaEditor({
         body: JSON.stringify({
           category_id: categoryId,
           current_outcome_ids: outcomeIds,
-          current_primary_life_domain: primaryLifeDomain,
+          current_life_domains: lifeDomains,
         }),
       });
       if (!res.ok) {
@@ -99,7 +114,7 @@ export default function ProjectDnaEditor({
     } finally {
       setSuggesting(false);
     }
-  }, [categoryId, outcomeIds, primaryLifeDomain, suggesting]);
+  }, [categoryId, outcomeIds, lifeDomains, suggesting]);
 
   async function save() {
     if (!categoryId || saving) return;
@@ -110,12 +125,16 @@ export default function ProjectDnaEditor({
       const userId = sessionData?.session?.user?.id;
       if (!userId) throw new Error("Not authenticated");
 
+      const capped = lifeDomains.slice(0, MAX_NEEDS);
+      const primary = capped[0] || null;
+
       // 1. Persist project-level DNA inside shared_project_workspaces.workspace
       const nextWorkspace = {
         ...(workspace || {}),
         resources: resources || workspace?.resources || [],
         outcome_ids: outcomeIds,
-        primary_life_domain: primaryLifeDomain || null,
+        life_domains: capped,
+        primary_life_domain: primary,
       };
       await saveCollaborativeProjectWorkspace(categoryId, {
         workspace: nextWorkspace,
@@ -126,7 +145,8 @@ export default function ProjectDnaEditor({
         .from("tasks")
         .update({
           outcome_ids: outcomeIds,
-          primary_life_domain: primaryLifeDomain || null,
+          life_domains: capped,
+          primary_life_domain: primary,
         })
         .eq("user_id", userId)
         .eq("category_id", categoryId)
@@ -147,152 +167,217 @@ export default function ProjectDnaEditor({
     }
   }
 
+  function proposedNeeds() {
+    if (!proposed) return [];
+    const arr = Array.isArray(proposed.life_domains)
+      ? proposed.life_domains
+      : proposed.primary_life_domain
+      ? [proposed.primary_life_domain]
+      : [];
+    return arr.slice(0, MAX_NEEDS);
+  }
+
   function applyProposedField(field) {
     if (!proposed) return;
     if (field === "outcomes") setOutcomeIds(proposed.outcome_ids || []);
-    if (field === "domain")
-      setPrimaryLifeDomain(proposed.primary_life_domain || null);
+    if (field === "domain") setLifeDomains(proposedNeeds());
   }
 
   function applyAllProposed() {
     if (!proposed) return;
     setOutcomeIds(proposed.outcome_ids || []);
-    setPrimaryLifeDomain(proposed.primary_life_domain || null);
+    setLifeDomains(proposedNeeds());
   }
 
+  function toggleNeed(key) {
+    setLifeDomains((cur) => {
+      if (cur.includes(key)) return cur.filter((k) => k !== key);
+      if (cur.length >= MAX_NEEDS) return cur; // cap at 3
+      return [...cur, key];
+    });
+  }
+
+  const hasSelection = outcomeIds.length > 0 || lifeDomains.length > 0;
+  const summary = (() => {
+    const parts = [];
+    if (outcomeIds.length > 0) {
+      const titles = desiredOutcomes
+        .filter((o) => outcomeIds.includes(o.id))
+        .map((o) => o.title);
+      parts.push(
+        `${outcomeIds.length} outcome${outcomeIds.length === 1 ? "" : "s"}` +
+          (titles.length > 0 ? `: ${titles.slice(0, 2).join(" · ")}` : "") +
+          (titles.length > 2 ? ` +${titles.length - 2}` : "")
+      );
+    }
+    if (lifeDomains.length > 0) {
+      parts.push(
+        `needs: ${lifeDomains
+          .map((k) => HUMAN_NEED_STRATEGY_LABELS[k] || k)
+          .join(" · ")}`
+      );
+    }
+    if (parts.length === 0) return "Not set yet — open to assign.";
+    return parts.join("  ·  ");
+  })();
+
   return (
-    <div className="pdna">
-      <div className="pdna-head">
-        <div>
-          <div className="pdna-cap">Project DNA — propagates to every task</div>
+    <div className={"pdna" + (expanded ? "" : " pdna--collapsed")}>
+      <button
+        type="button"
+        className="pdna-head pdna-head--button"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+      >
+        <div className="pdna-head-body">
+          <div className="pdna-cap">
+            Project DNA{hasSelection ? "" : " — propagates to every task"}
+          </div>
+          <div className="pdna-summary">{summary}</div>
+        </div>
+        <span className="pdna-toggle" aria-hidden>
+          {expanded ? "▾" : "▸"}
+        </span>
+      </button>
+
+      {expanded && (
+        <>
           <div className="pdna-sub">
-            Outcomes this project serves + the human need it feeds. Saving
-            cascades to every non-archived task under this project.
+            Outcomes this project serves + up to three human needs it feeds.
+            Saving cascades to every non-archived task under this project.
           </div>
-        </div>
-        <button
-          type="button"
-          className="ps-btn"
-          onClick={fetchProposal}
-          disabled={suggesting}
-        >
-          {suggesting ? "Coach thinking…" : "Coach: suggest"}
-        </button>
-      </div>
 
-      {error && <div className="today-error">{error}</div>}
+          {error && <div className="today-error">{error}</div>}
 
-      <div className="pdna-field">
-        <div className="pdna-label">
-          Outcomes
-          {proposed && (
-            <button
-              type="button"
-              className="pdna-apply"
-              onClick={() => applyProposedField("outcomes")}
-            >
-              use coach
-            </button>
-          )}
-        </div>
-        {desiredOutcomes.length === 0 ? (
-          <div className="pdna-empty">
-            No outcomes defined — add them on the Vision page.
-          </div>
-        ) : (
-          <div className="pdna-chips">
-            {desiredOutcomes.map((o) => {
-              const on = outcomeIds.includes(o.id);
-              const suggested = proposed?.outcome_ids?.includes(o.id);
-              return (
+          <div className="pdna-field">
+            <div className="pdna-label">
+              Outcomes
+              {proposed && (
                 <button
-                  key={o.id}
                   type="button"
-                  className={
-                    "pdna-chip" +
-                    (on ? " on" : "") +
-                    (suggested && !on ? " suggested" : "")
-                  }
-                  onClick={() => toggleOutcome(o.id)}
+                  className="pdna-apply"
+                  onClick={() => applyProposedField("outcomes")}
                 >
-                  {on ? "✓ " : suggested ? "+ " : ""}
-                  {o.title}
+                  use coach
                 </button>
-              );
-            })}
+              )}
+            </div>
+            {desiredOutcomes.length === 0 ? (
+              <div className="pdna-empty">
+                No outcomes defined — add them on the Vision page.
+              </div>
+            ) : (
+              <div className="pdna-chips">
+                {desiredOutcomes.map((o) => {
+                  const on = outcomeIds.includes(o.id);
+                  const suggested = proposed?.outcome_ids?.includes(o.id);
+                  return (
+                    <button
+                      key={o.id}
+                      type="button"
+                      className={
+                        "pdna-chip" +
+                        (on ? " on" : "") +
+                        (suggested && !on ? " suggested" : "")
+                      }
+                      onClick={() => toggleOutcome(o.id)}
+                    >
+                      {on ? "✓ " : suggested ? "+ " : ""}
+                      {o.title}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      <div className="pdna-field">
-        <div className="pdna-label">
-          Human need
+          <div className="pdna-field">
+            <div className="pdna-label">
+              <span>
+                Human needs{" "}
+                <span className="pdna-hint">
+                  · pick up to {MAX_NEEDS}
+                </span>
+              </span>
+              {proposed && (
+                <button
+                  type="button"
+                  className="pdna-apply"
+                  onClick={() => applyProposedField("domain")}
+                >
+                  use coach
+                </button>
+              )}
+            </div>
+            <div className="pdna-chips">
+              {HUMAN_NEED_STRATEGY_KEYS.map((key) => {
+                const on = lifeDomains.includes(key);
+                const suggested = proposedNeeds().includes(key);
+                const atCap = !on && lifeDomains.length >= MAX_NEEDS;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    className={
+                      "pdna-chip" +
+                      (on ? " on" : "") +
+                      (suggested && !on ? " suggested" : "") +
+                      (atCap ? " disabled" : "")
+                    }
+                    onClick={() => !atCap && toggleNeed(key)}
+                    disabled={atCap}
+                  >
+                    {on ? "✓ " : suggested ? "+ " : ""}
+                    {HUMAN_NEED_STRATEGY_LABELS[key]}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {proposed && (
+            <div className="pdna-proposal">
+              <div className="pdna-proposal-head">
+                <span className="pdna-proposal-cap">Coach rationale</span>
+                <button
+                  type="button"
+                  className="ps-btn ps-btn--primary"
+                  onClick={applyAllProposed}
+                >
+                  Accept all
+                </button>
+              </div>
+              {proposed.rationale && (
+                <div className="pdna-proposal-reason">{proposed.rationale}</div>
+              )}
+            </div>
+          )}
+
+          <div className="pdna-actions">
             <button
               type="button"
-              className="pdna-apply"
-              onClick={() => applyProposedField("domain")}
+              className="ps-btn"
+              onClick={fetchProposal}
+              disabled={suggesting}
             >
-              use coach
+              {suggesting ? "Coach thinking…" : "Coach: suggest"}
             </button>
-          )}
-        </div>
-        <div className="pdna-chips">
-          {HUMAN_NEED_STRATEGY_KEYS.map((key) => {
-            const on = primaryLifeDomain === key;
-            const suggested = proposed?.primary_life_domain === key;
-            return (
+            <div className="pdna-save">
+              {lastSaved && (
+                <span className="pdna-saved">Saved at {lastSaved}</span>
+              )}
               <button
-                key={key}
                 type="button"
-                className={
-                  "pdna-chip" +
-                  (on ? " on" : "") +
-                  (suggested && !on ? " suggested" : "")
-                }
-                onClick={() =>
-                  setPrimaryLifeDomain((cur) => (cur === key ? null : key))
-                }
+                className="ps-btn ps-btn--primary"
+                onClick={save}
+                disabled={saving}
               >
-                {on ? "✓ " : suggested ? "+ " : ""}
-                {HUMAN_NEED_STRATEGY_LABELS[key]}
+                {saving ? "Saving + propagating…" : "Save & propagate"}
               </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {proposed && (
-        <div className="pdna-proposal">
-          <div className="pdna-proposal-head">
-            <span className="pdna-proposal-cap">Coach rationale</span>
-            <button
-              type="button"
-              className="ps-btn ps-btn--primary"
-              onClick={applyAllProposed}
-            >
-              Accept all
-            </button>
+            </div>
           </div>
-          {proposed.rationale && (
-            <div className="pdna-proposal-reason">{proposed.rationale}</div>
-          )}
-        </div>
+        </>
       )}
-
-      <div className="pdna-save">
-        {lastSaved && (
-          <span className="pdna-saved">Saved at {lastSaved}</span>
-        )}
-        <button
-          type="button"
-          className="ps-btn ps-btn--primary"
-          onClick={save}
-          disabled={saving}
-        >
-          {saving ? "Saving + propagating…" : "Save & propagate to tasks"}
-        </button>
-      </div>
 
       <style jsx global>{`
         .pdna {
@@ -304,12 +389,60 @@ export default function ProjectDnaEditor({
           display: flex;
           flex-direction: column;
           gap: 12px;
+          transition: padding 120ms;
+        }
+        .pdna--collapsed {
+          padding: 10px 14px;
         }
         .pdna-head {
           display: flex;
           justify-content: space-between;
           align-items: flex-start;
           gap: 14px;
+          flex-wrap: wrap;
+        }
+        .pdna-head--button {
+          appearance: none;
+          border: none;
+          background: transparent;
+          width: 100%;
+          text-align: left;
+          cursor: pointer;
+          padding: 0;
+          font-family: inherit;
+          color: inherit;
+        }
+        .pdna-head-body {
+          flex: 1;
+          min-width: 0;
+        }
+        .pdna-summary {
+          font-size: 12.5px;
+          color: var(--ps-ink-70);
+          line-height: 1.5;
+          margin-top: 3px;
+        }
+        .pdna-toggle {
+          font-size: 14px;
+          color: var(--ps-ink-50);
+          line-height: 1;
+          padding: 2px 4px;
+        }
+        .pdna-head--button:hover .pdna-toggle {
+          color: var(--ps-ink);
+        }
+        .pdna-hint {
+          text-transform: none;
+          letter-spacing: 0;
+          font-size: 10px;
+          color: var(--ps-ink-50);
+          margin-left: 4px;
+        }
+        .pdna-actions {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 10px;
           flex-wrap: wrap;
         }
         .pdna-cap {
@@ -388,6 +521,10 @@ export default function ProjectDnaEditor({
           background: var(--ps-accent-soft);
           border-style: dashed;
         }
+        .pdna-chip.disabled {
+          opacity: 0.4;
+          cursor: not-allowed;
+        }
         .pdna-empty {
           font-size: 12px;
           color: var(--ps-ink-50);
@@ -420,7 +557,6 @@ export default function ProjectDnaEditor({
         }
         .pdna-save {
           display: flex;
-          justify-content: flex-end;
           align-items: center;
           gap: 10px;
         }
