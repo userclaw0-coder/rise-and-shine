@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import Link from "next/link";
 import PSShell from "../../components/PSShell";
 import ProjectKnowledgeBase from "../../components/ProjectKnowledgeBase";
+import ProjectDnaEditor from "../../components/ProjectDnaEditor";
 import { useAuth } from "../../hooks/useAuth";
 import { HUMAN_NEED_STRATEGY_LABELS } from "../../lib/humanNeedStrategies";
 
@@ -83,15 +84,15 @@ export default function ProjectPage() {
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState(null);
   const [subtasks, setSubtasks] = useState({});
-  const [coachOutcomes, setCoachOutcomes] = useState(null);
-  const [outcomesLoading, setOutcomesLoading] = useState(false);
-  const [outcomesError, setOutcomesError] = useState("");
   const [breakdowns, setBreakdowns] = useState({});
   const [breakingDown, setBreakingDown] = useState(null);
   const [insertingTask, setInsertingTask] = useState(null);
   const [knowledgeBase, setKnowledgeBase] = useState("");
   const [resources, setResources] = useState([]);
   const [mantra, setMantra] = useState("");
+  const [projectWorkspace, setProjectWorkspace] = useState(null);
+  const [projectOutcomeIds, setProjectOutcomeIds] = useState([]);
+  const [projectPrimaryDomain, setProjectPrimaryDomain] = useState(null);
   const [kbSaving, setKbSaving] = useState(false);
   const [kbError, setKbError] = useState("");
   const [editingMantra, setEditingMantra] = useState(false);
@@ -157,12 +158,16 @@ export default function ProjectPage() {
       });
       setOutcomes(withProgress);
 
-      // Load workspace (knowledge base + resources + mantra)
+      // Load workspace (knowledge base + resources + mantra + DNA)
       try {
         const ws = await loadCollaborativeProject(categoryId);
         setKnowledgeBase(ws?.knowledge_base || "");
-        setResources(ws?.workspace?.resources || []);
-        setMantra(ws?.workspace?.mantra || "");
+        const wsObj = ws?.workspace || {};
+        setProjectWorkspace(wsObj);
+        setResources(wsObj.resources || []);
+        setMantra(wsObj.mantra || "");
+        setProjectOutcomeIds(wsObj.outcome_ids || []);
+        setProjectPrimaryDomain(wsObj.primary_life_domain || null);
       } catch {
         // silent — shared_project_workspaces row may not exist yet
       }
@@ -242,34 +247,6 @@ export default function ProjectPage() {
       setKbError(err.message || "Save failed.");
     } finally {
       setKbSaving(false);
-    }
-  }
-
-  async function fetchOutcomes() {
-    if (!user || outcomesLoading || !categoryId) return;
-    setOutcomesLoading(true);
-    setOutcomesError("");
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      const res = await fetch("/api/coach/project-outcomes", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ category_id: categoryId }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body?.error || "Failed");
-      }
-      const data = await res.json();
-      setCoachOutcomes(data.outcomes || []);
-    } catch (err) {
-      setOutcomesError(err.message || "Failed to fetch outcomes.");
-    } finally {
-      setOutcomesLoading(false);
     }
   }
 
@@ -586,100 +563,14 @@ export default function ProjectPage() {
             </div>
           </div>
 
-          {outcomes.length > 0 && (
-            <>
-              <div className="ps-section-title">Outcomes this project serves</div>
-              <div className="ps-section-sub">
-                Each outcome is a 90-day bet. Tasks ladder up to exactly one.
-              </div>
-              <div className="pj-outcomes">
-                {outcomes.map((o) => (
-                  <div key={o.id} className="pj-outcome-card">
-                    <div className="pj-outcome-cap" style={{ color }}>
-                      Outcome
-                    </div>
-                    <div className="pj-outcome-label">{o.title}</div>
-                    <div className="pj-progress-bar" style={{ marginTop: 14 }}>
-                      <div
-                        className="pj-progress-fill"
-                        style={{
-                          width: Math.round(o.progress * 100) + "%",
-                          background: color,
-                        }}
-                      />
-                    </div>
-                    <div className="pj-outcome-foot">
-                      <span>{Math.round(o.progress * 100)}%</span>
-                      <span>
-                        {o.taskCount} task{o.taskCount === 1 ? "" : "s"}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-
-          <div className="pj-coach-card">
-            <div className="pj-coach-head">
-              <div>
-                <div className="pj-coach-cap">Coach · 90-day outcomes proposal</div>
-                <div className="pj-coach-title">
-                  Let the coach propose outcomes for {category?.name || "this project"}
-                </div>
-                <div className="pj-coach-sub">
-                  Anchored to your vision and what&apos;s actually moving in this project.
-                </div>
-              </div>
-              <button
-                type="button"
-                className="ps-btn ps-btn--primary"
-                onClick={fetchOutcomes}
-                disabled={outcomesLoading}
-              >
-                {outcomesLoading ? "Thinking…" : coachOutcomes ? "Re-propose" : "Propose 3 outcomes"}
-              </button>
-            </div>
-            {outcomesError && (
-              <div className="today-error" style={{ marginTop: 10 }}>
-                {outcomesError}
-              </div>
-            )}
-            {coachOutcomes && coachOutcomes.length > 0 && (
-              <div className="pj-coach-outcomes">
-                {coachOutcomes.map((o, i) => (
-                  <div key={i} className="pj-coach-outcome">
-                    <div className="pj-coach-outcome-text">{o.text}</div>
-                    <div className="pj-coach-outcome-reason">{o.reason}</div>
-                    <div className="pj-coach-outcome-foot">
-                      <span
-                        className="ps-tag"
-                        style={{
-                          background:
-                            o.confidence === "high"
-                              ? "var(--ps-sage-soft)"
-                              : o.confidence === "low"
-                              ? "var(--ps-clay-soft)"
-                              : "var(--ps-gold-soft)",
-                          color:
-                            o.confidence === "high"
-                              ? "var(--ps-sage)"
-                              : o.confidence === "low"
-                              ? "var(--ps-clay)"
-                              : "var(--ps-gold)",
-                        }}
-                      >
-                        {o.confidence || "medium"} confidence
-                      </span>
-                      <span className="pj-coach-hint">
-                        Save outcomes on /vision &rarr; Clarify mode
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <ProjectDnaEditor
+            categoryId={categoryId}
+            initialOutcomeIds={projectOutcomeIds}
+            initialPrimaryLifeDomain={projectPrimaryDomain}
+            workspace={projectWorkspace}
+            resources={resources}
+            onSaved={() => load()}
+          />
 
           <div className="pj-ladder">
             <div className="pj-ladder-head">

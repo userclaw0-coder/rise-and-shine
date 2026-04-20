@@ -59,6 +59,7 @@ export default function BacklogPage() {
   const [priProposals, setPriProposals] = useState(null);
   const [priError, setPriError] = useState("");
   const [applying, setApplying] = useState(false);
+  const [desiredOutcomes, setDesiredOutcomes] = useState([]);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -86,6 +87,24 @@ export default function BacklogPage() {
       if (taskRes.error) throw new Error(taskRes.error.message);
       setCategories(catRes.data || []);
       setTasks(taskRes.data || []);
+
+      // Desired outcomes from user profile — needed so the DNA editor
+      // can resolve outcome_ids into titles for the inspector.
+      try {
+        const { data: profileRow } = await supabase
+          .from("user_profile")
+          .select("profile")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        setDesiredOutcomes(
+          (profileRow?.profile?.desired_outcomes || []).map((o) => ({
+            id: o.id,
+            title: o.title,
+          }))
+        );
+      } catch {
+        // silent
+      }
     } catch (err) {
       setError(err.message || "Failed to load.");
     } finally {
@@ -659,7 +678,19 @@ export default function BacklogPage() {
                 </button>
               </div>
 
-              <TaskDnaEditor task={selected} onSaved={() => load()} />
+              <TaskDnaEditor
+                task={selected}
+                onSaved={() => load()}
+                projectOutcomes={desiredOutcomes.filter((o) =>
+                  (selected.outcome_ids || []).includes(o.id)
+                )}
+                projectLifeDomain={selected.primary_life_domain || null}
+                projectEditHref={
+                  selected.category_id
+                    ? `/category/${selected.category_id}`
+                    : null
+                }
+              />
             </aside>
           )}
         </div>

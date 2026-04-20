@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { supabase } from "../lib/supabaseClient";
-import {
-  HUMAN_NEED_STRATEGY_KEYS,
-  HUMAN_NEED_STRATEGY_LABELS,
-} from "../lib/humanNeedStrategies";
+import { HUMAN_NEED_STRATEGY_LABELS } from "../lib/humanNeedStrategies";
 
 const TYPE_TAGS = [
   { id: "quick-win", label: "Quick Win" },
@@ -40,10 +38,14 @@ function tagsToTypeTag(tags) {
   return null;
 }
 
-export default function TaskDnaEditor({ task, onSaved, compact = false }) {
-  const [desiredOutcomes, setDesiredOutcomes] = useState([]);
-  const [outcomeIds, setOutcomeIds] = useState([]);
-  const [primaryLifeDomain, setPrimaryLifeDomain] = useState(null);
+export default function TaskDnaEditor({
+  task,
+  onSaved,
+  compact = false,
+  projectOutcomes,
+  projectLifeDomain,
+  projectEditHref,
+}) {
   const [typeTag, setTypeTag] = useState(null);
   const [effortBucket, setEffortBucket] = useState(null);
   const [proposed, setProposed] = useState(null);
@@ -53,46 +55,11 @@ export default function TaskDnaEditor({ task, onSaved, compact = false }) {
 
   useEffect(() => {
     if (!task) return;
-    setOutcomeIds(task.outcome_ids || []);
-    setPrimaryLifeDomain(task.primary_life_domain || null);
     setTypeTag(tagsToTypeTag(task.tags));
     setEffortBucket(bucketForHours(task.effort_hours));
     setProposed(null);
     setError("");
   }, [task?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const userId = sessionData?.session?.user?.id;
-        if (!userId) return;
-        const { data } = await supabase
-          .from("user_profile")
-          .select("profile")
-          .eq("user_id", userId)
-          .maybeSingle();
-        if (cancelled) return;
-        setDesiredOutcomes(
-          ((data?.profile?.desired_outcomes || []) || []).map((o) => ({
-            id: o.id,
-            title: o.title,
-          }))
-        );
-      } catch {
-        // silent
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const toggleOutcome = (id) =>
-    setOutcomeIds((cur) =>
-      cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]
-    );
 
   const fetchProposal = useCallback(async () => {
     if (!task?.id || suggesting) return;
@@ -132,20 +99,18 @@ export default function TaskDnaEditor({ task, onSaved, compact = false }) {
       const userId = sessionData?.session?.user?.id;
       if (!userId) throw new Error("Not authenticated");
 
-      // Fields that live on tasks
-      const updates = {
-        outcome_ids: outcomeIds,
-        primary_life_domain: primaryLifeDomain || null,
-      };
+      const updates = {};
       const bucket = EFFORT_BUCKETS.find((b) => b.id === effortBucket);
       if (bucket) updates.effort_hours = bucket.hours;
 
-      const { error: updErr } = await supabase
-        .from("tasks")
-        .update(updates)
-        .eq("id", task.id)
-        .eq("user_id", userId);
-      if (updErr) throw updErr;
+      if (Object.keys(updates).length > 0) {
+        const { error: updErr } = await supabase
+          .from("tasks")
+          .update(updates)
+          .eq("id", task.id)
+          .eq("user_id", userId);
+        if (updErr) throw updErr;
+      }
 
       // Type tag: merge into the type-slot, stripping other type tags.
       const currentTagNames = (task.tags || [])
@@ -156,7 +121,6 @@ export default function TaskDnaEditor({ task, onSaved, compact = false }) {
       );
       const nextTagNames = typeTag ? [...kept, typeTag] : kept;
 
-      // Reset task_tags join rows to the new list.
       await supabase
         .from("task_tags")
         .delete()
@@ -202,8 +166,6 @@ export default function TaskDnaEditor({ task, onSaved, compact = false }) {
         event_type: "updated",
         value: {
           source: "dna_editor",
-          outcome_ids: outcomeIds,
-          primary_life_domain: primaryLifeDomain,
           type_tag: typeTag,
           effort_bucket: effortBucket,
         },
@@ -219,16 +181,12 @@ export default function TaskDnaEditor({ task, onSaved, compact = false }) {
 
   function applyProposedField(field) {
     if (!proposed) return;
-    if (field === "outcomes") setOutcomeIds(proposed.outcome_ids || []);
-    if (field === "domain") setPrimaryLifeDomain(proposed.primary_life_domain || null);
     if (field === "type") setTypeTag(proposed.type_tag || null);
     if (field === "effort") setEffortBucket(proposed.effort_bucket || null);
   }
 
   function applyAllProposed() {
     if (!proposed) return;
-    setOutcomeIds(proposed.outcome_ids || []);
-    setPrimaryLifeDomain(proposed.primary_life_domain || null);
     setTypeTag(proposed.type_tag || null);
     setEffortBucket(proposed.effort_bucket || null);
   }
@@ -249,84 +207,31 @@ export default function TaskDnaEditor({ task, onSaved, compact = false }) {
 
       {error && <div className="today-error">{error}</div>}
 
-      <div className="dna-field">
-        <div className="dna-label">
-          Outcomes
-          {proposed && (
-            <button
-              type="button"
-              className="dna-apply"
-              onClick={() => applyProposedField("outcomes")}
-            >
-              use coach
-            </button>
-          )}
+      <div className="dna-inherit">
+        <div className="dna-inherit-cap">Inherited from project</div>
+        <div className="dna-inherit-rows">
+          <div className="dna-inherit-row">
+            <span className="dna-inherit-label">Outcomes</span>
+            <span className="dna-inherit-value">
+              {Array.isArray(projectOutcomes) && projectOutcomes.length > 0
+                ? projectOutcomes.map((o) => o.title).join(" · ")
+                : "— none set on project"}
+            </span>
+          </div>
+          <div className="dna-inherit-row">
+            <span className="dna-inherit-label">Human need</span>
+            <span className="dna-inherit-value">
+              {projectLifeDomain
+                ? HUMAN_NEED_STRATEGY_LABELS[projectLifeDomain] || projectLifeDomain
+                : "— none set on project"}
+            </span>
+          </div>
         </div>
-        {desiredOutcomes.length === 0 ? (
-          <div className="dna-empty">
-            No outcomes defined — add them on the Vision page.
-          </div>
-        ) : (
-          <div className="dna-chips">
-            {desiredOutcomes.map((o) => {
-              const on = outcomeIds.includes(o.id);
-              const suggested = proposed?.outcome_ids?.includes(o.id);
-              return (
-                <button
-                  key={o.id}
-                  type="button"
-                  className={
-                    "dna-chip" +
-                    (on ? " on" : "") +
-                    (suggested && !on ? " suggested" : "")
-                  }
-                  onClick={() => toggleOutcome(o.id)}
-                >
-                  {on ? "✓ " : suggested ? "+ " : ""}
-                  {o.title}
-                </button>
-              );
-            })}
-          </div>
+        {projectEditHref && (
+          <Link href={projectEditHref} className="dna-inherit-edit">
+            Edit on project →
+          </Link>
         )}
-      </div>
-
-      <div className="dna-field">
-        <div className="dna-label">
-          Human need
-          {proposed && (
-            <button
-              type="button"
-              className="dna-apply"
-              onClick={() => applyProposedField("domain")}
-            >
-              use coach
-            </button>
-          )}
-        </div>
-        <div className="dna-chips">
-          {HUMAN_NEED_STRATEGY_KEYS.map((key) => {
-            const on = primaryLifeDomain === key;
-            const suggested = proposed?.primary_life_domain === key;
-            return (
-              <button
-                key={key}
-                type="button"
-                className={
-                  "dna-chip" +
-                  (on ? " on" : "") +
-                  (suggested && !on ? " suggested" : "")
-                }
-                onClick={() =>
-                  setPrimaryLifeDomain((cur) => (cur === key ? null : key))
-                }
-              >
-                {on ? "✓ " : suggested ? "+ " : ""}
-                {HUMAN_NEED_STRATEGY_LABELS[key]}
-              </button>
-            );
-          })}
-        </div>
       </div>
 
       <div className="dna-field-row">
@@ -464,6 +369,56 @@ export default function TaskDnaEditor({ task, onSaved, compact = false }) {
           display: flex;
           flex-direction: column;
           gap: 6px;
+        }
+        .dna-inherit {
+          padding: 10px 12px;
+          background: #fff;
+          border: 1px dashed var(--ps-ink-10);
+          border-radius: 8px;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        .dna-inherit-cap {
+          font-family: var(--ps-mono);
+          font-size: 9px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+        }
+        .dna-inherit-rows {
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+        }
+        .dna-inherit-row {
+          display: grid;
+          grid-template-columns: 80px 1fr;
+          gap: 8px;
+          font-size: 12px;
+          line-height: 1.4;
+        }
+        .dna-inherit-label {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+        }
+        .dna-inherit-value {
+          color: var(--ps-ink-80);
+        }
+        .dna-inherit-edit {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          color: var(--ps-accent);
+          text-decoration: none;
+          align-self: flex-start;
+        }
+        .dna-inherit-edit:hover {
+          text-decoration: underline;
         }
         .dna-field-row {
           display: grid;
