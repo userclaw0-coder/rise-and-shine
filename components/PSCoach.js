@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 
 const SCOPE_LABELS = {
@@ -248,21 +248,47 @@ export default function PSCoach({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collapsed, scope, bootstrapped, hydrated, payloadReady, payloadHasContent]);
 
+  // Synchronous pin before paint.
+  useLayoutEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [messages, collapsed]);
+
+  // Observe the scroll container for size changes and keep it pinned
+  // until the user scrolls up. Handles async content layout on hard
+  // refresh where scrollHeight grows after the first paint.
+  const userScrolledUpRef = useRef(false);
   useEffect(() => {
     const el = bodyRef.current;
     if (!el) return;
     const pin = () => {
-      if (bodyRef.current) {
-        bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
-      }
+      if (!bodyRef.current || userScrolledUpRef.current) return;
+      bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
     };
-    requestAnimationFrame(() => {
-      pin();
-      requestAnimationFrame(pin);
-    });
-    const t = setTimeout(pin, 120);
-    return () => clearTimeout(t);
-  }, [messages, collapsed]);
+    pin();
+    const timers = [
+      setTimeout(pin, 50),
+      setTimeout(pin, 200),
+      setTimeout(pin, 600),
+      setTimeout(pin, 1200),
+    ];
+    const ro = new ResizeObserver(() => pin());
+    ro.observe(el);
+    for (const child of el.children) ro.observe(child);
+    const onScroll = () => {
+      if (!bodyRef.current) return;
+      const { scrollTop, scrollHeight, clientHeight } = bodyRef.current;
+      const atBottom = scrollHeight - scrollTop - clientHeight < 40;
+      userScrolledUpRef.current = !atBottom;
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      timers.forEach(clearTimeout);
+      ro.disconnect();
+      el.removeEventListener("scroll", onScroll);
+    };
+  }, [hydrated, collapsed]);
 
   async function handleSend(question) {
     const q = (question || input).trim();

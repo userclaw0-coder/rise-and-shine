@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { supabase } from "../lib/supabaseClient";
 
 /**
@@ -83,23 +83,55 @@ export default function ChatPanel({ isOverlay = false, isOpen = true, onClose })
   }, [getToken]);
 
   // Auto-scroll to bottom on new messages, history load, or panel open.
-  // Double-rAF + a small timeout because on first paint the scroll
-  // container height is often still 0 until flex layout settles.
+  // Synchronous pin before paint so the first frame is already at the
+  // bottom.
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [messages, isOpen, isLoadingHistory]);
+
+  // Observe the scroll container for size changes and re-pin. Handles
+  // late layout (fonts, markdown, image loads) that grows scrollHeight
+  // after the initial paint. Disengages once the user scrolls up so we
+  // don't fight them.
+  const userScrolledUpRef = useRef(false);
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
+
     const pin = () => {
-      if (scrollRef.current) {
-        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-      }
+      if (!scrollRef.current || userScrolledUpRef.current) return;
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     };
-    requestAnimationFrame(() => {
-      pin();
-      requestAnimationFrame(pin);
-    });
-    const t = setTimeout(pin, 120);
-    return () => clearTimeout(t);
-  }, [messages, isOpen, isLoadingHistory]);
+
+    // Pin a few times after initial mount to catch async content layout.
+    pin();
+    const timers = [
+      setTimeout(pin, 50),
+      setTimeout(pin, 200),
+      setTimeout(pin, 600),
+      setTimeout(pin, 1200),
+    ];
+
+    const ro = new ResizeObserver(() => pin());
+    ro.observe(el);
+    for (const child of el.children) ro.observe(child);
+
+    const onScroll = () => {
+      if (!scrollRef.current) return;
+      const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+      const atBottom = scrollHeight - scrollTop - clientHeight < 40;
+      userScrolledUpRef.current = !atBottom;
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+
+    return () => {
+      timers.forEach(clearTimeout);
+      ro.disconnect();
+      el.removeEventListener("scroll", onScroll);
+    };
+  }, [isLoadingHistory]);
 
   // Auto-greeting pickup: after history loads, if no messages found, greet
   useEffect(() => {
