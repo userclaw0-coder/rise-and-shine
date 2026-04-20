@@ -249,10 +249,20 @@ export default function PSCoach({
   }, [collapsed, scope, bootstrapped, hydrated, payloadReady, payloadHasContent]);
 
   useEffect(() => {
-    if (bodyRef.current) {
-      bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
-    }
-  }, [messages]);
+    const el = bodyRef.current;
+    if (!el) return;
+    const pin = () => {
+      if (bodyRef.current) {
+        bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
+      }
+    };
+    requestAnimationFrame(() => {
+      pin();
+      requestAnimationFrame(pin);
+    });
+    const t = setTimeout(pin, 120);
+    return () => clearTimeout(t);
+  }, [messages, collapsed]);
 
   async function handleSend(question) {
     const q = (question || input).trim();

@@ -82,16 +82,23 @@ export default function ChatPanel({ isOverlay = false, isOpen = true, onClose })
     loadHistory();
   }, [getToken]);
 
-  // Auto-scroll to bottom on new messages, history load, or panel open
+  // Auto-scroll to bottom on new messages, history load, or panel open.
+  // Double-rAF + a small timeout because on first paint the scroll
+  // container height is often still 0 until flex layout settles.
   useEffect(() => {
-    if (scrollRef.current) {
-      // Use requestAnimationFrame to ensure DOM has rendered
-      requestAnimationFrame(() => {
-        if (scrollRef.current) {
-          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-        }
-      });
-    }
+    const el = scrollRef.current;
+    if (!el) return;
+    const pin = () => {
+      if (scrollRef.current) {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }
+    };
+    requestAnimationFrame(() => {
+      pin();
+      requestAnimationFrame(pin);
+    });
+    const t = setTimeout(pin, 120);
+    return () => clearTimeout(t);
   }, [messages, isOpen, isLoadingHistory]);
 
   // Auto-greeting pickup: after history loads, if no messages found, greet
@@ -322,8 +329,8 @@ export default function ChatPanel({ isOverlay = false, isOpen = true, onClose })
           {!isLoadingHistory && messages.length === 0 && (
             <div className="jarvis-empty">
               <span className="material-symbols-outlined jarvis-empty__icon">chat</span>
-              <p>Hey! I'm Jarvis, your Rise &amp; Shine coach.</p>
-              <p>Ask me about your tasks, goals, or just tell me what's on your mind.</p>
+              <p>Hey! I&apos;m Jarvis, your Rise &amp; Shine coach.</p>
+              <p>Ask me about your tasks, goals, or just tell me what&apos;s on your mind.</p>
             </div>
           )}
           {messages.map((msg, i) => (
