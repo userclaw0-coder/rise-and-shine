@@ -1,242 +1,119 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
+import Head from "next/head";
 import Link from "next/link";
-import { DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors } from "@dnd-kit/core";
-import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-
-import BacklogStrategicTaskCard from "../../components/BacklogStrategicTaskCard";
 import DashboardLayout from "../../components/DashboardLayout";
-import Modal from "../../components/Modal";
-import PageHeader from "../../components/PageHeader";
-import ProjectKnowledgeBase from "../../components/ProjectKnowledgeBase";
-import ProjectPlanView from "../../components/ProjectPlanView";
-import SectionCard from "../../components/SectionCard";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabaseClient";
 import {
-  getAllTags,
+  getUserProfile,
+  updateTaskStatusWithEvent,
 } from "../../lib/db";
-import {
-  addCollaborativeProjectMember,
-  assignCollaborativeTask,
-  createCollaborativeTask,
-  ensureCollaborativeSubcategory,
-  listCollaborativeProjectMembers,
-  loadCollaborativeProject,
-  removeCollaborativeProjectMember,
-  saveCollaborativeProjectWorkspace,
-  setCollaborativeTaskTags,
-  updateCollaborativeProjectMember,
-  updateCollaborativeTask,
-  updateCollaborativeTaskStatus,
-} from "../../lib/collaborationClient";
-import { computeTaskScore } from "../../lib/scoring";
-import {
-  RESOURCE_KINDS,
-  buildProjectExportBundle,
-  buildProjectContextPack,
-  computeProjectAlignment,
-  defaultProjectWorkspace,
-  newResourceRow,
-} from "../../lib/projectWorkspace";
-import {
-  flattenExternalProjectImportActions,
-  groupExternalProjectImportActions,
-} from "../../lib/externalProjectImport";
-import {
-  HUMAN_NEED_STRATEGY_KEYS as LIFE_DOMAIN_KEYS,
-  getHumanNeedStrategyLabel,
-} from "../../lib/humanNeedStrategies";
 
-function AutoHeightTextarea({ value, onChange, rows = 2, className, placeholder, disabled = false }) {
-  const ref = useRef(null);
+const PROJECT_COLORS = [
+  "var(--ps-clay)",
+  "var(--ps-indigo)",
+  "var(--ps-plum)",
+  "var(--ps-accent)",
+  "var(--ps-gold)",
+  "var(--ps-sage)",
+  "var(--ps-ink)",
+];
 
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${Math.max(el.scrollHeight, 24 * rows)}px`;
-  }, [value, rows]);
-
-  return (
-    <textarea
-      ref={ref}
-      className={className}
-      value={value}
-      disabled={disabled}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      rows={rows}
-      style={{
-        width: "100%",
-        resize: "none",
-        overflow: "hidden",
-        boxSizing: "border-box",
-      }}
-    />
-  );
-}
-
-function SortableTaskCard({ id, children }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id });
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-    zIndex: isDragging ? 10 : undefined,
-  };
-  return (
-    <div ref={setNodeRef} style={style} className="sortable-task-card">
-      <div
-        {...attributes}
-        {...listeners}
-        className="sortable-task-card__handle"
-        title="Drag to reorder"
-      >
-        <span className="material-symbols-outlined">drag_indicator</span>
-      </div>
-      <div className="sortable-task-card__content">
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function lifeDomainLabel(key, profile) {
-  return getHumanNeedStrategyLabel(key);
-}
-
-function extractTagNames(task) {
-  if (!task || !task.tags) return [];
-  const result = [];
-  for (const t of task.tags) {
-    if (!t) continue;
-    if (typeof t === "string") result.push(t);
-    else if (t.tag && t.tag.name) result.push(t.tag.name);
-    else if (t.name) result.push(t.name);
+function groupTasks(tasks) {
+  const active = [];
+  const backlog = [];
+  const needsBreak = [];
+  for (const t of tasks) {
+    if (t.status === "done") continue;
+    const tooBig = (t.effort_hours || 0) > 0.5;
+    const priority = t.priority;
+    if (priority === "Critical" || priority === "High") {
+      if (tooBig) needsBreak.push(t);
+      else active.push(t);
+    } else if (tooBig) {
+      needsBreak.push(t);
+    } else {
+      backlog.push(t);
+    }
   }
-  return result;
+  return [
+    { label: "This week — active", items: active },
+    { label: "Ordered backlog", items: backlog },
+    { label: "Needs breakdown — too big", items: needsBreak, flag: true },
+  ].filter((g) => g.items.length > 0);
 }
 
-function makeTagText(task) {
-  return extractTagNames(task).join(", ");
-}
-
-function parseTagText(text) {
-  return (text || "")
-    .split(",")
-    .map((t) => t.trim())
-    .filter(Boolean);
-}
-
-export default function StrategicProjectWorkspacePage() {
+export default function ProjectPage() {
   const router = useRouter();
   const { categoryId } = router.query;
-  const { user, isCheckingAuth } = useAuth();
-
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [categories, setCategories] = useState([]);
+  const { user } = useAuth();
   const [category, setCategory] = useState(null);
   const [tasks, setTasks] = useState([]);
-  const [profile, setProfile] = useState(null);
-  const [tags, setTags] = useState([]);
+  const [outcomes, setOutcomes] = useState([]);
+  const [categoryIndex, setCategoryIndex] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [expanded, setExpanded] = useState(null);
+  const [subtasks, setSubtasks] = useState({});
 
-  const [knowledgeBase, setKnowledgeBase] = useState("");
-  const [mantra, setMantra] = useState("");
-  const [narrative, setNarrative] = useState("");
-  const [efficiencyTip, setEfficiencyTip] = useState("");
-  const [suggestedMoves, setSuggestedMoves] = useState([]);
-  const [newMoveText, setNewMoveText] = useState("");
-  const [resources, setResources] = useState([]);
-  const [healthNeeds, setHealthNeeds] = useState(defaultProjectWorkspace().health_needs);
-  const [projectLinks, setProjectLinks] = useState("");
-  const [savingWorkspace, setSavingWorkspace] = useState(false);
-  const [copyFlashKey, setCopyFlashKey] = useState("");
-  const [aiProvider, setAiProvider] = useState("claude");
-  const [importText, setImportText] = useState("");
-  const [importLoading, setImportLoading] = useState(false);
-  const [importApplying, setImportApplying] = useState(false);
-  const [importError, setImportError] = useState("");
-  const [importRun, setImportRun] = useState(null);
-  const [selectedImportActionIds, setSelectedImportActionIds] = useState([]);
-  const [recentImports, setRecentImports] = useState([]);
-
-  const [sortKey, setSortKey] = useState("score");
-  const [sortDir, setSortDir] = useState("desc");
-  const [taskStatusScope, setTaskStatusScope] = useState("open");
-  const [taskViewMode, setTaskViewMode] = useState("full");
-  const [expandedSimpleCards, setExpandedSimpleCards] = useState({});
-
-  const [orderIds, setOrderIds] = useState([]);
-  const [subtaskOrderIds, setSubtaskOrderIds] = useState({});
-  const [actionItemsView, setActionItemsView] = useState("plan");
-  const dndSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
-  );
-
-  const [expandedSubtasksByParent, setExpandedSubtasksByParent] = useState({});
-  const [expandedTagPillsByTask, setExpandedTagPillsByTask] = useState({});
-
-  const [taskModalOpen, setTaskModalOpen] = useState(false);
-  const [taskTitle, setTaskTitle] = useState("");
-  const [taskPriority, setTaskPriority] = useState("Medium");
-  const [taskStatus, setTaskStatus] = useState("todo");
-  const [taskDueDate, setTaskDueDate] = useState("");
-  const [taskEffortHours, setTaskEffortHours] = useState("");
-  const [taskTagsText, setTaskTagsText] = useState("");
-  const [savingTask, setSavingTask] = useState(false);
-  const [members, setMembers] = useState([]);
-  const [shareEmail, setShareEmail] = useState("");
-  const [shareRole, setShareRole] = useState("viewer");
-  const [sharingMember, setSharingMember] = useState(false);
+  const color = PROJECT_COLORS[categoryIndex % PROJECT_COLORS.length];
 
   const load = useCallback(async () => {
     if (!user || !categoryId) return;
     setLoading(true);
     setError("");
     try {
-      const data = await loadCollaborativeProject(categoryId);
-      const cats = data.categories || [];
-      setCategories(cats);
-      const cat = data.category || cats.find((c) => String(c.id) === String(categoryId)) || null;
-      setCategory(cat);
-      const inCat = data.tasks || [];
-      setTasks(
-        inCat.map((t) => ({
-          ...t,
-          _tagsText: makeTagText(t),
-          _subcategoryText: t?.subcategory?.name || "",
-        }))
-      );
-      setMembers(data.members || []);
-      const prof = data.profile || null;
-      setProfile(prof);
-      const legacy = String(data.legacy_links || "");
-      setProjectLinks(legacy);
-      const ws = {
-        ...defaultProjectWorkspace(),
-        ...(data.workspace || {}),
-      };
-      setKnowledgeBase(data.knowledge_base || "");
-      setMantra(ws.mantra || "");
-      setNarrative(ws.narrative || "");
-      setEfficiencyTip(ws.efficiency_tip || "");
-      setSuggestedMoves(ws.suggested_moves || []);
-      setResources(ws.resources?.length ? ws.resources : []);
-      setHealthNeeds({ ...defaultProjectWorkspace().health_needs, ...(ws.health_needs || {}) });
-      setOrderIds((data.task_order_ids || []).filter(Boolean));
-      setSubtaskOrderIds(data.subtask_order_ids || {});
+      const [catRes, listRes, profileRes, allCatsRes] = await Promise.all([
+        supabase
+          .from("categories")
+          .select("id, name")
+          .eq("id", categoryId)
+          .eq("user_id", user.id)
+          .maybeSingle(),
+        supabase
+          .from("tasks")
+          .select(
+            "id, title, status, priority, effort_hours, due_date, parent_task_id, outcome_ids, created_at, updated_at"
+          )
+          .eq("user_id", user.id)
+          .eq("category_id", categoryId)
+          .is("archived_at", null)
+          .order("updated_at", { ascending: false }),
+        getUserProfile(user.id),
+        supabase
+          .from("categories")
+          .select("id")
+          .eq("user_id", user.id)
+          .order("name", { ascending: true }),
+      ]);
+      if (catRes.error) throw new Error(catRes.error.message);
+      if (!catRes.data) throw new Error("Project not found.");
+      if (listRes.error) throw new Error(listRes.error.message);
+      setCategory(catRes.data);
+      setTasks(listRes.data || []);
+      const cats = allCatsRes.data || [];
+      const idx = cats.findIndex((c) => c.id === categoryId);
+      setCategoryIndex(idx === -1 ? 0 : idx);
 
-      getAllTags(user.id).then((tRes) => {
-        if (!tRes.error) setTags(tRes.data || []);
+      const profile = profileRes?.data?.profile || {};
+      const visionOutcomes = profile.desired_outcomes || [];
+      const linked = new Set();
+      for (const t of listRes.data || []) {
+        for (const id of t.outcome_ids || []) linked.add(id);
+      }
+      const relevant = visionOutcomes.filter((o) => linked.has(o.id));
+      const withProgress = relevant.map((o) => {
+        const subset = (listRes.data || []).filter((t) =>
+          (t.outcome_ids || []).includes(o.id)
+        );
+        const done = subset.filter((t) => t.status === "done").length;
+        const progress = subset.length > 0 ? done / subset.length : 0;
+        return { ...o, progress, taskCount: subset.length };
       });
-      setRecentImports(data.recent_imports || []);
-    } catch (e) {
-      setError(e.message || "Failed to load project.");
+      setOutcomes(withProgress);
+    } catch (err) {
+      setError(err.message || "Failed to load project.");
     } finally {
       setLoading(false);
     }
@@ -246,1419 +123,571 @@ export default function StrategicProjectWorkspacePage() {
     load();
   }, [load]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const storedScope = window.localStorage.getItem("project-workspace-task-scope");
-      const storedView = window.localStorage.getItem("project-workspace-task-view");
-      if (storedScope === "open" || storedScope === "all") setTaskStatusScope(storedScope);
-      if (storedView === "full" || storedView === "simplified") setTaskViewMode(storedView);
-      const storedAiView = window.localStorage.getItem("project-workspace-action-items-view");
-      if (storedAiView === "plan" || storedAiView === "detail") setActionItemsView(storedAiView);
-    } catch {
-      // ignore storage errors
-    }
-  }, []);
+  async function loadSubtasks(taskId) {
+    if (subtasks[taskId]) return;
+    const { data } = await supabase
+      .from("tasks")
+      .select("id, title, status, effort_hours")
+      .eq("user_id", user.id)
+      .eq("parent_task_id", taskId)
+      .is("archived_at", null)
+      .order("created_at", { ascending: true });
+    setSubtasks((s) => ({ ...s, [taskId]: data || [] }));
+  }
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      window.localStorage.setItem("project-workspace-task-scope", taskStatusScope);
-      window.localStorage.setItem("project-workspace-task-view", taskViewMode);
-      window.localStorage.setItem("project-workspace-action-items-view", actionItemsView);
-    } catch {
-      // ignore storage errors
-    }
-  }, [taskStatusScope, taskViewMode]);
+  async function toggleTask(t) {
+    const nextStatus = t.status === "done" ? "todo" : "done";
+    setTasks((ts) =>
+      ts.map((x) => (x.id === t.id ? { ...x, status: nextStatus } : x))
+    );
+    await updateTaskStatusWithEvent(user.id, t.id, nextStatus);
+  }
 
-  const childrenByParent = useMemo(() => {
-    const m = new Map();
-    for (const t of tasks || []) {
-      const pid = t.parent_task_id;
-      if (!pid) continue;
-      if (!m.has(pid)) m.set(pid, []);
-      m.get(pid).push(t);
-    }
-    return m;
+  const groups = useMemo(() => groupTasks(tasks), [tasks]);
+  const overall = useMemo(() => {
+    const active = tasks.filter((t) => t.status !== "done");
+    if (active.length === 0 && tasks.length === 0) return 0;
+    return Math.round(
+      (tasks.filter((t) => t.status === "done").length / Math.max(1, tasks.length)) *
+        100
+    );
   }, [tasks]);
 
-  const rootTasks = useMemo(
-    () => (tasks || []).filter((t) => !t.parent_task_id),
-    [tasks]
-  );
+  const doneThisWeek = useMemo(() => {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 7);
+    return tasks.filter(
+      (t) =>
+        t.status === "done" &&
+        t.updated_at &&
+        new Date(t.updated_at) > cutoff
+    ).length;
+  }, [tasks]);
 
-  function taskMatchesScope(task) {
-    if (!task) return false;
-    if (taskStatusScope === "open") {
-      return task.status === "todo" || task.status === "doing";
-    }
-    return true;
-  }
+  const lastTouched = useMemo(() => {
+    if (tasks.length === 0) return null;
+    const max = tasks.reduce((a, t) => {
+      const ts = t.updated_at ? new Date(t.updated_at).getTime() : 0;
+      return ts > a ? ts : a;
+    }, 0);
+    if (!max) return null;
+    const days = Math.round((Date.now() - max) / 86400000);
+    if (days === 0) return "today";
+    if (days === 1) return "yesterday";
+    return `${days}d ago`;
+  }, [tasks]);
 
-  const scoredRoots = useMemo(() => {
-    return rootTasks.map((t) => {
-      const scoring = computeTaskScore(
-        { ...t, tags: extractTagNames(t) },
-        { mode: profile?.preferences?.default_mode || "Strategic Push" }
-      );
-      return { ...t, _aiPriorityScore: scoring.score };
-    });
-  }, [rootTasks, profile?.preferences?.default_mode]);
-
-  const visibleScoredRoots = useMemo(
-    () => scoredRoots.filter(taskMatchesScope),
-    [scoredRoots, taskStatusScope]
-  );
-
-  const sortedRootTasks = useMemo(() => {
-    const byId = new Map(visibleScoredRoots.map((t) => [t.id, t]));
-    const inOrder = (orderIds || []).map((id) => byId.get(id)).filter(Boolean);
-    const remaining = visibleScoredRoots.filter((t) => !(orderIds || []).includes(t.id));
-
-    // Sort only the unordered remainder — manual order takes precedence
-    const dir = sortDir === "asc" ? 1 : -1;
-    const sortedRemaining = [...remaining].sort((a, b) => {
-      let cmp = 0;
-      if (sortKey === "score") cmp = (a._aiPriorityScore ?? 0) - (b._aiPriorityScore ?? 0);
-      else if (sortKey === "title") {
-        cmp = String(a.title || "").localeCompare(String(b.title || ""), undefined, {
-          sensitivity: "base",
-        });
-      } else if (sortKey === "due") {
-        const da = a.due_date ? new Date(a.due_date).getTime() : 0;
-        const db = b.due_date ? new Date(b.due_date).getTime() : 0;
-        cmp = da - db;
-      }
-      return cmp * dir;
-    });
-
-    return [...inOrder, ...sortedRemaining];
-  }, [visibleScoredRoots, orderIds, sortKey, sortDir]);
-
-  // Plan view ordering: manual order via orderIds, done tasks at bottom
-  const planViewTasks = useMemo(() => {
-    const byId = new Map(rootTasks.map((t) => [t.id, t]));
-    const inOrder = (orderIds || []).map((id) => byId.get(id)).filter(Boolean);
-    const remaining = rootTasks.filter((t) => !(orderIds || []).includes(t.id));
-    const all = [...inOrder, ...remaining];
-    const undone = all.filter((t) => t.status !== "done" && t.status !== "archived");
-    const done = all.filter((t) => t.status === "done" || t.status === "archived");
-    if (taskStatusScope === "open") return undone;
-    return [...undone, ...done];
-  }, [rootTasks, orderIds, taskStatusScope]);
-
-  const alignmentPct = useMemo(
-    () => computeProjectAlignment(rootTasks, mantra, narrative),
-    [rootTasks, mantra, narrative]
-  );
-
-  const exportBundle = useMemo(
-    () =>
-      buildProjectExportBundle(
-        {
-          categoryId,
-          categoryName: category?.name,
-          mantra,
-          narrative,
-          knowledgeBase,
-          profile,
-          rootTasks: tasks,
-          healthNeeds,
-          resources,
-          efficiencyTip,
-          suggestedMoves,
-          legacyLinksText: projectLinks,
-          taskOrderIds: orderIds,
-          subtaskOrderIds,
-        },
-        { provider: aiProvider }
-      ),
-    [
-      aiProvider,
-      category?.name,
-      categoryId,
-      efficiencyTip,
-      healthNeeds,
-      knowledgeBase,
-      mantra,
-      narrative,
-      profile,
-      projectLinks,
-      resources,
-      suggestedMoves,
-      tasks,
-      orderIds,
-      subtaskOrderIds,
-    ]
-  );
-
-  const importGroups = useMemo(
-    () => groupExternalProjectImportActions(importRun?.normalized_json || null, categoryId),
-    [categoryId, importRun]
-  );
-
-  const importActionIds = useMemo(
-    () =>
-      flattenExternalProjectImportActions(importRun?.normalized_json || null, categoryId)
-        .map((item) => item.id)
-        .filter(Boolean),
-    [categoryId, importRun]
-  );
-
-  const categoryOptions = useMemo(() => {
-    return (categories || [])
-      .map((c) => ({ id: c.id, name: c.name }))
-      .filter((c) => c.id && c.name)
-      .sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { sensitivity: "base" }));
-  }, [categories]);
-
-  function updateTaskLocal(taskId, patch) {
-    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, ...patch } : t)));
-  }
-
-  const canEditProject = !!category?._access?.can_edit;
-  const canManageMembers = !!category?._access?.can_manage_members;
-
-  async function handleStatusChange(task, nextStatus) {
-    if (!user) return;
-    try {
-      const res = await updateCollaborativeTaskStatus(task.id, nextStatus);
-      updateTaskLocal(task.id, {
-        ...(res.task || {}),
-        status: nextStatus,
-        archived_at: nextStatus === "archived" ? new Date().toISOString() : null,
-      });
-    } catch (e) {
-      setError(e.message);
-      return;
-    }
-  }
-
-  async function handleInlineSave(taskId, patch) {
-    if (!user) return;
-    try {
-      const res = await updateCollaborativeTask(taskId, patch);
-      updateTaskLocal(taskId, res.task || patch);
-    } catch (e) {
-      setError(e.message);
-      return;
-    }
-  }
-
-  async function handleSubcategorySave(task) {
-    if (!user) return;
-    const catId = task.category_id || null;
-    const name = String(task._subcategoryText || "").trim();
-    if (!catId) {
-      setError("Select a category before setting a subcategory.");
-      return;
-    }
-    if (!name) {
-      await handleInlineSave(task.id, { subcategory_id: null });
-      updateTaskLocal(task.id, { subcategory_id: null, subcategory: null, _subcategoryText: "" });
-      return;
-    }
-    let subcategory = null;
-    try {
-      const subRes = await ensureCollaborativeSubcategory(catId, name);
-      subcategory = subRes.subcategory || null;
-    } catch (e) {
-      setError(e.message || "Failed to save subcategory.");
-      return;
-    }
-    if (!subcategory?.id) return;
-    try {
-      const saveRes = await updateCollaborativeTask(task.id, { subcategory_id: subcategory.id });
-      updateTaskLocal(task.id, {
-        ...(saveRes.task || {}),
-        subcategory_id: subcategory.id,
-        subcategory: { name: subcategory.name },
-        _subcategoryText: subcategory.name,
-      });
-    } catch (e) {
-      setError(e.message || "Failed to save subcategory.");
-      return;
-    }
-  }
-
-  async function handleTagsSave(taskId, tagsText) {
-    if (!user) return;
-    const names = parseTagText(tagsText);
-    try {
-      await setCollaborativeTaskTags(taskId, names);
-      updateTaskLocal(taskId, {
-        _tagsText: tagsText,
-        tags: names.map((name) => ({ name })),
-      });
-    } catch (e) {
-      setError(e.message);
-      return;
-    }
-  }
-
-  async function handleAddSubtask(parent) {
-    if (!user) return;
-    const title = `Subtask of ${parent.title}`;
-    let createdTask = null;
-    try {
-      const res = await createCollaborativeTask({
-        title,
-        status: "todo",
-        parent_task_id: parent.id,
-        category_id: parent.category_id || null,
-        subcategory_id: parent.subcategory_id || null,
-      });
-      createdTask = res.task || null;
-    } catch (e) {
-      setError(e.message);
-      return;
-    }
-    const created = {
-      ...createdTask,
-      _tagsText: "",
-      _subcategoryText: parent?.subcategory?.name || "",
-    };
-    setTasks((prev) => [...prev, created]);
-  }
-
-  async function persistFullWorkspace() {
-    if (!user || !categoryId) return;
-    setSavingWorkspace(true);
-    setError("");
-    try {
-      await saveCollaborativeProjectWorkspace(categoryId, {
-        mantra: mantra.trim(),
-        narrative: narrative.trim(),
-        knowledge_base: knowledgeBase,
-        efficiency_tip: efficiencyTip.trim(),
-        suggested_moves: suggestedMoves.filter((s) => String(s).trim()),
-        resources: resources.filter((r) => r.url?.trim() || r.label?.trim()),
-        health_needs: { ...healthNeeds },
-        legacy_links: String(projectLinks || ""),
-        task_order_ids: orderIds,
-      });
-    } finally {
-      setSavingWorkspace(false);
-    }
-  }
-
-  async function handleAssignTask(task, assigneeUserId) {
-    if (!user || !task?.id) return;
-    try {
-      const res = await assignCollaborativeTask(task.id, assigneeUserId);
-      updateTaskLocal(task.id, { assignees: res.assignees || [] });
-    } catch (e) {
-      setError(e.message || "Failed to assign task.");
-    }
-  }
-
-  async function handleAddMember() {
-    if (!user || !categoryId || !shareEmail.trim()) return;
-    setSharingMember(true);
-    setError("");
-    try {
-      const res = await addCollaborativeProjectMember(categoryId, shareEmail.trim(), shareRole);
-      setMembers(res.members || []);
-      setShareEmail("");
-      await load();
-    } catch (e) {
-      setError(e.message || "Failed to share project.");
-    } finally {
-      setSharingMember(false);
-    }
-  }
-
-  async function handleMemberRoleChange(memberUserId, role) {
-    if (!categoryId) return;
-    try {
-      const res = await updateCollaborativeProjectMember(categoryId, memberUserId, role);
-      setMembers(res.members || []);
-    } catch (e) {
-      setError(e.message || "Failed to update member.");
-    }
-  }
-
-  async function handleRemoveMember(memberUserId) {
-    if (!categoryId) return;
-    try {
-      const res = await removeCollaborativeProjectMember(categoryId, memberUserId);
-      setMembers(res.members || []);
-      const freshMembers = await listCollaborativeProjectMembers(categoryId);
-      setMembers(freshMembers.members || res.members || []);
-      await load();
-    } catch (e) {
-      setError(e.message || "Failed to remove member.");
-    }
-  }
-
-  function flashCopy(key) {
-    setCopyFlashKey(key);
-    window.setTimeout(() => setCopyFlashKey(""), 2000);
-  }
-
-  async function copyTextValue(text, key) {
-    try {
-      await navigator.clipboard.writeText(text);
-      flashCopy(key);
-    } catch {
-      setError("Could not copy to clipboard.");
-    }
-  }
-
-  async function copyContextPack() {
-    const pack = buildProjectContextPack(
-      {
-        categoryId,
-        categoryName: category?.name,
-        mantra,
-        narrative,
-        profile,
-        rootTasks: tasks,
-        healthNeeds,
-        resources,
-        efficiencyTip,
-        suggestedMoves,
-        legacyLinksText: projectLinks,
-      },
-      { format: "conversation_pack" }
-    );
-    await copyTextValue(pack, "context");
-  }
-
-  async function copyPlanningPrompt() {
-    await copyTextValue(exportBundle.planning_prompt, "prompt");
-  }
-
-  async function copyExportJson() {
-    await copyTextValue(exportBundle.json_seed, "json");
-  }
-
-  async function copyPromptBundle() {
-    await copyTextValue(exportBundle.prompt_bundle, "bundle");
-  }
-
-  function downloadTextFile(filename, text, type) {
-    const blob = new Blob([text], { type });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  }
-
-  function downloadExportBundle(format) {
-    const safeName = String(category?.name || "project")
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "") || "project";
-    if (format === "md") {
-      downloadTextFile(`${safeName}-external-ai-pack.md`, exportBundle.prompt_bundle, "text/markdown;charset=utf-8");
-      return;
-    }
-    downloadTextFile(`${safeName}-external-ai-seed.json`, exportBundle.json_seed, "application/json;charset=utf-8");
-  }
-
-  async function handlePreviewImport() {
-    if (!user || !categoryId || !importText.trim()) return;
-    setImportLoading(true);
-    setImportError("");
-    try {
-      let { data: sessionData } = await supabase.auth.getSession();
-      let token = sessionData?.session?.access_token;
-      if (!token) {
-        const { data: refreshed } = await supabase.auth.refreshSession();
-        token = refreshed?.session?.access_token;
-      }
-      if (!token) throw new Error("Auth session missing. Please refresh and sign in again.");
-
-      const response = await fetch("/api/project-import/preview", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          category_id: categoryId,
-          import_text: importText,
-        }),
-      });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || "Failed to preview import.");
-      setImportRun(payload.run || null);
-      const actionIds =
-        flattenExternalProjectImportActions(payload.run?.normalized_json || null, categoryId)
-          .map((item) => item.id)
-          .filter(Boolean);
-      setSelectedImportActionIds(actionIds);
-      setRecentImports((prev) => [payload.run, ...prev.filter((row) => row.id !== payload.run?.id)].slice(0, 6));
-    } catch (e) {
-      setImportError(e.message || "Failed to preview import.");
-    } finally {
-      setImportLoading(false);
-    }
-  }
-
-  async function handleApplyImport() {
-    if (!user || !importRun) return;
-    setImportApplying(true);
-    setImportError("");
-    try {
-      let { data: sessionData } = await supabase.auth.getSession();
-      let token = sessionData?.session?.access_token;
-      if (!token) {
-        const { data: refreshed } = await supabase.auth.refreshSession();
-        token = refreshed?.session?.access_token;
-      }
-      if (!token) throw new Error("Auth session missing. Please refresh and sign in again.");
-
-      const rejected = importActionIds.filter((id) => !selectedImportActionIds.includes(id));
-      const response = await fetch("/api/project-import/apply", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          run_id: importRun.id,
-          accepted_action_ids: selectedImportActionIds,
-          rejected_action_ids: rejected,
-        }),
-      });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || "Failed to apply import.");
-      setImportRun(payload.run || importRun);
-      await load();
-    } catch (e) {
-      setImportError(e.message || "Failed to apply import.");
-    } finally {
-      setImportApplying(false);
-    }
-  }
-
-  function toggleImportAction(actionId) {
-    setSelectedImportActionIds((prev) =>
-      prev.includes(actionId)
-        ? prev.filter((id) => id !== actionId)
-        : [...prev, actionId]
-    );
-  }
-
-  function handleImportFile(e) {
-    const file = e.target?.files?.[0];
-    if (!file) return;
-    file.text().then((text) => {
-      setImportText(text || "");
-    });
-    e.target.value = "";
-  }
-
-  function toggleSimpleCard(taskId) {
-    setExpandedSimpleCards((prev) => ({
-      ...prev,
-      [taskId]: !prev[taskId],
-    }));
-  }
-
-  function openCreateTaskModal() {
-    setTaskTitle("");
-    setTaskPriority("Medium");
-    setTaskStatus("todo");
-    setTaskDueDate("");
-    setTaskEffortHours("");
-    setTaskTagsText("");
-    setTaskModalOpen(true);
-  }
-
-  async function handleSaveTask() {
-    if (!user || !categoryId) return;
-    const title = String(taskTitle || "").trim();
-    if (!title) return;
-
-    setSavingTask(true);
-    setError("");
-    try {
-      const updates = {
-        title,
-        priority: taskPriority || "Medium",
-        status: taskStatus || "todo",
-        due_date: taskDueDate ? taskDueDate : null,
-        effort_hours: taskEffortHours ? Number(taskEffortHours) : null,
-        category_id: categoryId,
-      };
-
-      const res = await createCollaborativeTask({
-        ...updates,
-        tags: parseTagText(taskTagsText),
-      });
-      const newTaskId = res.task?.id;
-      if (newTaskId) {
-        setOrderIds((prev) => (prev.includes(newTaskId) ? prev : [...prev, newTaskId]));
-      }
-
-      await load();
-      setTaskModalOpen(false);
-    } finally {
-      setSavingTask(false);
-    }
-  }
-
-  function addSuggestedMove() {
-    const t = newMoveText.trim();
-    if (!t) return;
-    setSuggestedMoves((m) => [...m, t]);
-    setNewMoveText("");
-  }
-
-  function removeSuggestedMove(idx) {
-    setSuggestedMoves((m) => m.filter((_, i) => i !== idx));
-  }
-
-  function addResource() {
-    setResources((r) => [...r, newResourceRow()]);
-  }
-
-  function patchResource(id, patch) {
-    setResources((r) => r.map((x) => (x.id === id ? { ...x, ...patch } : x)));
-  }
-
-  function removeResource(id) {
-    setResources((r) => r.filter((x) => x.id !== id));
-  }
-
-  if (isCheckingAuth || !user || loading || !router.isReady) {
+  if (!user) {
     return (
       <DashboardLayout>
-        <p style={{ fontSize: 14, color: "var(--rs-on-surface-variant)" }}>Loading…</p>
-      </DashboardLayout>
-    );
-  }
-
-  if (!category && categoryId) {
-    return (
-      <DashboardLayout>
-        <p style={{ fontSize: 14, color: "var(--rs-on-surface-variant)" }}>Category not found.</p>
-        <Link href="/backlog" className="rs-btn-ghost" style={{ marginTop: 12, display: "inline-block" }}>
-          ← Action Items
-        </Link>
+        <p style={{ fontSize: 14, color: "#6b7280" }}>Loading…</p>
       </DashboardLayout>
     );
   }
 
   return (
     <DashboardLayout>
-      <div className="rs-project-workspace">
-        <PageHeader
-          eyebrow="Strategic project workspace"
-          title={category?.name || "Project"}
-          subtitle={`Source of truth, resources, and AI context — with Action Items scoped to this initiative. Access: ${category?._access?.role || "viewer"}.`}
-          right={
-            <div className="rs-project-workspace__header-actions">
-              <select
-                className="rs-select-compact"
-                value={String(categoryId || "")}
-                onChange={(e) => {
-                  const id = e.target.value;
-                  if (id) router.push(`/category/${id}`);
-                }}
-                aria-label="Switch project"
-              >
-                {categoryOptions.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-              <Link href="/backlog" className="rs-btn-ghost" style={{ textDecoration: "none" }}>
-                Action Items
-              </Link>
-              <button type="button" className="rs-btn-primary" onClick={openCreateTaskModal} disabled={!canEditProject}>
-                New initiative
-              </button>
-            </div>
-          }
-        />
-
-        {error && <p className="rs-project-workspace__error">{error}</p>}
-
-        {/* Hero: mantra + narrative + alignment */}
-        <section className="rs-project-hero rs-section-card">
-          <div className="rs-project-hero__grid">
-            <div className="rs-project-hero__main">
-              <p className="rs-page-eyebrow" style={{ marginBottom: 8 }}>
-                Active mantra
-              </p>
-              <AutoHeightTextarea
-                className="rs-input rs-project-mantra-input"
-                value={mantra}
-                onChange={setMantra}
-                rows={2}
-                disabled={!canEditProject}
-                placeholder="One line that captures why this project exists (e.g. dignified transition for parents)."
-              />
-              <label className="rs-project-narrative-label">
-                <span>Strategic source of truth</span>
-                <textarea
-                  className="rs-input rs-project-narrative"
-                  value={narrative}
-                  disabled={!canEditProject}
-                  onChange={(e) => setNarrative(e.target.value)}
-                  rows={5}
-                  placeholder="Long-form context for you and your AI: constraints, stakeholders, non-negotiables, timeline, how this ties to vision and outcomes."
-                />
-              </label>
-              <div className="rs-project-hero__save-row">
-                <button
-                  type="button"
-                  className="rs-btn-primary"
-                  onClick={persistFullWorkspace}
-                  disabled={savingWorkspace || !canEditProject}
-                >
-                  {savingWorkspace ? "Saving…" : "Save strategic brief"}
-                </button>
-                <span className="rs-project-hero__hint">
-                  Saves mantra, narrative, AI notes, resources, health sliders, and legacy link block.
-                </span>
-              </div>
-            </div>
-            <div className="rs-project-alignment-card">
-              <div className="rs-project-alignment-card__value">{alignmentPct}%</div>
-              <div className="rs-project-alignment-card__label">Alignment</div>
-              <p className="rs-project-alignment-card__sub">
-                Heuristic from narrative depth, task progress, and outcome links — tune the story and finish work to
-                raise it.
-              </p>
-            </div>
+      <Head>
+        <title>{category ? `${category.name} · Rise & Shine` : "Project"}</title>
+      </Head>
+      <div className="ps-page">
+        <div className="ps-view">
+          <div className="ps-eyebrow pj-breadcrumb">
+            <Link href="/projects">Projects</Link>
+            <span className="pj-sep">/</span>
+            <span className="pj-current">{category?.name || "…"}</span>
           </div>
-        </section>
 
-        {/* Knowledge Base + Resources */}
-        <ProjectKnowledgeBase
-          knowledgeBase={knowledgeBase}
-          onKnowledgeBaseChange={setKnowledgeBase}
-          resources={resources}
-          onResourcesChange={setResources}
-          projectName={category?.name || ""}
-          mantra={mantra}
-          onSave={persistFullWorkspace}
-          saving={savingWorkspace}
-        />
+          {error && <div className="today-error">{error}</div>}
 
-        <div className="rs-project-workspace__grid">
-          <div className="rs-project-workspace__main-col">
-            <section className="rs-section-card">
-              <div className="rs-project-section-head">
+          <div className="pj-hero">
+            <div className="pj-hero-body">
+              <div className="pj-hero-eyebrow">
+                <span className="pj-dot" style={{ background: color }} />
+                <span>Active project</span>
+              </div>
+              <h1 className="ps-title">{category?.name || "Project"}</h1>
+              <div className="pj-meta">
                 <div>
-                  <h2 className="rs-section-card__title" style={{ marginBottom: 4 }}>
-                    Action items
-                  </h2>
-                  <p className="rs-section-card__subtitle" style={{ margin: 0 }}>
-                    {(actionItemsView === "plan" ? planViewTasks : sortedRootTasks).length} task{(actionItemsView === "plan" ? planViewTasks : sortedRootTasks).length === 1 ? "" : "s"} ·{" "}
-                    {taskStatusScope === "open" ? "todo + doing" : "all statuses"}
-                  </p>
+                  <strong>{outcomes.length}</strong> linked outcome
+                  {outcomes.length === 1 ? "" : "s"}
                 </div>
-                <div className="rs-project-sort">
-                  {/* View toggle */}
-                  <div style={{ display: "flex", borderRadius: 6, overflow: "hidden", border: "1px solid var(--rs-border, #e5e1d8)" }}>
-                    <button
-                      type="button"
-                      onClick={() => setActionItemsView("plan")}
-                      style={{
-                        padding: "4px 12px",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        border: "none",
-                        cursor: "pointer",
-                        background: actionItemsView === "plan" ? "var(--rs-accent, #b8860b)" : "var(--rs-bg, #fff)",
-                        color: actionItemsView === "plan" ? "#fff" : "var(--rs-text-muted, #8a8478)",
-                      }}
-                    >
-                      Plan
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActionItemsView("detail")}
-                      style={{
-                        padding: "4px 12px",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        border: "none",
-                        borderLeft: "1px solid var(--rs-border, #e5e1d8)",
-                        cursor: "pointer",
-                        background: actionItemsView === "detail" ? "var(--rs-accent, #b8860b)" : "var(--rs-bg, #fff)",
-                        color: actionItemsView === "detail" ? "#fff" : "var(--rs-text-muted, #8a8478)",
-                      }}
-                    >
-                      Detail
-                    </button>
+                <div>
+                  <strong>{tasks.filter((t) => t.status !== "done").length}</strong>{" "}
+                  open tasks
+                </div>
+                <div>
+                  <strong>{doneThisWeek}</strong> done this week
+                </div>
+                {lastTouched && (
+                  <div>
+                    Last touched <strong>{lastTouched}</strong>
                   </div>
-                  <label>
-                    Show
-                    <select
-                      className="rs-select-compact"
-                      value={taskStatusScope}
-                      onChange={(e) => setTaskStatusScope(e.target.value)}
-                    >
-                      <option value="open">Todo + Doing</option>
-                      <option value="all">All tasks</option>
-                    </select>
-                  </label>
-                  {actionItemsView === "detail" && (
-                    <>
-                      <label>
-                        View
-                        <select
-                          className="rs-select-compact"
-                          value={taskViewMode}
-                          onChange={(e) => setTaskViewMode(e.target.value)}
-                        >
-                          <option value="full">Full</option>
-                          <option value="simplified">Simplified</option>
-                        </select>
-                      </label>
-                      <label>
-                        Sort
-                        <select
-                          className="rs-select-compact"
-                          value={sortKey}
-                          onChange={(e) => setSortKey(e.target.value)}
-                        >
-                          <option value="score">Strategic score</option>
-                          <option value="due">Due date</option>
-                          <option value="title">Title</option>
-                        </select>
-                      </label>
-                      <button
-                        type="button"
-                        className="rs-btn-ghost rs-btn-ghost--small"
-                        onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
-                      >
-                        {sortDir === "desc" ? "High → low" : "Low → high"}
-                      </button>
-                    </>
-                  )}
-                </div>
+                )}
               </div>
-
-              {categories.map((c) => (
-                <datalist key={c.id} id={`subcategory-options-${c.id}`}>
-                  {(c.subcategories || []).map((s) => (
-                    <option key={s.id} value={s.name} />
-                  ))}
-                </datalist>
-              ))}
-
-              {/* Plan View */}
-              {actionItemsView === "plan" && (
-                <div style={{ marginTop: 16 }}>
-                  <ProjectPlanView
-                    tasks={planViewTasks}
-                    childrenByParent={childrenByParent}
-                    subtaskOrderIds={subtaskOrderIds}
-                    completionMap={{}}
-                    onToggleCompletion={(taskId) => handleStatusChange({ id: taskId }, "done")}
-                    onSubtaskCompletion={(taskId) => handleStatusChange({ id: taskId }, "done")}
-                    onReorderRoots={(newIds) => {
-                      setOrderIds(newIds);
-                      saveCollaborativeProjectWorkspace(categoryId, { task_order_ids: newIds });
-                    }}
-                    onReorderSubtasks={(parentId, newSubIds) => {
-                      const next = { ...subtaskOrderIds, [parentId]: newSubIds };
-                      setSubtaskOrderIds(next);
-                      saveCollaborativeProjectWorkspace(categoryId, { subtask_order_ids: next });
-                    }}
-                    onJarvisBreakDown={(task) => {
-                      if (typeof window !== "undefined") {
-                        const msg = `Break down "${task.title}" in project "${category?.name || ""}" into 5-7 bite-size subtasks. Consider the project knowledge base and current context.`;
-                        window.open(`/chat?message=${encodeURIComponent(msg)}`, "_self");
-                      }
-                    }}
-                    todayStr={new Date().toISOString().slice(0, 10)}
-                  />
-                </div>
-              )}
-
-              {/* Detail View */}
-              {actionItemsView === "detail" && (
-              <DndContext
-                sensors={dndSensors}
-                collisionDetection={closestCenter}
-                onDragEnd={(event) => {
-                  const { active, over } = event;
-                  if (!over || active.id === over.id) return;
-                  const oldIndex = sortedRootTasks.findIndex((t) => t.id === active.id);
-                  const newIndex = sortedRootTasks.findIndex((t) => t.id === over.id);
-                  if (oldIndex < 0 || newIndex < 0) return;
-                  const newOrder = arrayMove(sortedRootTasks, oldIndex, newIndex).map((t) => t.id);
-                  setOrderIds(newOrder);
-                  saveCollaborativeProjectWorkspace(categoryId, { task_order_ids: newOrder });
-                }}
-              >
-                <SortableContext items={sortedRootTasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-                  <div className="rs-backlog-card-list" style={{ marginTop: 16 }}>
-                    {sortedRootTasks.length === 0 ? (
-                      <p className="rs-section-card__subtitle">
-                        {taskStatusScope === "open"
-                          ? "No todo or doing initiatives match this project right now."
-                          : "No initiatives in this project yet."}
-                      </p>
-                    ) : (
-                      sortedRootTasks.map((t) => {
-                        const subOrder = subtaskOrderIds[t.id] || [];
-                        const allKids = (childrenByParent.get(t.id) || []).filter(taskMatchesScope);
-                        // Apply subtask ordering
-                        const kidMap = new Map(allKids.map((k) => [k.id, k]));
-                        const orderedKids = [
-                          ...subOrder.map((id) => kidMap.get(id)).filter(Boolean),
-                          ...allKids.filter((k) => !subOrder.includes(k.id)),
-                        ];
-                        return (
-                          <SortableTaskCard key={t.id} id={t.id}>
-                            <BacklogStrategicTaskCard
-                              task={t}
-                              sortedChildren={orderedKids}
-                              categories={categories}
-                              memberOptions={members}
-                              profile={profile}
-                              lifeDomainLabel={lifeDomainLabel}
-                              LIFE_DOMAIN_KEYS={LIFE_DOMAIN_KEYS}
-                              expandedSubtasks={!!expandedSubtasksByParent[t.id]}
-                              onToggleSubtasksExpanded={() =>
-                                setExpandedSubtasksByParent((p) => ({ ...p, [t.id]: !p[t.id] }))
-                              }
-                              expandedTagPills={!!expandedTagPillsByTask[t.id]}
-                              onToggleTagPills={() =>
-                                setExpandedTagPillsByTask((p) => ({ ...p, [t.id]: !p[t.id] }))
-                              }
-                              updateTaskLocal={updateTaskLocal}
-                              handleInlineSave={handleInlineSave}
-                              handleStatusChange={handleStatusChange}
-                              handleSubcategorySave={handleSubcategorySave}
-                              handleTagsSave={handleTagsSave}
-                              handleAddSubtask={handleAddSubtask}
-                              handleAssignTask={handleAssignTask}
-                              onReorderSubtasks={(parentId, newSubIds) => {
-                                const next = { ...subtaskOrderIds, [parentId]: newSubIds };
-                                setSubtaskOrderIds(next);
-                                saveCollaborativeProjectWorkspace(categoryId, { subtask_order_ids: next });
-                              }}
-                              tagText={t._tagsText ?? makeTagText(t)}
-                              simplified={taskViewMode === "simplified"}
-                              expanded={!!expandedSimpleCards[t.id]}
-                              onToggleExpanded={() => toggleSimpleCard(t.id)}
-                            />
-                          </SortableTaskCard>
-                        );
-                      })
-                    )}
-                  </div>
-                </SortableContext>
-              </DndContext>
-              )}
-            </section>
+            </div>
+            <div className="pj-progress">
+              <div className="pj-progress-num">
+                {overall}
+                <span>%</span>
+              </div>
+              <div className="pj-progress-cap">All tasks complete</div>
+              <div className="pj-progress-bar">
+                <div
+                  className="pj-progress-fill"
+                  style={{ width: overall + "%", background: color }}
+                />
+              </div>
+            </div>
           </div>
 
-          <aside className="rs-project-workspace__aside">
-            <section className="rs-section-card">
-              <h2 className="rs-section-card__title" style={{ marginBottom: 8 }}>
-                Shared access
-              </h2>
-              <p className="rs-section-card__subtitle" style={{ marginBottom: 12 }}>
-                {members.length || 1} collaborator{members.length === 1 ? "" : "s"} · {category?._access?.role || "viewer"}
-              </p>
-              <div className="rs-project-member-list">
-                {members.map((member) => (
-                  <div key={member.user_id} className="rs-project-member-row">
-                    <div className="rs-project-member-row__email">{member.email_snapshot || member.user_id}</div>
-                    {canManageMembers && member.role !== "owner" ? (
-                      <div className="rs-project-member-row__actions">
-                        <select
-                          className="rs-select-compact"
-                          value={member.role}
-                          onChange={(e) => handleMemberRoleChange(member.user_id, e.target.value)}
+          {outcomes.length > 0 && (
+            <>
+              <div className="ps-section-title">Outcomes this project serves</div>
+              <div className="ps-section-sub">
+                Each outcome is a 90-day bet. Tasks ladder up to exactly one.
+              </div>
+              <div className="pj-outcomes">
+                {outcomes.map((o) => (
+                  <div key={o.id} className="pj-outcome-card">
+                    <div className="pj-outcome-cap" style={{ color }}>
+                      Outcome
+                    </div>
+                    <div className="pj-outcome-label">{o.title}</div>
+                    <div className="pj-progress-bar" style={{ marginTop: 14 }}>
+                      <div
+                        className="pj-progress-fill"
+                        style={{
+                          width: Math.round(o.progress * 100) + "%",
+                          background: color,
+                        }}
+                      />
+                    </div>
+                    <div className="pj-outcome-foot">
+                      <span>{Math.round(o.progress * 100)}%</span>
+                      <span>
+                        {o.taskCount} task{o.taskCount === 1 ? "" : "s"}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          <div className="pj-ladder">
+            <div className="pj-ladder-head">
+              <div>
+                <div className="pj-ladder-title">Task ladder</div>
+                <div className="pj-ladder-sub">
+                  Coach-ordered. Anything over 30 min gets flagged for breakdown.
+                </div>
+              </div>
+              <Link href="/backlog" className="ps-btn ps-btn--primary">
+                + Add in backlog
+              </Link>
+            </div>
+
+            {loading && <div className="pj-empty">Loading…</div>}
+            {!loading && groups.length === 0 && (
+              <div className="pj-empty">
+                No active tasks yet. Capture some in{" "}
+                <Link href="/backlog">Action items</Link>.
+              </div>
+            )}
+
+            {groups.map((g) => (
+              <div key={g.label} className="pj-group">
+                <div className="pj-group-head">
+                  <span className="pj-group-label">{g.label}</span>
+                  <span className="pj-group-count">{g.items.length}</span>
+                </div>
+                {g.items.map((t) => {
+                  const mins = Math.round((t.effort_hours || 0) * 60);
+                  const isOpen = expanded === t.id;
+                  const subs = subtasks[t.id] || [];
+                  return (
+                    <div key={t.id} className="pj-item">
+                      <div className="pj-item-row">
+                        <button
+                          type="button"
+                          className={"pj-check" + (t.status === "done" ? " done" : "")}
+                          onClick={() => toggleTask(t)}
+                          aria-label="Toggle complete"
                         >
-                          <option value="viewer">Viewer</option>
-                          <option value="editor">Editor</option>
-                        </select>
-                        <button type="button" className="rs-btn-ghost rs-btn-ghost--small" onClick={() => handleRemoveMember(member.user_id)}>
-                          Remove
+                          {t.status === "done" ? "✓" : ""}
+                        </button>
+                        <div className="pj-item-body">
+                          <div
+                            className={
+                              "pj-item-text" + (t.status === "done" ? " done" : "")
+                            }
+                          >
+                            {t.title}
+                          </div>
+                          <div className="pj-item-tags">
+                            {t.priority && (
+                              <span className="ps-tag">{t.priority}</span>
+                            )}
+                            {g.flag && (
+                              <span className="ps-tag pj-tag-flag">⚑ Too big</span>
+                            )}
+                          </div>
+                          {g.flag && (
+                            <div className="pj-coach-note">
+                              <div className="pj-coach-cap">Coach</div>
+                              <p>
+                                This one is ~{mins} minutes. Want to break it into
+                                smaller ≤30 min sub-steps? Add subtasks in the
+                                backlog or run a coach prompt to propose a
+                                breakdown.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                        <div className="pj-item-size">{mins ? `${mins} min` : ""}</div>
+                        <button
+                          className="pj-item-expand"
+                          onClick={() => {
+                            const next = isOpen ? null : t.id;
+                            setExpanded(next);
+                            if (next) loadSubtasks(t.id);
+                          }}
+                        >
+                          {isOpen ? "−" : "+"}
                         </button>
                       </div>
-                    ) : (
-                      <div className="rs-project-member-row__role">{member.role}</div>
-                    )}
-                  </div>
-                ))}
-              </div>
-              {canManageMembers && (
-                <div className="rs-project-share-box">
-                  <input
-                    type="email"
-                    className="rs-input"
-                    value={shareEmail}
-                    onChange={(e) => setShareEmail(e.target.value)}
-                    placeholder="Member email"
-                  />
-                  <select className="rs-select-compact" value={shareRole} onChange={(e) => setShareRole(e.target.value)}>
-                    <option value="viewer">Viewer</option>
-                    <option value="editor">Editor</option>
-                  </select>
-                  <button type="button" className="rs-btn-primary" onClick={handleAddMember} disabled={sharingMember || !shareEmail.trim()}>
-                    {sharingMember ? "Sharing…" : "Share project"}
-                  </button>
-                </div>
-              )}
-            </section>
-            <section className="rs-section-card rs-project-ai-card">
-              <div className="rs-project-ai-card__head">
-                <h2 className="rs-section-card__title" style={{ margin: 0, fontSize: "1rem" }}>
-                  AI strategic window
-                </h2>
-                <span className="material-symbols-outlined rs-project-ai-card__icon" aria-hidden>
-                  auto_awesome
-                </span>
-              </div>
-              <p className="rs-section-card__subtitle" style={{ marginBottom: 10 }}>
-                Export this project into Claude, Grok, or ChatGPT, then preview a structured import before anything touches your source of truth.
-              </p>
-              <div className="rs-project-import-provider">
-                <label className="rs-project-field-label" style={{ marginBottom: 0 }}>
-                  Prompt target
-                </label>
-                <select
-                  className="rs-select-compact"
-                  value={aiProvider}
-                  disabled={!canEditProject}
-                  onChange={(e) => setAiProvider(e.target.value)}
-                >
-                  <option value="claude">Claude</option>
-                  <option value="grok">Grok</option>
-                  <option value="chatgpt">ChatGPT</option>
-                  <option value="generic">Generic</option>
-                </select>
-              </div>
-              <label className="rs-project-field-label">Efficiency / batching tip</label>
-              <textarea
-                className="rs-input"
-                rows={3}
-                value={efficiencyTip}
-                disabled={!canEditProject}
-                onChange={(e) => setEfficiencyTip(e.target.value)}
-                placeholder="e.g. Batch estate notarization to save travel time next week."
-              />
-              <label className="rs-project-field-label" style={{ marginTop: 12 }}>
-                Suggested moves &amp; subtask ideas
-              </label>
-              <ul className="rs-project-suggest-list">
-                {suggestedMoves.map((line, idx) => (
-                  <li key={idx}>
-                    <span className="material-symbols-outlined" aria-hidden>
-                      arrow_forward
-                    </span>
-                    <span>{line}</span>
-                    <button
-                      type="button"
-                      className="rs-project-icon-btn"
-                      disabled={!canEditProject}
-                      onClick={() => removeSuggestedMove(idx)}
-                      aria-label="Remove"
-                    >
-                      <span className="material-symbols-outlined">close</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              <div className="rs-project-add-row">
-                <input
-                  type="text"
-                  className="rs-input"
-                  value={newMoveText}
-                  disabled={!canEditProject}
-                  onChange={(e) => setNewMoveText(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addSuggestedMove())}
-                  placeholder="Add a line from your AI planner…"
-                />
-                <button type="button" className="rs-btn-ghost" onClick={addSuggestedMove} disabled={!canEditProject}>
-                  Add
-                </button>
-              </div>
-              <div className="rs-project-ai-actions">
-                <button type="button" className="rs-btn-primary" onClick={copyContextPack}>
-                  {copyFlashKey === "context" ? "Copied" : "Copy context"}
-                </button>
-                <button type="button" className="rs-btn-ghost" onClick={copyPlanningPrompt}>
-                  {copyFlashKey === "prompt" ? "Copied" : "Copy planning prompt"}
-                </button>
-                <button type="button" className="rs-btn-ghost" onClick={copyExportJson}>
-                  {copyFlashKey === "json" ? "Copied" : "Copy export JSON"}
-                </button>
-                <button type="button" className="rs-btn-ghost" onClick={copyPromptBundle}>
-                  {copyFlashKey === "bundle" ? "Copied" : "Copy full bundle"}
-                </button>
-                <button type="button" className="rs-btn-ghost" onClick={() => downloadExportBundle("md")}>
-                  Download .md
-                </button>
-                <button type="button" className="rs-btn-ghost" onClick={() => downloadExportBundle("json")}>
-                  Download .json
-                </button>
-                <button type="button" className="rs-btn-ghost" onClick={persistFullWorkspace} disabled={savingWorkspace}>
-                  Save AI notes
-                </button>
-              </div>
-
-              <div className="rs-project-import-card">
-                <div className="rs-project-import-card__head">
-                  <div>
-                    <h3 className="rs-section-card__title" style={{ fontSize: "0.95rem", marginBottom: 4 }}>
-                      External AI import
-                    </h3>
-                    <p className="rs-section-card__subtitle" style={{ margin: 0 }}>
-                      Paste the JSON response here or upload a file, then review every change before apply.
-                    </p>
-                  </div>
-                  <label className="rs-btn-ghost rs-btn-ghost--small rs-project-import-upload">
-                    Upload JSON
-                    <input type="file" accept=".json,application/json,text/plain" onChange={handleImportFile} />
-                  </label>
-                </div>
-                <textarea
-                  className="rs-input rs-project-import-textarea"
-                  rows={10}
-                  value={importText}
-                  onChange={(e) => setImportText(e.target.value)}
-                  placeholder='Paste the external AI response JSON here. Tip: tell the model to return only one JSON object with workspace_patch, task_actions, alignment_actions, and vision_suggestions.'
-                />
-                <div className="rs-project-ai-actions">
-                  <button
-                    type="button"
-                    className="rs-btn-primary"
-                    onClick={handlePreviewImport}
-                    disabled={importLoading || !importText.trim()}
-                  >
-                    {importLoading ? "Previewing…" : "Preview import"}
-                  </button>
-                  <button
-                    type="button"
-                    className="rs-btn-ghost"
-                    onClick={handleApplyImport}
-                    disabled={importApplying || !importRun || selectedImportActionIds.length === 0}
-                  >
-                    {importApplying ? "Applying…" : `Apply selected (${selectedImportActionIds.length || 0})`}
-                  </button>
-                </div>
-
-                {importError && (
-                  <p className="rs-project-import-error">{importError}</p>
-                )}
-
-                {importRun?.preview_metrics && (
-                  <div className="rs-project-import-metrics">
-                    <span className="rs-project-import-pill">
-                      Actions: <strong>{importRun.preview_metrics.total_actions || 0}</strong>
-                    </span>
-                    <span className="rs-project-import-pill">
-                      Tasks: <strong>{importRun.preview_metrics.task_actions || 0}</strong>
-                    </span>
-                    <span className="rs-project-import-pill">
-                      Alignment: <strong>{importRun.preview_metrics.alignment_actions || 0}</strong>
-                    </span>
-                    <span className="rs-project-import-pill">
-                      Vision: <strong>{importRun.preview_metrics.vision_actions || 0}</strong>
-                    </span>
-                  </div>
-                )}
-
-                {importRun?.normalized_json?.summary && (
-                  <div className="rs-project-import-summary">
-                    {importRun.normalized_json.summary.current_state && (
-                      <p><strong>Current state:</strong> {importRun.normalized_json.summary.current_state}</p>
-                    )}
-                    {importRun.normalized_json.summary.strategy && (
-                      <p><strong>Strategy:</strong> {importRun.normalized_json.summary.strategy}</p>
-                    )}
-                    {importRun.normalized_json.summary.operator_notes && (
-                      <p><strong>Operator notes:</strong> {importRun.normalized_json.summary.operator_notes}</p>
-                    )}
-                  </div>
-                )}
-
-                {importGroups.length > 0 && (
-                  <div className="rs-project-import-groups">
-                    {importGroups.map((group) => (
-                      <div key={group.key} className="rs-project-import-group">
-                        <h4 className="rs-project-import-group__title">{group.label}</h4>
-                        <div className="rs-project-import-actions">
-                          {group.items.map((item) => (
-                            <label key={item.id} className="rs-project-import-action">
-                              <input
-                                type="checkbox"
-                                checked={selectedImportActionIds.includes(item.id)}
-                                onChange={() => toggleImportAction(item.id)}
-                              />
-                              <div>
-                                <strong>{item.title}</strong>
-                                {item.summary ? <p>{item.summary}</p> : null}
+                      {isOpen && (
+                        <div className="pj-subtasks">
+                          {subs.length === 0 ? (
+                            <div className="pj-empty-sub">No subtasks yet.</div>
+                          ) : (
+                            subs.map((s) => (
+                              <div key={s.id} className="pj-sub">
+                                <span
+                                  className={
+                                    "pj-check pj-check-sm" +
+                                    (s.status === "done" ? " done" : "")
+                                  }
+                                >
+                                  {s.status === "done" ? "✓" : ""}
+                                </span>
+                                <span className="pj-sub-text">{s.title}</span>
+                                {s.effort_hours > 0 && (
+                                  <span className="pj-sub-mins">
+                                    {Math.round(s.effort_hours * 60)}m
+                                  </span>
+                                )}
                               </div>
-                            </label>
-                          ))}
+                            ))
+                          )}
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {recentImports.length > 0 && (
-                  <div className="rs-project-import-history">
-                    <h4 className="rs-project-import-group__title">Recent imports</h4>
-                    <ul>
-                      {recentImports.map((row) => (
-                        <li key={row.id}>
-                          <button
-                            type="button"
-                            className="rs-project-import-history__btn"
-                            onClick={() => {
-                              setImportRun(row);
-                              setSelectedImportActionIds(
-                                flattenExternalProjectImportActions(row.normalized_json || null, categoryId)
-                                  .map((item) => item.id)
-                                  .filter(Boolean)
-                              );
-                            }}
-                          >
-                            <span>{new Date(row.created_at).toLocaleString()}</span>
-                            <span>{row.status || "draft"}</span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-            </section>
-
-            <section className="rs-section-card rs-project-health-card">
-              <div className="rs-project-health-card__head">
-                <span className="material-symbols-outlined" aria-hidden>
-                  favorite
-                </span>
-                <h2 className="rs-section-card__title" style={{ margin: 0, fontSize: "1rem" }}>
-                  Project health
-                </h2>
-              </div>
-              <p className="rs-section-card__subtitle" style={{ marginBottom: 12 }}>
-                How this initiative currently feels across core needs (self-reported).
-              </p>
-              {[
-                ["relationships", "Loving relationships / care"],
-                ["financial", "Financial stability"],
-                ["wellbeing", "Security & wellbeing"],
-                ["growth", "Growth & meaning"],
-              ].map(([key, label]) => (
-                <div key={key} className="rs-project-health-row">
-                  <div className="rs-project-health-row__label">
-                    <span>{label}</span>
-                    <span>{healthNeeds[key] ?? 0}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={healthNeeds[key] ?? 50}
-                    onChange={(e) =>
-                      setHealthNeeds((h) => ({ ...h, [key]: Number(e.target.value) }))
-                    }
-                    className="rs-project-range"
-                  />
-                </div>
-              ))}
-              <button
-                type="button"
-                className="rs-btn-ghost"
-                style={{ marginTop: 8 }}
-                onClick={persistFullWorkspace}
-                disabled={savingWorkspace}
-              >
-                Save health
-              </button>
-            </section>
-
-            <section className="rs-section-card rs-project-vault-card">
-              <h2 className="rs-section-card__title" style={{ fontSize: "1rem", marginBottom: 4 }}>
-                Resource vault
-              </h2>
-              <p className="rs-section-card__subtitle" style={{ marginBottom: 12 }}>
-                Drive folders, docs, dedicated AI projects, archives.
-              </p>
-
-              {resources.length === 0 && (
-                <p className="rs-section-card__subtitle" style={{ fontSize: 12 }}>
-                  No structured links yet — add rows below or paste bulk links in the legacy block.
-                </p>
-              )}
-
-              <div className="rs-project-resource-list">
-                {resources.map((r) => (
-                  <div key={r.id} className="rs-project-resource-row">
-                    <input
-                      type="text"
-                      className="rs-input"
-                      placeholder="Label"
-                      value={r.label}
-                      onChange={(e) => patchResource(r.id, { label: e.target.value })}
-                    />
-                    <input
-                      type="url"
-                      className="rs-input"
-                      placeholder="https://…"
-                      value={r.url}
-                      onChange={(e) => patchResource(r.id, { url: e.target.value })}
-                    />
-                    <select
-                      className="rs-select-compact"
-                      value={r.kind || "folder"}
-                      onChange={(e) => patchResource(r.id, { kind: e.target.value })}
-                    >
-                      {RESOURCE_KINDS.map((k) => (
-                        <option key={k.value} value={k.value}>
-                          {k.label}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      className="rs-project-icon-btn"
-                      onClick={() => removeResource(r.id)}
-                      aria-label="Remove resource"
-                    >
-                      <span className="material-symbols-outlined">delete</span>
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              <button type="button" className="rs-btn-ghost rs-project-add-resource" onClick={addResource}>
-                <span className="material-symbols-outlined">add</span>
-                Add resource
-              </button>
-
-              <label className="rs-project-field-label" style={{ marginTop: 16 }}>
-                Legacy link dump (also saved)
-              </label>
-              <textarea
-                className="rs-input"
-                rows={4}
-                value={projectLinks}
-                onChange={(e) => setProjectLinks(e.target.value)}
-                placeholder="Paste any extra URLs or notes — we’ll include them in the AI context pack when structured rows are empty."
-              />
-              <button
-                type="button"
-                className="rs-btn-primary"
-                style={{ marginTop: 10 }}
-                onClick={persistFullWorkspace}
-                disabled={savingWorkspace}
-              >
-                Save vault
-              </button>
-            </section>
-
-            <section className="rs-section-card rs-project-tips">
-              <h3 className="rs-section-card__title" style={{ fontSize: "0.95rem" }}>
-                Ideas to increase value
-              </h3>
-              <ul className="rs-project-tips__list">
-                <li>Run Action Items → AI enrichment on tasks, then copy winning subtasks here.</li>
-                <li>Re-copy the context pack after big edits so external AI threads stay current.</li>
-                <li>Link each initiative to an outcome for clearer cross-project prioritization.</li>
-              </ul>
-            </section>
-          </aside>
+            ))}
+          </div>
         </div>
       </div>
 
-      <Modal
-        title="New initiative"
-        open={taskModalOpen}
-        onClose={() => !savingTask && setTaskModalOpen(false)}
-      >
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <label className="rs-project-field-label">
-            Title
-            <input
-              type="text"
-              className="rs-input"
-              value={taskTitle}
-              onChange={(e) => setTaskTitle(e.target.value)}
-            />
-          </label>
-          <div className="rs-form-grid-2">
-            <label className="rs-project-field-label">
-              Priority
-              <select
-                className="rs-input"
-                value={taskPriority}
-                onChange={(e) => setTaskPriority(e.target.value)}
-              >
-                <option>Critical</option>
-                <option>High</option>
-                <option>Medium</option>
-                <option>Low</option>
-              </select>
-            </label>
-            <label className="rs-project-field-label">
-              Status
-              <select className="rs-input" value={taskStatus} onChange={(e) => setTaskStatus(e.target.value)}>
-                <option value="todo">todo</option>
-                <option value="doing">doing</option>
-                <option value="done">done</option>
-                <option value="archived">archived</option>
-              </select>
-            </label>
-          </div>
-          <div className="rs-form-grid-2">
-            <label className="rs-project-field-label">
-              Due
-              <input type="date" className="rs-input" value={taskDueDate} onChange={(e) => setTaskDueDate(e.target.value)} />
-            </label>
-            <label className="rs-project-field-label">
-              Effort (hrs)
-              <input
-                type="number"
-                step="0.25"
-                className="rs-input"
-                value={taskEffortHours}
-                onChange={(e) => setTaskEffortHours(e.target.value)}
-              />
-            </label>
-          </div>
-          <label className="rs-project-field-label">
-            Tags (comma separated)
-            <input
-              type="text"
-              className="rs-input"
-              value={taskTagsText}
-              onChange={(e) => setTaskTagsText(e.target.value)}
-              placeholder={tags?.length ? tags.slice(0, 5).map((t) => t.name).join(", ") : ""}
-            />
-          </label>
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
-            <button type="button" className="rs-btn-ghost" onClick={() => setTaskModalOpen(false)} disabled={savingTask}>
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="rs-btn-primary"
-              onClick={handleSaveTask}
-              disabled={savingTask || !taskTitle.trim()}
-            >
-              {savingTask ? "Saving…" : "Save"}
-            </button>
-          </div>
-        </div>
-      </Modal>
+      <style jsx global>{`
+        .pj-breadcrumb {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .pj-breadcrumb a {
+          color: inherit;
+          text-decoration: none;
+        }
+        .pj-breadcrumb a:hover { color: var(--ps-ink); }
+        .pj-sep { color: var(--ps-ink-30); }
+        .pj-current { color: var(--ps-ink); }
+        .pj-hero {
+          background: var(--ps-paper-soft);
+          border: 1px solid var(--ps-ink-10);
+          border-radius: 16px;
+          padding: 22px 24px;
+          margin-top: 12px;
+          display: grid;
+          grid-template-columns: 1fr 260px;
+          gap: 24px;
+          align-items: center;
+        }
+        .pj-hero-eyebrow {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: var(--ps-ink-60);
+          margin-bottom: 4px;
+        }
+        .pj-dot { width: 10px; height: 10px; border-radius: 3px; }
+        .pj-meta {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 20px;
+          font-size: 12px;
+          color: var(--ps-ink-60);
+          margin-top: 10px;
+        }
+        .pj-meta strong { color: var(--ps-ink); font-weight: 600; }
+        .pj-progress {
+          background: #fff;
+          border: 1px solid var(--ps-ink-08);
+          border-radius: 12px;
+          padding: 14px 16px;
+        }
+        .pj-progress-num {
+          font-family: var(--ps-serif);
+          font-size: 36px;
+          letter-spacing: -0.02em;
+          line-height: 1;
+          color: var(--ps-ink);
+        }
+        .pj-progress-num span {
+          font-size: 18px;
+          color: var(--ps-ink-50);
+          margin-left: 2px;
+        }
+        .pj-progress-cap {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+          margin: 4px 0 10px;
+        }
+        .pj-progress-bar {
+          height: 6px;
+          background: var(--ps-ink-08);
+          border-radius: 3px;
+          overflow: hidden;
+          position: relative;
+        }
+        .pj-progress-fill {
+          position: absolute;
+          left: 0;
+          top: 0;
+          bottom: 0;
+          border-radius: 3px;
+          transition: width 300ms;
+        }
+        .pj-outcomes {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 12px;
+          margin-top: 12px;
+        }
+        .pj-outcome-card {
+          background: #fff;
+          border: 1px solid var(--ps-ink-10);
+          border-radius: 12px;
+          padding: 14px 16px;
+        }
+        .pj-outcome-cap {
+          font-family: var(--ps-mono);
+          font-size: 9px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          margin-bottom: 6px;
+        }
+        .pj-outcome-label {
+          font-family: var(--ps-serif);
+          font-size: 16px;
+          letter-spacing: -0.01em;
+          line-height: 1.3;
+        }
+        .pj-outcome-foot {
+          display: flex;
+          justify-content: space-between;
+          margin-top: 6px;
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          color: var(--ps-ink-50);
+        }
+
+        .pj-ladder {
+          margin-top: 32px;
+        }
+        .pj-ladder-head {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 16px;
+          padding-bottom: 14px;
+          border-bottom: 1px solid var(--ps-ink-10);
+          margin-bottom: 14px;
+        }
+        .pj-ladder-title {
+          font-family: var(--ps-serif);
+          font-size: 20px;
+          letter-spacing: -0.01em;
+        }
+        .pj-ladder-sub {
+          font-size: 12px;
+          color: var(--ps-ink-60);
+          margin-top: 2px;
+        }
+        .pj-empty {
+          background: var(--ps-paper);
+          border: 1px dashed var(--ps-ink-15);
+          border-radius: 12px;
+          padding: 30px;
+          text-align: center;
+          color: var(--ps-ink-60);
+          font-size: 13px;
+        }
+        .pj-group {
+          margin-bottom: 20px;
+        }
+        .pj-group-head {
+          display: flex;
+          align-items: baseline;
+          gap: 10px;
+          padding: 6px 0;
+          margin-bottom: 6px;
+        }
+        .pj-group-label {
+          font-family: var(--ps-serif);
+          font-size: 14px;
+          letter-spacing: -0.01em;
+        }
+        .pj-group-count {
+          margin-left: auto;
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          color: var(--ps-ink-50);
+        }
+        .pj-item {
+          background: #fff;
+          border: 1px solid var(--ps-ink-08);
+          border-radius: 10px;
+          margin-bottom: 6px;
+        }
+        .pj-item-row {
+          display: grid;
+          grid-template-columns: 22px 1fr auto 24px;
+          gap: 12px;
+          padding: 10px 14px;
+          align-items: start;
+        }
+        .pj-check {
+          appearance: none;
+          width: 20px;
+          height: 20px;
+          margin-top: 2px;
+          border-radius: 5px;
+          border: 1.5px solid var(--ps-ink-30);
+          background: #fff;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          color: var(--ps-bg);
+          font-size: 12px;
+          line-height: 1;
+        }
+        .pj-check.done {
+          background: var(--ps-sage);
+          border-color: var(--ps-sage);
+        }
+        .pj-check-sm {
+          width: 16px;
+          height: 16px;
+          font-size: 10px;
+          border-width: 1px;
+        }
+        .pj-item-body { min-width: 0; }
+        .pj-item-text {
+          font-size: 13.5px;
+          color: var(--ps-ink);
+          line-height: 1.4;
+        }
+        .pj-item-text.done {
+          text-decoration: line-through;
+          color: var(--ps-ink-50);
+        }
+        .pj-item-tags {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 5px;
+          margin-top: 4px;
+        }
+        .pj-tag-flag { background: var(--ps-accent-soft); color: var(--ps-accent); }
+        .pj-item-size {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          color: var(--ps-ink-50);
+          letter-spacing: 0.04em;
+          white-space: nowrap;
+          margin-top: 2px;
+        }
+        .pj-item-expand {
+          appearance: none;
+          border: 1px solid var(--ps-ink-10);
+          background: transparent;
+          width: 24px;
+          height: 24px;
+          border-radius: 6px;
+          cursor: pointer;
+          color: var(--ps-ink-60);
+          font-size: 14px;
+          line-height: 1;
+        }
+        .pj-item-expand:hover { border-color: var(--ps-ink); color: var(--ps-ink); }
+        .pj-coach-note {
+          background: var(--ps-accent-soft);
+          border: 1px solid rgba(185, 115, 22, 0.25);
+          border-radius: 8px;
+          padding: 10px 12px;
+          margin-top: 8px;
+        }
+        .pj-coach-note p { margin: 4px 0 0; font-size: 12px; color: var(--ps-ink-80); line-height: 1.5; }
+        .pj-coach-cap {
+          font-family: var(--ps-mono);
+          font-size: 9px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--ps-accent);
+        }
+        .pj-subtasks {
+          padding: 4px 14px 12px 46px;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        .pj-sub {
+          display: grid;
+          grid-template-columns: 16px 1fr auto;
+          gap: 8px;
+          align-items: center;
+          padding: 4px 0;
+          font-size: 12.5px;
+          color: var(--ps-ink-80);
+        }
+        .pj-sub-mins {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          color: var(--ps-ink-50);
+        }
+        .pj-empty-sub {
+          font-size: 12px;
+          color: var(--ps-ink-50);
+          font-style: italic;
+          padding: 4px 0;
+        }
+
+        @media (max-width: 900px) {
+          .pj-hero { grid-template-columns: 1fr; }
+          .pj-outcomes { grid-template-columns: 1fr; }
+        }
+      `}</style>
     </DashboardLayout>
   );
 }
