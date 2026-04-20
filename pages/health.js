@@ -1,196 +1,82 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useId } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Head from "next/head";
 import DashboardLayout from "../components/DashboardLayout";
-import OccamMonthCalendar from "../components/OccamMonthCalendar";
-import OccamNotifySettings from "../components/OccamNotifySettings";
-import PageHeader from "../components/PageHeader";
 import { useAuth } from "../hooks/useAuth";
 import {
   getBodyWeightLogs,
   insertBodyWeightLog,
   getLiftingSessions,
-  createLiftingSession,
-  getLiftingSets,
   getLiftingSetsWithSession,
+  createLiftingSession,
   addLiftingSet,
-  getUserProfile,
-  upsertUserProfile,
 } from "../lib/db";
-import {
-  OCCAM_CADENCE_SHORT,
-  OCCAM_PROTOCOL_BLURB,
-  OCCAM_WORKOUTS,
-  classifyLiftForGoals,
-} from "../lib/occam";
-import {
-  MIN_RECOVERY_HOURS,
-  IDEAL_RECOVERY_HOURS,
-  buildWorkoutPlanForPhase,
-  getOccamScheduleState,
-  groupSetsBySessionDate,
-  inferLatestOccamCompletionFromSets,
-  occamSessionLooksComplete,
-  getLastTopSetForOccamExercise,
-  suggestOccamWeight,
-} from "../lib/occamSchedule";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-} from "recharts";
 
-function todayStr() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
+const OCCAM_LIFTS = [
+  {
+    id: "yates-row",
+    label: "Yates row (EZ bar)",
+    workout: "A",
+    aliases: ["yates row", "yates", "ez row", "ez bar row"],
+    color: "var(--ps-sage)",
+  },
+  {
+    id: "barbell-press",
+    label: "Barbell press",
+    workout: "A",
+    aliases: ["barbell press", "overhead press", "ohp", "press"],
+    color: "var(--ps-plum)",
+  },
+  {
+    id: "incline-bench",
+    label: "Incline bench",
+    workout: "B",
+    aliases: ["incline bench", "bench", "incline"],
+    color: "var(--ps-clay)",
+  },
+  {
+    id: "squat",
+    label: "Squat",
+    workout: "B",
+    aliases: ["squat", "back squat"],
+    color: "var(--ps-accent)",
+  },
+];
 
-function localDateStr(isoOrDate) {
-  if (!isoOrDate) return "";
-  const d = new Date(isoOrDate);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-function deriveBestsFromSets(rows) {
-  let bench = null;
-  let squatLike = null;
-  for (const row of rows || []) {
-    const w = row.weight != null ? Number(row.weight) : null;
-    if (w == null || Number.isNaN(w)) continue;
-    const { countsForBench, countsForSquatLike } = classifyLiftForGoals(row.exercise);
-    if (countsForBench) bench = bench == null ? w : Math.max(bench, w);
-    if (countsForSquatLike) squatLike = squatLike == null ? w : Math.max(squatLike, w);
+function matchLift(exercise) {
+  const lower = (exercise || "").toLowerCase();
+  for (const l of OCCAM_LIFTS) {
+    if (l.aliases.some((a) => lower.includes(a))) return l;
   }
-  return { bestBenchLb: bench, bestSquatLb: squatLike };
+  return null;
 }
 
-function setsForSessionDate(rows, dateStr) {
-  return (rows || []).filter((r) => {
-    const sd = r.session?.session_date;
-    return sd === dateStr;
-  });
+function sortBySessionDate(a, b) {
+  const ad = a.session?.session_date || a.created_at;
+  const bd = b.session?.session_date || b.created_at;
+  return new Date(ad) - new Date(bd);
 }
 
-const MEASURE_DEFAULTS = {
-  chest_in: "",
-  waist_in: "",
-  hips_in: "",
-  shoulders_in: "",
-  neck_in: "",
-  left_bicep_in: "",
-  left_quad_in: "",
-  left_calf_in: "",
-};
-
-const MEASURE_FIELDS = [
-  ["chest_in", "Chest"],
-  ["waist_in", "Waist"],
-  ["hips_in", "Hips"],
-  ["shoulders_in", "Shoulders"],
-  ["neck_in", "Neck"],
-  ["left_bicep_in", "Left bicep"],
-  ["left_quad_in", "Left quad"],
-  ["left_calf_in", "Left calf"],
-];
-
-const CHART_COLORS = [
-  "#6b5500",
-  "#555d1e",
-  "#d4af37",
-  "#7f5c53",
-  "#4a3d00",
-  "#6b7530",
-];
-
-function toMeasurementSnapshot(raw = {}) {
-  const snapshot = {
-    measured_at: raw?.measured_at ? String(raw.measured_at).slice(0, 10) : "",
-  };
-  MEASURE_FIELDS.forEach(([key]) => {
-    const value = raw?.[key];
-    snapshot[key] =
-      value == null || value === "" || Number.isNaN(Number(value)) ? null : Number(value);
-  });
-  return snapshot;
-}
-
-function sortMeasurementSnapshots(rows = []) {
-  return [...rows]
-    .map((row) => toMeasurementSnapshot(row))
-    .filter((row) => row.measured_at)
-    .sort((a, b) => new Date(a.measured_at) - new Date(b.measured_at));
-}
-
-function getLatestMeasurementSnapshot(rows = []) {
-  const sorted = sortMeasurementSnapshots(rows);
-  return sorted.length > 0 ? sorted[sorted.length - 1] : null;
-}
-
-function formatMeasurementDelta(value) {
-  if (value == null || Number.isNaN(value)) return null;
-  const rounded = Math.round(value * 10) / 10;
-  if (rounded === 0) return "No change";
-  return `${rounded > 0 ? "+" : ""}${rounded.toFixed(1)} in`;
-}
-
-function OccamGoalRing({ pct, title, sub, detail }) {
-  const uid = useId();
-  const gradId = `occam-ring-grad-${uid}`;
-  const p = pct == null ? null : Math.min(100, Math.max(0, Number(pct)));
-  const r = 38;
-  const c = 2 * Math.PI * r;
-  const off = p == null ? c : c - (p / 100) * c;
+function Sparkline({ points, color }) {
+  if (!points || points.length < 2) return null;
+  const w = 160, h = 40, pad = 4;
+  const ys = points.map((p) => p.w);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const scaleX = (w - pad * 2) / Math.max(1, points.length - 1);
+  const scaleY = (h - pad * 2) / Math.max(1, maxY - minY || 1);
+  const d = points
+    .map((p, i) => {
+      const x = pad + i * scaleX;
+      const y = h - pad - (p.w - minY) * scaleY;
+      return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
   return (
-    <div className="rs-occam-ring">
-      <div className="rs-occam-ring__svg-wrap">
-        <svg width="112" height="112" viewBox="0 0 112 112" aria-hidden>
-          <circle
-            cx="56"
-            cy="56"
-            r={r}
-            fill="none"
-            stroke="rgba(186,177,159,0.22)"
-            strokeWidth="7"
-          />
-          {p != null && (
-            <circle
-              cx="56"
-              cy="56"
-              r={r}
-              fill="none"
-              stroke={`url(#${gradId})`}
-              strokeWidth="7"
-              strokeLinecap="round"
-              strokeDasharray={c}
-              strokeDashoffset={off}
-              transform="rotate(-90 56 56)"
-            />
-          )}
-          <defs>
-            <linearGradient id={gradId} x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="var(--rs-primary-strong)" />
-              <stop offset="100%" stopColor="var(--rs-accent-gold)" />
-            </linearGradient>
-          </defs>
-        </svg>
-        <div className="rs-occam-ring__overlay">
-          <span className="rs-occam-ring__pct">{p != null ? `${Math.round(p)}%` : "—"}</span>
-          <span className="rs-occam-ring__lbl">{title}</span>
-        </div>
-      </div>
-      {sub && <span className="rs-occam-ring__sub">{sub}</span>}
-      {detail && <span className="rs-occam-ring__detail">{detail}</span>}
-    </div>
+    <svg width={w} height={h} className="fit-spark">
+      <path d={d} stroke={color} strokeWidth="1.5" fill="none" />
+    </svg>
   );
 }
 
@@ -198,167 +84,34 @@ export default function HealthPage() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
-  const [weightLogs, setWeightLogs] = useState([]);
-  const [weightDate, setWeightDate] = useState(todayStr());
-  const [weightLb, setWeightLb] = useState("");
-
   const [sessions, setSessions] = useState([]);
-  const [setsWithSession, setSetsWithSession] = useState([]);
-  const [expandedSessionId, setExpandedSessionId] = useState(null);
-  const [setsBySession, setSetsBySession] = useState({});
-
-  const [newSessionDate, setNewSessionDate] = useState(todayStr());
-  const [newSetExercise, setNewSetExercise] = useState("");
-  const [newSetWeight, setNewSetWeight] = useState("");
-  const [newSetReps, setNewSetReps] = useState("");
-  const [newSetNumber, setNewSetNumber] = useState("");
-
-  const [measurements, setMeasurements] = useState(MEASURE_DEFAULTS);
-  const [measurementHistory, setMeasurementHistory] = useState([]);
-  const [measureDate, setMeasureDate] = useState(todayStr());
-  const [savingMeasures, setSavingMeasures] = useState(false);
-
-  const [celebrate, setCelebrate] = useState(null);
-  const bestBenchRef = useRef(null);
-  const bestSquatRef = useRef(null);
-  const celebratedCompleteRef = useRef({});
-
-  const dateToday = todayStr();
-  const [userPreferences, setUserPreferences] = useState(null);
-  const [calYear, setCalYear] = useState(() => new Date().getFullYear());
-  const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
-  const [workoutTab, setWorkoutTab] = useState("Occam A");
-
-  const scheduleState = useMemo(
-    () =>
-      getOccamScheduleState({
-        preferences: userPreferences,
-        setsWithSession,
-        now: new Date(),
-      }),
-    [userPreferences, setsWithSession]
-  );
-
-  const todaysPlan = useMemo(
-    () => buildWorkoutPlanForPhase(scheduleState.phase, dateToday, scheduleState),
-    [scheduleState, dateToday]
-  );
-
-  const setsByDate = useMemo(() => groupSetsBySessionDate(setsWithSession), [setsWithSession]);
-
-  const nextEligibleDateStr = useMemo(() => {
-    if (!scheduleState.recoveryEndsAt) return null;
-    const d = scheduleState.recoveryEndsAt;
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
-  }, [scheduleState.recoveryEndsAt]);
-
-  const recoveryBarPct = useMemo(() => {
-    if (
-      !scheduleState.lastCompletion ||
-      scheduleState.mode !== "recovery" ||
-      !scheduleState.recoveryEndsAt
-    )
-      return scheduleState.mode === "workout" ? 100 : 0;
-    const start = scheduleState.lastCompletion.completedAt.getTime();
-    const end = scheduleState.recoveryEndsAt.getTime();
-    const now = Date.now();
-    const p = ((now - start) / (end - start)) * 100;
-    return Math.min(100, Math.max(0, p));
-  }, [scheduleState]);
-
-  useEffect(() => {
-    if (scheduleState.mode === "recovery" && scheduleState.nextWorkoutAfterRecovery) {
-      setWorkoutTab(scheduleState.nextWorkoutAfterRecovery);
-    } else if (scheduleState.phase === "Occam A" || scheduleState.phase === "Occam B") {
-      setWorkoutTab(scheduleState.phase);
-    }
-  }, [scheduleState.mode, scheduleState.phase, scheduleState.nextWorkoutAfterRecovery]);
+  const [allSets, setAllSets] = useState([]);
+  const [weights, setWeights] = useState([]);
+  const [addWeight, setAddWeight] = useState("");
+  const [addingWeight, setAddingWeight] = useState(false);
+  const [quickLift, setQuickLift] = useState("yates-row");
+  const [quickWeight, setQuickWeight] = useState("");
+  const [quickReps, setQuickReps] = useState("");
+  const [logging, setLogging] = useState(false);
 
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     setError("");
     try {
-      const [wRes, sRes, setsRes, profileRes] = await Promise.all([
+      const [sessRes, setsRes, wtRes] = await Promise.all([
+        getLiftingSessions(user.id, 30),
+        getLiftingSetsWithSession(user.id, 300),
         getBodyWeightLogs(user.id, 120),
-        getLiftingSessions(user.id, 60),
-        getLiftingSetsWithSession(user.id, 500),
-        getUserProfile(user.id),
       ]);
-      if (wRes.error) setError(wRes.error.message);
-      else setWeightLogs(wRes.data || []);
-      if (sRes.error) setError(sRes.error.message);
-      else setSessions(sRes.data || []);
-      if (!setsRes.error) {
-        const rows = setsRes.data || [];
-        setSetsWithSession(rows);
-        const { bestBenchLb, bestSquatLb } = deriveBestsFromSets(rows);
-        bestBenchRef.current = bestBenchLb;
-        bestSquatRef.current = bestSquatLb;
-      }
-      if (!profileRes.error && profileRes.data?.profile) {
-        const prof = profileRes.data.profile;
-        const om = prof.preferences?.occam_measurements || {};
-        const savedHistory = Array.isArray(prof.preferences?.occam_measurement_history)
-          ? prof.preferences.occam_measurement_history
-          : [];
-        const normalizedHistory =
-          savedHistory.length > 0
-            ? sortMeasurementSnapshots(savedHistory)
-            : om.measured_at
-              ? sortMeasurementSnapshots([om])
-              : [];
-        const latestMeasurement = getLatestMeasurementSnapshot(normalizedHistory);
-        setMeasurements({
-          chest_in: latestMeasurement?.chest_in != null ? String(latestMeasurement.chest_in) : "",
-          waist_in: latestMeasurement?.waist_in != null ? String(latestMeasurement.waist_in) : "",
-          hips_in: latestMeasurement?.hips_in != null ? String(latestMeasurement.hips_in) : "",
-          shoulders_in:
-            latestMeasurement?.shoulders_in != null ? String(latestMeasurement.shoulders_in) : "",
-          neck_in: latestMeasurement?.neck_in != null ? String(latestMeasurement.neck_in) : "",
-          left_bicep_in:
-            latestMeasurement?.left_bicep_in != null ? String(latestMeasurement.left_bicep_in) : "",
-          left_quad_in:
-            latestMeasurement?.left_quad_in != null ? String(latestMeasurement.left_quad_in) : "",
-          left_calf_in:
-            latestMeasurement?.left_calf_in != null ? String(latestMeasurement.left_calf_in) : "",
-        });
-        setMeasurementHistory(normalizedHistory);
-        if (latestMeasurement?.measured_at) setMeasureDate(String(latestMeasurement.measured_at).slice(0, 10));
-
-        let prefs = prof.preferences || {};
-        const rows = setsRes.error ? [] : setsRes.data || [];
-        const inferred = inferLatestOccamCompletionFromSets(rows);
-        const existingLc = prefs.occam_schedule?.last_completion;
-        const existingAt = existingLc?.completed_at
-          ? new Date(existingLc.completed_at).getTime()
-          : 0;
-        const infAt = inferred?.completedAt?.getTime() ?? 0;
-        if (inferred && infAt > existingAt) {
-          prefs = {
-            ...prefs,
-            occam_schedule: {
-              ...prefs.occam_schedule,
-              last_completion: {
-                phase: inferred.phase,
-                completed_at: inferred.completedAt.toISOString(),
-                session_date: inferred.session_date,
-              },
-            },
-          };
-          const up = await upsertUserProfile(user.id, { ...prof, preferences: prefs });
-          if (up.error) setError(up.error.message);
-        }
-        setUserPreferences(prefs);
-      } else {
-        setUserPreferences(null);
-      }
-    } catch (e) {
-      setError(e?.message || "Failed to load health data.");
+      if (sessRes.error) throw new Error(sessRes.error.message);
+      if (setsRes.error) throw new Error(setsRes.error.message);
+      if (wtRes.error) throw new Error(wtRes.error.message);
+      setSessions(sessRes.data || []);
+      setAllSets(setsRes.data || []);
+      setWeights(wtRes.data || []);
+    } catch (err) {
+      setError(err.message || "Failed to load.");
     } finally {
       setLoading(false);
     }
@@ -368,1007 +121,625 @@ export default function HealthPage() {
     load();
   }, [load]);
 
-  async function loadSets(sessionId) {
-    const res = await getLiftingSets(sessionId);
-    if (!res.error) setSetsBySession((prev) => ({ ...prev, [sessionId]: res.data || [] }));
-  }
-
-  useEffect(() => {
-    if (!expandedSessionId) return;
-    loadSets(expandedSessionId);
-  }, [expandedSessionId]);
-
-  function flashCelebrate(payload) {
-    setCelebrate(payload);
-    window.setTimeout(() => setCelebrate((c) => (c === payload ? null : c)), 5200);
-  }
-
-  async function handleAddWeight() {
-    if (!user || !weightLb.trim()) return;
-    setError("");
-    const res = await insertBodyWeightLog(user.id, weightDate, parseFloat(weightLb), "lb");
-    if (res.error) setError(res.error.message);
-    else {
-      setWeightLogs((prev) => [res.data, ...prev]);
-      setWeightLb("");
-      setWeightDate(todayStr());
-      flashCelebrate({
-        kind: "weight",
-        title: "Logged",
-        body: "Body weight recorded — your strength goals update automatically.",
-      });
-    }
-  }
-
-  async function handleSaveMeasurements() {
-    if (!user) return;
-    setSavingMeasures(true);
-    setError("");
-    try {
-      const res = await getUserProfile(user.id);
-      const profile = res?.data?.profile || {};
-      const measurementSnapshot = {
-        chest_in: measurements.chest_in === "" ? null : parseFloat(measurements.chest_in),
-        waist_in: measurements.waist_in === "" ? null : parseFloat(measurements.waist_in),
-        hips_in: measurements.hips_in === "" ? null : parseFloat(measurements.hips_in),
-        shoulders_in: measurements.shoulders_in === "" ? null : parseFloat(measurements.shoulders_in),
-        neck_in: measurements.neck_in === "" ? null : parseFloat(measurements.neck_in),
-        left_bicep_in:
-          measurements.left_bicep_in === "" ? null : parseFloat(measurements.left_bicep_in),
-        left_quad_in:
-          measurements.left_quad_in === "" ? null : parseFloat(measurements.left_quad_in),
-        left_calf_in:
-          measurements.left_calf_in === "" ? null : parseFloat(measurements.left_calf_in),
-        measured_at: measureDate,
-      };
-      const prevHistory = Array.isArray(profile.preferences?.occam_measurement_history)
-        ? profile.preferences.occam_measurement_history
-        : [];
-      const nextHistory = sortMeasurementSnapshots([
-        ...prevHistory.filter((row) => String(row?.measured_at || "").slice(0, 10) !== measureDate),
-        measurementSnapshot,
-      ]).slice(-180);
-      const latestMeasurementSnapshot = getLatestMeasurementSnapshot(nextHistory) || toMeasurementSnapshot(measurementSnapshot);
-      const prefs = {
-        ...(profile.preferences || {}),
-        occam_measurements: latestMeasurementSnapshot,
-        occam_measurement_history: nextHistory,
-      };
-      const up = await upsertUserProfile(user.id, { ...profile, preferences: prefs });
-      if (up.error) setError(up.error.message);
-      else {
-        setUserPreferences(prefs);
-        setMeasurementHistory(nextHistory);
-        flashCelebrate({
-          kind: "measures",
-          title: "Measurements saved",
-          body: "Tape progress is in — consistency beats perfection.",
-        });
-      }
-    } finally {
-      setSavingMeasures(false);
-    }
-  }
-
-  async function handleCreateSession() {
-    if (!user) return;
-    setError("");
-    const res = await createLiftingSession(user.id, newSessionDate);
-    if (res.error) setError(res.error.message);
-    else {
-      setSessions((prev) => [res.data, ...prev]);
-      setNewSessionDate(todayStr());
-      setExpandedSessionId(res.data.id);
-      flashCelebrate({
-        kind: "session",
-        title: "Session created",
-        body: "Log each lift below — one hard set to failure per exercise (after warm-ups).",
-      });
-    }
-  }
-
-  async function ensureTodaysSession() {
-    const existing = sessions.find((s) => s.session_date === dateToday);
-    if (existing) {
-      setExpandedSessionId(existing.id);
-      return;
-    }
-    setNewSessionDate(dateToday);
-    const res = await createLiftingSession(user.id, dateToday);
-    if (res.error) {
-      setError(res.error.message);
-      return;
-    }
-    setSessions((prev) => [res.data, ...prev]);
-    setExpandedSessionId(res.data.id);
-    flashCelebrate({
-      kind: "session",
-      title: "Today’s session is ready",
-      body: "Add your working sets when you’re done with warm-ups.",
-    });
-  }
-
-  async function handleAddSet(sessionId) {
-    if (!newSetExercise.trim() || !user) return;
-    setError("");
-    const w = newSetWeight ? parseFloat(newSetWeight) : null;
-    const ex = newSetExercise.trim();
-    const { countsForBench, countsForSquatLike } = classifyLiftForGoals(ex);
-
-    const res = await addLiftingSet(user.id, sessionId, {
-      exercise_name: ex,
-      weight: w,
-      reps: newSetReps ? parseInt(newSetReps, 10) : null,
-      set_number: newSetNumber ? parseInt(newSetNumber, 10) : null,
-    });
-    if (res.error) {
-      setError(res.error.message);
-      return;
-    }
-
-    if (w != null && !Number.isNaN(w)) {
-      if (countsForBench && w > (bestBenchRef.current ?? 0)) {
-        bestBenchRef.current = w;
-        flashCelebrate({
-          kind: "pr_bench",
-          title: "Bench milestone",
-          body: `New top weight logged: ${w} lb. You’re pressing toward 1× bodyweight.`,
-        });
-      }
-      if (countsForSquatLike && w > (bestSquatRef.current ?? 0)) {
-        bestSquatRef.current = w;
-        flashCelebrate({
-          kind: "pr_squat",
-          title: "Leg strength milestone",
-          body: `New top load: ${w} lb. Tracking toward 2× bodyweight on squat.`,
-        });
-      }
-    }
-
-    loadSets(sessionId);
-    const full = await getLiftingSetsWithSession(user.id, 500);
-    if (!full.error) setSetsWithSession(full.data || []);
-
-    setNewSetExercise("");
-    setNewSetWeight("");
-    setNewSetReps("");
-    setNewSetNumber("");
-
-    const sess = sessions.find((s) => s.id === sessionId);
-    if (sess && sess.session_date === dateToday) {
-      const onDate = setsForSessionDate(full.data || [], dateToday);
-      const withNew = [...onDate, { exercise: ex, weight: w }];
-      for (const phase of ["Occam A", "Occam B"]) {
-        if (
-          occamSessionLooksComplete(withNew, phase) &&
-          !celebratedCompleteRef.current[dateToday + phase]
-        ) {
-          celebratedCompleteRef.current[dateToday + phase] = true;
-          flashCelebrate({
-            kind: "full",
-            title: "Protocol success!",
-            body: "You’ve logged every lift for this Occam template. Check it off on Today when you’re ready to celebrate the win.",
-          });
-          const inf = inferLatestOccamCompletionFromSets(full.data || []);
-          if (inf && user) {
-            const pr = await getUserProfile(user.id);
-            const prof = pr?.data?.profile;
-            if (prof) {
-              const prefs = {
-                ...prof.preferences,
-                occam_schedule: {
-                  ...prof.preferences?.occam_schedule,
-                  last_completion: {
-                    phase: inf.phase,
-                    completed_at: inf.completedAt.toISOString(),
-                    session_date: inf.session_date,
-                  },
-                },
-              };
-              const up = await upsertUserProfile(user.id, { ...prof, preferences: prefs });
-              if (!up.error) setUserPreferences(prefs);
-            }
-          }
-          break;
+  const liftProgress = useMemo(() => {
+    const byLift = new Map(OCCAM_LIFTS.map((l) => [l.id, []]));
+    for (const s of [...allSets].sort(sortBySessionDate)) {
+      const lift = matchLift(s.exercise);
+      if (!lift) continue;
+      const date = s.session?.session_date || s.created_at?.slice(0, 10);
+      const last = byLift.get(lift.id).slice(-1)[0];
+      if (last && last.d === date) {
+        if ((s.weight || 0) > (last.w || 0)) {
+          last.w = s.weight;
+          last.reps = s.reps;
         }
+      } else {
+        byLift.get(lift.id).push({ d: date, w: Number(s.weight || 0), reps: s.reps });
       }
+    }
+    return OCCAM_LIFTS.map((l) => {
+      const series = byLift.get(l.id) || [];
+      const last = series[series.length - 1];
+      return {
+        ...l,
+        series,
+        currentWeight: last?.w ?? null,
+        currentReps: last?.reps ?? null,
+        sessionCount: series.length,
+      };
+    });
+  }, [allSets]);
+
+  const bodyweightSeries = useMemo(() => {
+    return [...weights]
+      .sort((a, b) => new Date(a.measured_at) - new Date(b.measured_at))
+      .map((w) => ({ w: Number(w.weight), d: w.measured_at }));
+  }, [weights]);
+
+  const latestWeight = bodyweightSeries[bodyweightSeries.length - 1];
+
+  const last7 = useMemo(() => {
+    if (bodyweightSeries.length === 0) return null;
+    const cutoff = Date.now() - 7 * 86400000;
+    const recent = bodyweightSeries.filter((p) => new Date(p.d).getTime() >= cutoff);
+    if (recent.length === 0) return null;
+    const avg = recent.reduce((a, p) => a + p.w, 0) / recent.length;
+    return avg;
+  }, [bodyweightSeries]);
+
+  const weekPlan = useMemo(() => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const dayIdx = (now.getDay() + 6) % 7;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - dayIdx);
+    const slots = [
+      { kind: "occam-a", label: "Occam A", sub: "Yates row + barbell press", color: "var(--ps-accent)" },
+      { kind: "sprints", label: "Sprints", sub: "Hill · O'Mara", color: "var(--ps-clay)" },
+      { kind: "recovery", label: "Recovery", sub: "Walk · mobility", color: "var(--ps-ink-30)" },
+      { kind: "occam-b", label: "Occam B", sub: "Incline bench + squat", color: "var(--ps-accent)" },
+      { kind: "row", label: "Rower", sub: "Sprint intervals", color: "var(--ps-indigo)" },
+      { kind: "rest", label: "Rest", sub: "Adventure day", color: "var(--ps-ink-30)" },
+      { kind: "rest", label: "Rest", sub: "Prep for week", color: "var(--ps-ink-30)" },
+    ];
+    return slots.map((s, i) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      const dateStr = d.toISOString().slice(0, 10);
+      const done = sessions.some((sess) => sess.session_date === dateStr);
+      return {
+        ...s,
+        day: DAYS[i],
+        date: d.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+        done,
+        today: i === dayIdx,
+      };
+    });
+  }, [sessions]);
+
+  const nextSession = useMemo(
+    () => weekPlan.find((w) => w.today),
+    [weekPlan]
+  );
+
+  async function handleWeightLog(e) {
+    e.preventDefault();
+    if (!user || !addWeight) return;
+    setAddingWeight(true);
+    const dateStr = new Date().toISOString().slice(0, 10);
+    await insertBodyWeightLog(user.id, dateStr, Number(addWeight), "lb");
+    setAddWeight("");
+    setAddingWeight(false);
+    load();
+  }
+
+  async function handleQuickLog(e) {
+    e.preventDefault();
+    if (!user || !quickWeight || !quickReps) return;
+    setLogging(true);
+    try {
+      const dateStr = new Date().toISOString().slice(0, 10);
+      let session = sessions.find((s) => s.session_date === dateStr);
+      if (!session) {
+        const res = await createLiftingSession(user.id, dateStr);
+        if (res.error) throw new Error(res.error.message);
+        session = res.data;
+      }
+      const liftMeta = OCCAM_LIFTS.find((l) => l.id === quickLift);
+      await addLiftingSet(user.id, session.id, {
+        exercise: liftMeta.label,
+        weight: Number(quickWeight),
+        reps: Number(quickReps),
+        set_number: 1,
+      });
+      setQuickWeight("");
+      setQuickReps("");
+      load();
+    } catch (err) {
+      setError(err.message || "Log failed.");
+    } finally {
+      setLogging(false);
     }
   }
 
-  const weightChartData = [...(weightLogs || [])]
-    .reverse()
-    .map((r) => ({
-      date: localDateStr(r.measured_at),
-      weight: r.unit === "kg" ? Math.round(r.weight * 2.205) : r.weight,
-    }));
-
-  const latestBodyWeightLb = useMemo(() => {
-    const sorted = [...(weightLogs || [])].sort(
-      (a, b) => new Date(b.measured_at) - new Date(a.measured_at)
-    );
-    const r = sorted[0];
-    if (!r) return null;
-    return r.unit === "kg" ? r.weight * 2.205 : r.weight;
-  }, [weightLogs]);
-
-  const { bestBenchLb, bestSquatLb } = useMemo(
-    () => deriveBestsFromSets(setsWithSession),
-    [setsWithSession]
-  );
-
-  const pctBenchGoal =
-    latestBodyWeightLb && latestBodyWeightLb > 0 && bestBenchLb != null
-      ? Math.min(100, Math.round((bestBenchLb / latestBodyWeightLb) * 100))
-      : null;
-  const pctSquatGoal =
-    latestBodyWeightLb && latestBodyWeightLb > 0 && bestSquatLb != null
-      ? Math.min(100, Math.round((bestSquatLb / (2 * latestBodyWeightLb)) * 100))
-      : null;
-
-  const exerciseChartData = useMemo(() => {
-    const rows = setsWithSession || [];
-    const byDate = new Map();
-    for (const row of rows) {
-      const sessionDate = row.session?.session_date;
-      if (!sessionDate) continue;
-      const exercise = (row.exercise || "").trim() || "Unknown";
-      const w = row.weight != null ? Number(row.weight) : null;
-      if (w == null) continue;
-      let entry = byDate.get(sessionDate);
-      if (!entry) {
-        entry = { date: sessionDate };
-        byDate.set(sessionDate, entry);
-      }
-      const prev = entry[exercise];
-      entry[exercise] = prev == null ? w : Math.max(prev, w);
-    }
-    const dates = [...byDate.keys()].sort();
-    const data = dates.map((d) => byDate.get(d));
-    const exerciseNames = [...new Set(data.flatMap((d) => Object.keys(d).filter((k) => k !== "date")))]
-      .filter(Boolean)
-      .sort();
-    return { data, exerciseNames };
-  }, [setsWithSession]);
-
-  const morphologyChartData = useMemo(() => {
-    return sortMeasurementSnapshots(measurementHistory || [])
-      .map((row) => {
-        const entry = {
-          date: String(row.measured_at).slice(0, 10),
-        };
-        MEASURE_FIELDS.forEach(([key]) => {
-          const value = row[key];
-          entry[key] = value == null || value === "" ? null : Number(value);
-        });
-        return entry;
-      });
-  }, [measurementHistory]);
-
-  const latestMeasurementSnapshot = useMemo(
-    () => getLatestMeasurementSnapshot(measurementHistory || []),
-    [measurementHistory]
-  );
-
-  const previousMeasurementSnapshot = useMemo(() => {
-    const sorted = sortMeasurementSnapshots(measurementHistory || []);
-    return sorted.length > 1 ? sorted[sorted.length - 2] : null;
-  }, [measurementHistory]);
-
-  const morphologyProgressCards = useMemo(() => {
-    if (!latestMeasurementSnapshot) return [];
-    return [
-      {
-        label: "Shoulder:waist",
-        value:
-          latestMeasurementSnapshot.shoulders_in != null && latestMeasurementSnapshot.waist_in
-            ? (latestMeasurementSnapshot.shoulders_in / latestMeasurementSnapshot.waist_in).toFixed(2)
-            : "—",
-        detail: "Higher usually suggests a stronger V-taper.",
-      },
-      {
-        label: "Chest:waist",
-        value:
-          latestMeasurementSnapshot.chest_in != null && latestMeasurementSnapshot.waist_in
-            ? (latestMeasurementSnapshot.chest_in / latestMeasurementSnapshot.waist_in).toFixed(2)
-            : "—",
-        detail:
-          previousMeasurementSnapshot &&
-          latestMeasurementSnapshot.chest_in != null &&
-          previousMeasurementSnapshot.chest_in != null
-            ? `Chest ${formatMeasurementDelta(latestMeasurementSnapshot.chest_in - previousMeasurementSnapshot.chest_in)}`
-            : "Compares upper-torso size against waist.",
-      },
-      {
-        label: "Waist change",
-        value:
-          previousMeasurementSnapshot &&
-          latestMeasurementSnapshot.waist_in != null &&
-          previousMeasurementSnapshot.waist_in != null
-            ? formatMeasurementDelta(latestMeasurementSnapshot.waist_in - previousMeasurementSnapshot.waist_in)
-            : "—",
-        detail:
-          latestMeasurementSnapshot.measured_at
-            ? `Latest: ${latestMeasurementSnapshot.measured_at}`
-            : "Save measurements to start tracking.",
-      },
-    ];
-  }, [latestMeasurementSnapshot, previousMeasurementSnapshot]);
-
-  const occamExerciseOptions = useMemo(() => {
-    const set = new Set();
-    for (const w of Object.values(OCCAM_WORKOUTS)) {
-      for (const ex of w.exercises || []) {
-        set.add(ex.logName);
-      }
-    }
-    return [...set];
-  }, []);
-
-  if (loading) {
+  if (!user) {
     return (
       <DashboardLayout>
-        <p style={{ fontSize: 14, color: "var(--rs-on-surface-variant)" }}>Loading…</p>
+        <p style={{ fontSize: 14, color: "#6b7280" }}>Loading…</p>
       </DashboardLayout>
     );
   }
 
   return (
     <DashboardLayout>
-      <div style={{ position: "relative", paddingBottom: 24 }}>
-        {celebrate && (
-          <div className="rs-health-celebrate" role="status">
-            <div className="rs-health-celebrate__inner">
-              <span className="material-symbols-outlined rs-health-celebrate__icon" aria-hidden>
-                {celebrate.kind === "pr_bench" || celebrate.kind === "pr_squat"
-                  ? "star"
-                  : celebrate.kind === "full" || celebrate.kind === "protocol"
-                    ? "emoji_events"
-                    : "favorite"}
-              </span>
-              <div>
-                <div className="rs-health-celebrate__title">{celebrate.title}</div>
-                <div className="rs-health-celebrate__body">{celebrate.body}</div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <PageHeader
-          eyebrow="Minimal dose, maximum signal"
-          title="Occam Workout"
-          subtitle={
-            <>
-              Tim Ferriss’s Occam’s Protocol — about{" "}
-              <strong style={{ color: "var(--rs-on-surface)" }}>two brief heavy sessions</strong> per week,
-              5/5 tempo, one top set. Pair with protein and sleep. Bench goal:{" "}
-              <strong>1× bodyweight</strong>. Squat anchor: <strong>2× bodyweight</strong> equivalent.
-            </>
-          }
-        />
-
-        {error && (
-          <p style={{ color: "var(--rs-error)", fontSize: 13, marginBottom: 12 }}>{error}</p>
-        )}
-
-        <OccamNotifySettings />
-
-        <div className="rs-health-dashboard">
-          <div className="rs-health-dashboard__grid">
-            <div className="rs-health-dashboard__main">
-              <OccamMonthCalendar
-                year={calYear}
-                monthIndex={calMonth}
-                onPrevMonth={() => {
-                  setCalMonth((prev) => {
-                    if (prev === 0) {
-                      setCalYear((y) => y - 1);
-                      return 11;
-                    }
-                    return prev - 1;
-                  });
-                }}
-                onNextMonth={() => {
-                  setCalMonth((prev) => {
-                    if (prev === 11) {
-                      setCalYear((y) => y + 1);
-                      return 0;
-                    }
-                    return prev + 1;
-                  });
-                }}
-                todayStr={dateToday}
-                setsByDate={setsByDate}
-                nextEligibleDateStr={nextEligibleDateStr}
-              />
-
-              <section className="rs-section-card rs-health-hero rs-occam-engine">
-                <div className="rs-occam-engine__head">
-                  <div>
-                    <p className="rs-page-eyebrow" style={{ marginBottom: 6 }}>
-                      Occam&apos;s protocol engine
-                    </p>
-                    <h2 className="rs-section-card__title" style={{ fontSize: "1.2rem", marginBottom: 4 }}>
-                      Hypertrophy through precision &amp; forced recovery
-                    </h2>
-                    <p className="rs-section-card__subtitle" style={{ marginBottom: 0 }}>
-                      Today · {dateToday}
-                    </p>
-                  </div>
-                  <span className="rs-occam-cadence-pill">5/5 cadence mandate</span>
-                </div>
-
-                <div className="rs-occam-tabs" role="tablist" aria-label="Occam workout templates">
-                  {["Occam A", "Occam B"].map((key) => {
-                    const active = workoutTab === key;
-                    const short = key === "Occam A" ? "A" : "B";
-                    const sub = key === "Occam A" ? "Row & press" : "Bench & squat";
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        role="tab"
-                        aria-selected={active}
-                        className={`rs-occam-tab${active ? " rs-occam-tab--active" : ""}`}
-                        onClick={() => setWorkoutTab(key)}
-                      >
-                        <span className="rs-occam-tab__title">Workout {short}</span>
-                        <span className="rs-occam-tab__sub">{sub}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <p className="rs-occam-session-status">
-                  {scheduleState.mode === "recovery" ? (
-                    <>
-                      <strong>Recovery window</strong> — next heavy session:{" "}
-                      <strong>{scheduleState.nextWorkoutAfterRecovery}</strong>
-                      {scheduleState.recoveryEndsAt && (
-                        <>
-                          {" "}
-                          · eligible from{" "}
-                          <strong>
-                            {scheduleState.recoveryEndsAt.toLocaleString(undefined, {
-                              weekday: "short",
-                              month: "short",
-                              day: "numeric",
-                              hour: "numeric",
-                              minute: "2-digit",
-                            })}
-                          </strong>
-                        </>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <strong>Current focus:</strong> {scheduleState.dueWorkout} — complete when ready; missed days
-                      keep the same assignment until you log it.
-                    </>
-                  )}
-                </p>
-
-                <p style={{ fontSize: 13, color: "var(--rs-on-surface-variant)", margin: "0 0 16px" }}>
-                  <strong>{OCCAM_CADENCE_SHORT}</strong>. {OCCAM_PROTOCOL_BLURB}
-                </p>
-
-                {(OCCAM_WORKOUTS[workoutTab]?.exercises || []).map((ex) => {
-                  const last = getLastTopSetForOccamExercise(setsWithSession, ex);
-                  const sugg = last?.weight != null && last?.reps != null
-                    ? suggestOccamWeight(last.weight, last.reps, ex.targetReps)
-                    : null;
-                  const tipClass =
-                    ex.tipVariant === "cadence"
-                      ? "rs-occam-ex-tip--cadence"
-                      : ex.tipVariant === "volume"
-                        ? "rs-occam-ex-tip--volume"
-                        : "rs-occam-ex-tip--range";
-                  const showDue =
-                    workoutTab === scheduleState.dueWorkout && scheduleState.mode === "workout";
-                  return (
-                    <article
-                      key={ex.key}
-                      className={`rs-occam-ex-card${showDue ? " rs-occam-ex-card--due" : ""}`}
-                    >
-                      <div className="rs-occam-ex-card__top">
-                        <div>
-                          <h3 className="rs-occam-ex-card__name">{ex.name}</h3>
-                          {ex.focus && (
-                            <p className="rs-occam-ex-card__focus">{ex.focus}</p>
-                          )}
-                        </div>
-                        {showDue && <span className="rs-occam-ex-card__badge">Due now</span>}
-                      </div>
-                      <p className="rs-occam-ex-card__last">
-                        {last
-                          ? `Last session: ${last.weight} lb × ${last.reps ?? "—"} · ${last.session_date}`
-                          : "No prior log for this lift — start conservative after warm-ups."}
-                      </p>
-                      {sugg?.text && (
-                        <p className="rs-occam-ex-card__suggest">
-                          <span className="material-symbols-outlined" aria-hidden style={{ fontSize: 18 }}>
-                            trending_up
-                          </span>
-                          {sugg.text}
-                        </p>
-                      )}
-                      {ex.protocolTip && (
-                        <div className={`rs-occam-ex-tip ${tipClass}`}>{ex.protocolTip}</div>
-                      )}
-                      <p className="rs-occam-ex-card__meta">
-                        Target <strong>{ex.targetReps}</strong> · {ex.detail}
-                      </p>
-                    </article>
-                  );
-                })}
-
-                {scheduleState.mode === "recovery" && (
-                  <p className="rs-section-card__subtitle" style={{ marginTop: 14, marginBottom: 0 }}>
-                    Between heavy sessions: walk, easy mobility, sleep, protein — protect the{" "}
-                    {MIN_RECOVERY_HOURS}–{IDEAL_RECOVERY_HOURS}h recovery runway before the next load.
-                  </p>
-                )}
-
-                <div className="rs-occam-engine__actions">
-                  <button type="button" className="rs-btn-primary" onClick={ensureTodaysSession}>
-                    Log today&apos;s lifts
-                  </button>
-                  <Link
-                    href="/today"
-                    className="rs-btn-ghost"
-                    style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}
-                  >
-                    Check off on Today →
-                  </Link>
-                </div>
-              </section>
-            </div>
-
-            <aside className="rs-health-dashboard__aside">
-              <div className="rs-section-card rs-occam-aside-card">
-                <p className="rs-page-eyebrow" style={{ marginBottom: 8 }}>
-                  Recovery intelligence
-                </p>
-                <h3 className="rs-occam-aside-card__title">Next scheduled session</h3>
-                {scheduleState.mode === "recovery" && scheduleState.recoveryEndsAt ? (
-                  <p className="rs-occam-aside-card__body">
-                    <strong>{scheduleState.nextWorkoutAfterRecovery}</strong> unlocks after{" "}
-                    {MIN_RECOVERY_HOURS}h minimum recovery
-                    <span style={{ display: "block", marginTop: 8, fontSize: 13, opacity: 0.9 }}>
-                      Eligible:{" "}
-                      {scheduleState.recoveryEndsAt.toLocaleString(undefined, {
-                        weekday: "long",
-                        month: "short",
-                        day: "numeric",
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                  </p>
-                ) : (
-                  <p className="rs-occam-aside-card__body">
-                    <strong>{scheduleState.dueWorkout}</strong> is ready when you are. Spacing to the next
-                    session starts after you log a complete Occam workout.
-                  </p>
-                )}
-              </div>
-
-              <div className="rs-section-card rs-occam-aside-card">
-                <p className="rs-page-eyebrow" style={{ marginBottom: 10 }}>
-                  Path to peak performance
-                </p>
-                <div className="rs-occam-rings-row">
-                  <OccamGoalRing
-                    pct={pctBenchGoal}
-                    title="1× BW bench"
-                    sub={
-                      latestBodyWeightLb != null && bestBenchLb != null
-                        ? `${Math.round(bestBenchLb)} / ${Math.round(latestBodyWeightLb)} lb`
-                        : "Log bench + weight"
-                    }
-                    detail={pctBenchGoal != null ? `${pctBenchGoal}% of goal` : null}
-                  />
-                  <OccamGoalRing
-                    pct={pctSquatGoal}
-                    title="2× BW squat"
-                    sub={
-                      latestBodyWeightLb != null && bestSquatLb != null
-                        ? `${Math.round(bestSquatLb)} / ${Math.round(2 * latestBodyWeightLb)} lb`
-                        : "Log squat"
-                    }
-                    detail={pctSquatGoal != null ? `${pctSquatGoal}% of goal` : null}
-                  />
-                </div>
-                <p className="rs-occam-bw-inline">
-                  Body weight:{" "}
-                  <strong>
-                    {latestBodyWeightLb != null ? `${Number(latestBodyWeightLb).toFixed(1)} lb` : "—"}
-                  </strong>
-                </p>
-              </div>
-
-              {(pctBenchGoal >= 100 || pctSquatGoal >= 100) && (
-                <div className="rs-insight-panel rs-occam-aside-card">
-                  <p className="rs-insight-panel__title">Goal achieved</p>
-                  <p className="rs-insight-panel__body" style={{ margin: 0 }}>
-                    {pctBenchGoal >= 100 && "You’ve hit the 1× bodyweight bench benchmark. "}
-                    {pctSquatGoal >= 100 && "You’ve hit the 2× bodyweight leg strength benchmark. "}
-                    Maintain with Occam-style minimum effective dose, or set new targets in your training journal.
-                  </p>
-                </div>
-              )}
-
-              <div className="rs-section-card rs-occam-aside-card">
-                <div className="rs-occam-morph-head">
-                  <h3 className="rs-occam-aside-card__title" style={{ marginBottom: 0 }}>
-                    Morphology tracker
-                  </h3>
-                  <span className="rs-page-eyebrow" style={{ margin: 0 }}>
-                    CNS &amp; recomposition
-                  </span>
-                </div>
-                <div className="rs-occam-morph-grid">
-                  {MEASURE_FIELDS.map(([key, label]) => (
-                    <label key={key} className="rs-occam-morph-field">
-                      <span>{label}</span>
-                      <input
-                        type="number"
-                        step="0.1"
-                        className="rs-input"
-                        value={measurements[key]}
-                        onChange={(e) => setMeasurements((m) => ({ ...m, [key]: e.target.value }))}
-                      />
-                    </label>
-                  ))}
-                </div>
-                <div className="rs-toolbar" style={{ marginTop: 12, flexWrap: "wrap" }}>
-                  <input
-                    type="date"
-                    value={measureDate}
-                    onChange={(e) => setMeasureDate(e.target.value)}
-                    className="rs-input"
-                    style={{ width: "auto" }}
-                  />
-                  <button
-                    type="button"
-                    className="rs-btn-primary"
-                    onClick={handleSaveMeasurements}
-                    disabled={savingMeasures}
-                  >
-                    {savingMeasures ? "Saving…" : "Update measurements"}
-                  </button>
-                </div>
-                {latestMeasurementSnapshot && (
-                  <div
-                    style={{
-                      marginTop: 14,
-                      display: "grid",
-                      gap: 10,
-                      gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr))",
-                    }}
-                  >
-                    {morphologyProgressCards.map((card) => (
-                      <div
-                        key={card.label}
-                        style={{
-                          padding: "12px 14px",
-                          borderRadius: 14,
-                          border: "1px solid rgba(212, 175, 55, 0.18)",
-                          background: "rgba(255,255,255,0.55)",
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontSize: 11,
-                            textTransform: "uppercase",
-                            letterSpacing: "0.08em",
-                            color: "var(--rs-on-surface-variant)",
-                          }}
-                        >
-                          {card.label}
-                        </div>
-                        <div
-                          style={{
-                            marginTop: 4,
-                            fontSize: "1.1rem",
-                            fontWeight: 700,
-                            color: "var(--rs-on-surface)",
-                          }}
-                        >
-                          {card.value}
-                        </div>
-                        <div
-                          style={{
-                            marginTop: 4,
-                            fontSize: 12,
-                            color: "var(--rs-on-surface-variant)",
-                            lineHeight: 1.4,
-                          }}
-                        >
-                          {card.detail}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {morphologyChartData.length > 0 && (
-                  <div style={{ height: 240, marginTop: 16 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={morphologyChartData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(186, 177, 159, 0.25)" />
-                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#655e4f" }} />
-                        <YAxis domain={["auto", "auto"]} tick={{ fontSize: 11, fill: "#655e4f" }} />
-                        <Tooltip />
-                        <Legend />
-                        {MEASURE_FIELDS.map(([key, label], i) => (
-                          <Line
-                            key={key}
-                            type="monotone"
-                            dataKey={key}
-                            name={`${label} (in)`}
-                            stroke={CHART_COLORS[i % CHART_COLORS.length]}
-                            strokeWidth={2}
-                            dot={{ r: 2 }}
-                            connectNulls
-                          />
-                        ))}
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-              </div>
-
-              <div className="rs-section-card rs-occam-aside-card rs-occam-golden">
-                <span className="material-symbols-outlined rs-occam-golden__icon" aria-hidden>
-                  spa
-                </span>
-                <div>
-                  <p className="rs-occam-aside-card__title" style={{ marginBottom: 4 }}>
-                    Aesthetic symmetry
-                  </p>
-                  <p className="rs-occam-golden__ratio">1.618</p>
-                  <p className="rs-occam-aside-card__body" style={{ margin: 0, fontSize: 12 }}>
-                    A calm nod to proportion — your ratios are defined by consistent training and sleep, not a
-                    single number.
-                  </p>
-                </div>
-              </div>
-
-              <div className="rs-section-card rs-occam-aside-card rs-occam-recovery-vector">
-                <div className="rs-occam-recovery-vector__head">
-                  <span className="material-symbols-outlined" aria-hidden>
-                    bedtime
-                  </span>
-                  <h3 className="rs-occam-aside-card__title" style={{ marginBottom: 0 }}>
-                    Recovery vector
-                  </h3>
-                </div>
-                <div className="rs-occam-recovery-bar">
-                  <div
-                    className="rs-occam-recovery-bar__fill"
-                    style={{ width: `${recoveryBarPct}%` }}
-                  />
-                </div>
-                <p className="rs-occam-aside-card__body" style={{ margin: "10px 0 0", fontSize: 12 }}>
-                  {scheduleState.mode === "recovery"
-                    ? "Protein synthesis still climbing — protect sleep and easy movement until your next heavy window opens."
-                    : "System clear for focused loading — warm up thoroughly, then one honest set per lift."}
-                </p>
-              </div>
-            </aside>
-          </div>
-        </div>
-
-        <section className="rs-section-card">
-          <h2 className="rs-section-card__title">Body weight</h2>
-          <p className="rs-section-card__subtitle" style={{ marginBottom: 12 }}>
-            Weigh-in drives your bench/squat goal bars (1× and 2× multipliers).
+      <Head>
+        <title>Body &amp; Training · Rise &amp; Shine</title>
+      </Head>
+      <div className="ps-page">
+        <div className="ps-view">
+          <div className="ps-eyebrow">Protocol · Occam + sprints + rower</div>
+          <h1 className="ps-title">Body &amp; Training</h1>
+          <p className="ps-sub">
+            Occam minimal effective dose, O&apos;Mara sprints, water rower
+            intervals. Cadence: 5s up / 5s down, 1 working set to failure (7+
+            reps target).
           </p>
-          <div className="rs-toolbar" style={{ marginBottom: 12 }}>
+
+          {error && <div className="today-error">{error}</div>}
+
+          <div className="fit-week">
+            {weekPlan.map((w, i) => (
+              <div
+                key={i}
+                className={
+                  "fit-week-day" +
+                  (w.today ? " today" : "") +
+                  (w.done ? " done" : "")
+                }
+              >
+                <div className="fit-week-dow">{w.day}</div>
+                <div className="fit-week-date">{w.date}</div>
+                <div className="fit-week-block" style={{ background: w.color }}>
+                  <div className="fit-week-label">{w.label}</div>
+                  <div className="fit-week-sub">{w.sub}</div>
+                </div>
+                {w.done && <div className="fit-week-done">✓</div>}
+              </div>
+            ))}
+          </div>
+
+          {nextSession && (
+            <div className="fit-next">
+              <div className="fit-next-cap">
+                Next session · today {nextSession.date}
+              </div>
+              <div className="fit-next-title">
+                {nextSession.label} · {nextSession.sub}
+              </div>
+              <div className="fit-next-note">
+                5s up / 5s down · 1×7+ on the top set · 48h minimum recovery
+                before the next heavy day.
+              </div>
+            </div>
+          )}
+
+          <div className="ps-section-title">Strength · Occam lifts</div>
+          <div className="ps-section-sub">
+            Current top-set weight and session history from your lifting logs.
+          </div>
+          <div className="fit-lifts">
+            {loading && <div className="fit-empty">Loading…</div>}
+            {!loading &&
+              liftProgress.map((l) => (
+                <div key={l.id} className="fit-lift-card">
+                  <div className="fit-lift-head">
+                    <div className="fit-lift-tag" style={{ background: l.color }}>
+                      {l.workout}
+                    </div>
+                    <div className="fit-lift-label">{l.label}</div>
+                  </div>
+                  <div className="fit-lift-num">
+                    {l.currentWeight ? (
+                      <>
+                        {l.currentWeight}
+                        <span className="fit-lift-unit">
+                          lb × {l.currentReps || "—"}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="fit-lift-empty">No sets yet</span>
+                    )}
+                  </div>
+                  <Sparkline points={l.series} color={l.color} />
+                  <div className="fit-lift-meta">
+                    {l.sessionCount} session
+                    {l.sessionCount === 1 ? "" : "s"}
+                  </div>
+                </div>
+              ))}
+          </div>
+
+          <form className="fit-quick" onSubmit={handleQuickLog}>
+            <div className="fit-quick-label">Log a top set</div>
+            <select
+              value={quickLift}
+              onChange={(e) => setQuickLift(e.target.value)}
+            >
+              {OCCAM_LIFTS.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.label}
+                </option>
+              ))}
+            </select>
             <input
-              type="date"
-              value={weightDate}
-              onChange={(e) => setWeightDate(e.target.value)}
-              className="rs-input"
-              style={{ width: "auto" }}
+              type="number"
+              placeholder="Weight (lb)"
+              value={quickWeight}
+              onChange={(e) => setQuickWeight(e.target.value)}
+              step="5"
             />
             <input
               type="number"
-              step="0.1"
-              placeholder="lb"
-              value={weightLb}
-              onChange={(e) => setWeightLb(e.target.value)}
-              className="rs-input"
-              style={{ width: 100 }}
+              placeholder="Reps"
+              value={quickReps}
+              onChange={(e) => setQuickReps(e.target.value)}
             />
-            <button type="button" className="rs-btn-primary" onClick={handleAddWeight} disabled={!weightLb.trim()}>
-              Log weight
+            <button
+              className="ps-btn ps-btn--primary"
+              type="submit"
+              disabled={!quickWeight || !quickReps || logging}
+            >
+              {logging ? "Logging…" : "Log set"}
             </button>
-          </div>
-          {weightChartData.length > 0 && (
-            <div style={{ height: 220, marginTop: 8 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={weightChartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(186, 177, 159, 0.25)" />
-                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#655e4f" }} />
-                  <YAxis domain={["auto", "auto"]} tick={{ fontSize: 11, fill: "#655e4f" }} />
-                  <Tooltip />
-                  <Line
-                    type="monotone"
-                    dataKey="weight"
-                    stroke="#6b5500"
-                    strokeWidth={2}
-                    dot={{ r: 3, fill: "#d4af37" }}
-                    name="Weight (lb)"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </section>
+          </form>
 
-        {exerciseChartData.data.length > 0 && exerciseChartData.exerciseNames.length > 0 && (
-          <section className="rs-section-card">
-            <h2 className="rs-section-card__title">Strength trend</h2>
-            <p className="rs-section-card__subtitle" style={{ marginBottom: 12 }}>
-              Max weight logged per session by exercise (lb).
-            </p>
-            <div style={{ height: 280 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={exerciseChartData.data}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(186, 177, 159, 0.25)" />
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#655e4f" }} />
-                  <YAxis tick={{ fontSize: 11, fill: "#655e4f" }} />
-                  <Tooltip />
-                  <Legend />
-                  {exerciseChartData.exerciseNames.map((name, i) => (
-                    <Line
-                      key={name}
-                      type="monotone"
-                      dataKey={name}
-                      stroke={CHART_COLORS[i % CHART_COLORS.length]}
-                      strokeWidth={2}
-                      dot={{ r: 3 }}
-                      connectNulls
-                    />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </section>
-        )}
-
-        <section className="rs-section-card">
-          <h2 className="rs-section-card__title">Training sessions</h2>
-          <p className="rs-section-card__subtitle" style={{ marginBottom: 12 }}>
-            One row per gym visit. Expand to log working sets (Occam = typically one top set per lift after warm-up).
-          </p>
-          <div className="rs-toolbar" style={{ marginBottom: 14 }}>
-            <input
-              type="date"
-              value={newSessionDate}
-              onChange={(e) => setNewSessionDate(e.target.value)}
-              className="rs-input"
-              style={{ width: "auto" }}
-            />
-            <button type="button" className="rs-btn-ghost" onClick={handleCreateSession}>
-              New session
-            </button>
+          <div className="ps-section-title">Body composition</div>
+          <div className="ps-section-sub">
+            Body weight trend · log a new measurement below.
           </div>
-          {sessions.length === 0 ? (
-            <p style={{ fontSize: 14, color: "var(--rs-on-surface-variant)", margin: 0 }}>
-              No sessions yet — start with &quot;Log today&apos;s lifts&quot; above.
-            </p>
-          ) : (
-            <ul className="rs-health-session-list">
-              {sessions.map((s) => (
-                <li key={s.id} className="rs-health-session">
-                  <button
-                    type="button"
-                    className="rs-health-session__toggle"
-                    onClick={() => setExpandedSessionId((id) => (id === s.id ? null : s.id))}
-                  >
-                    <span>{s.session_date}</span>
-                    <span className="material-symbols-outlined" style={{ fontSize: 20 }}>
-                      {expandedSessionId === s.id ? "expand_less" : "expand_more"}
-                    </span>
-                  </button>
-                  {expandedSessionId === s.id && (
-                    <div className="rs-health-session__body">
-                      <p style={{ fontSize: 12, color: "var(--rs-on-surface-variant)", margin: "0 0 10px" }}>
-                        Pick an exercise (or type a custom name). Bench / incline / decline count toward the bench goal;
-                        squats count toward the 2× goal.
-                      </p>
-                      <div className="rs-health-set-form">
-                        <select
-                          value={occamExerciseOptions.includes(newSetExercise) ? newSetExercise : ""}
-                          onChange={(e) => setNewSetExercise(e.target.value || "")}
-                          className="rs-select-compact"
-                        >
-                          <option value="">Quick pick…</option>
-                          {occamExerciseOptions.map((ex) => (
-                            <option key={ex} value={ex}>
-                              {ex}
-                            </option>
-                          ))}
-                        </select>
-                        <input
-                          type="text"
-                          placeholder="Or type exercise name"
-                          value={newSetExercise}
-                          onChange={(e) => setNewSetExercise(e.target.value)}
-                          className="rs-input"
-                        />
-                        <input
-                          type="number"
-                          step="0.5"
-                          placeholder="lb"
-                          value={newSetWeight}
-                          onChange={(e) => setNewSetWeight(e.target.value)}
-                          className="rs-input"
-                          style={{ maxWidth: 90 }}
-                        />
-                        <input
-                          type="number"
-                          placeholder="reps"
-                          value={newSetReps}
-                          onChange={(e) => setNewSetReps(e.target.value)}
-                          className="rs-input"
-                          style={{ maxWidth: 90 }}
-                        />
-                        <input
-                          type="number"
-                          placeholder="set #"
-                          value={newSetNumber}
-                          onChange={(e) => setNewSetNumber(e.target.value)}
-                          className="rs-input"
-                          style={{ maxWidth: 72 }}
-                        />
-                        <button
-                          type="button"
-                          className="rs-btn-primary"
-                          onClick={() => handleAddSet(s.id)}
-                          disabled={!newSetExercise.trim()}
-                        >
-                          Add set
-                        </button>
-                      </div>
-                      <table className="rs-health-table">
-                        <thead>
-                          <tr>
-                            <th>Exercise</th>
-                            <th className="rs-health-table__num">lb</th>
-                            <th className="rs-health-table__num">Reps</th>
-                            <th className="rs-health-table__num">Set</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(setsBySession[s.id] || []).map((set) => (
-                            <tr key={set.id}>
-                              <td>{set.exercise}</td>
-                              <td className="rs-health-table__num">{set.weight != null ? set.weight : "—"}</td>
-                              <td className="rs-health-table__num">{set.reps ?? "—"}</td>
-                              <td className="rs-health-table__num">{set.set_number ?? "—"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+          <div className="fit-bw">
+            <div className="fit-bw-now">
+              <div className="fit-bw-big">
+                {latestWeight ? (
+                  <>
+                    {latestWeight.w.toFixed(1)}
+                    <span>lb</span>
+                  </>
+                ) : (
+                  "—"
+                )}
+              </div>
+              <div className="fit-bw-cap">Latest weight</div>
+              {last7 != null && (
+                <div className="fit-bw-sub">
+                  7-day avg: {last7.toFixed(1)} lb
+                </div>
+              )}
+            </div>
+            <div className="fit-bw-chart">
+              {bodyweightSeries.length >= 2 ? (
+                <Sparkline points={bodyweightSeries} color="var(--ps-accent)" />
+              ) : (
+                <div className="fit-empty">
+                  Log a few weights to see the trend.
+                </div>
+              )}
+            </div>
+            <form className="fit-bw-form" onSubmit={handleWeightLog}>
+              <input
+                type="number"
+                step="0.1"
+                placeholder="Weight (lb)"
+                value={addWeight}
+                onChange={(e) => setAddWeight(e.target.value)}
+              />
+              <button
+                type="submit"
+                className="ps-btn ps-btn--primary"
+                disabled={!addWeight || addingWeight}
+              >
+                {addingWeight ? "…" : "Log"}
+              </button>
+            </form>
+          </div>
+
+          <div className="ps-section-title">Session log</div>
+          <div className="fit-log">
+            {sessions.length === 0 ? (
+              <div className="fit-empty">No sessions yet.</div>
+            ) : (
+              sessions.slice(0, 10).map((s) => {
+                const setsForSession = allSets.filter(
+                  (st) => st.session?.session_date === s.session_date
+                );
+                const lifts = setsForSession
+                  .map(
+                    (st) =>
+                      `${st.exercise} ${st.weight || "-"}×${st.reps || "-"}`
+                  )
+                  .join(" · ");
+                return (
+                  <div key={s.id} className="fit-log-row">
+                    <div className="fit-log-date">
+                      {new Date(s.session_date + "T00:00:00").toLocaleDateString(
+                        undefined,
+                        { weekday: "short", month: "short", day: "numeric" }
+                      )}
                     </div>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <section className="rs-section-card" style={{ marginBottom: 0 }}>
-          <h2 className="rs-section-card__title">About Occam &amp; trackers</h2>
-          <p className="rs-section-card__subtitle" style={{ margin: 0, lineHeight: 1.55 }}>
-            Popular apps (Strong, Hevy, Jefit) excel at logging sets; Occam is unusual because it prescribes{" "}
-            <strong>frequency, tempo, and one top set</strong>. This page mirrors that structure and ties it to your
-            Today checklist. Always prioritize form; consider a coach for loaded movements.
-          </p>
-        </section>
+                    <div className="fit-log-lifts">
+                      {lifts || "(no sets logged)"}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
       </div>
+
+      <style jsx global>{`
+        .fit-week {
+          display: grid;
+          grid-template-columns: repeat(7, 1fr);
+          gap: 8px;
+          margin-top: 24px;
+        }
+        .fit-week-day {
+          background: #fff;
+          border: 1px solid var(--ps-ink-08);
+          border-radius: 10px;
+          padding: 10px;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          position: relative;
+          min-height: 110px;
+        }
+        .fit-week-day.today {
+          border-color: var(--ps-accent);
+          box-shadow: 0 0 0 2px var(--ps-accent-soft);
+        }
+        .fit-week-day.done { opacity: 0.65; }
+        .fit-week-dow {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--ps-ink-60);
+        }
+        .fit-week-date {
+          font-family: var(--ps-mono);
+          font-size: 9px;
+          color: var(--ps-ink-40);
+        }
+        .fit-week-block {
+          border-radius: 6px;
+          padding: 6px 8px;
+          color: #fff;
+          flex: 1;
+        }
+        .fit-week-label {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          font-weight: 600;
+        }
+        .fit-week-sub {
+          font-size: 10.5px;
+          margin-top: 2px;
+          opacity: 0.9;
+        }
+        .fit-week-done {
+          position: absolute;
+          top: 6px;
+          right: 6px;
+          width: 18px;
+          height: 18px;
+          border-radius: 50%;
+          background: var(--ps-sage);
+          color: #fff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 11px;
+          line-height: 1;
+        }
+        .fit-next {
+          background: var(--ps-ink);
+          color: var(--ps-bg);
+          border-radius: 14px;
+          padding: 20px 22px;
+          margin-top: 18px;
+        }
+        .fit-next-cap {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: rgba(250, 247, 242, 0.6);
+          margin-bottom: 6px;
+        }
+        .fit-next-title {
+          font-family: var(--ps-serif);
+          font-size: 22px;
+          letter-spacing: -0.01em;
+          margin-bottom: 6px;
+        }
+        .fit-next-note {
+          font-size: 13px;
+          color: rgba(250, 247, 242, 0.75);
+          line-height: 1.5;
+        }
+        .fit-lifts {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 12px;
+          margin-top: 12px;
+        }
+        .fit-lift-card {
+          background: #fff;
+          border: 1px solid var(--ps-ink-08);
+          border-radius: 12px;
+          padding: 14px;
+        }
+        .fit-lift-head {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 8px;
+        }
+        .fit-lift-tag {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          font-weight: 700;
+          color: #fff;
+          width: 20px;
+          height: 20px;
+          border-radius: 4px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .fit-lift-label { font-size: 13px; color: var(--ps-ink-70); }
+        .fit-lift-num {
+          font-family: var(--ps-serif);
+          font-size: 28px;
+          letter-spacing: -0.02em;
+          line-height: 1;
+          color: var(--ps-ink);
+          margin-bottom: 6px;
+        }
+        .fit-lift-unit {
+          font-size: 12px;
+          color: var(--ps-ink-50);
+          margin-left: 6px;
+        }
+        .fit-lift-empty {
+          font-size: 14px;
+          color: var(--ps-ink-40);
+          font-style: italic;
+        }
+        .fit-lift-meta {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          color: var(--ps-ink-50);
+          letter-spacing: 0.04em;
+          margin-top: 4px;
+        }
+        .fit-spark {
+          margin-top: 4px;
+          display: block;
+        }
+        .fit-quick {
+          margin-top: 14px;
+          padding: 14px;
+          background: #fff;
+          border: 1px solid var(--ps-ink-10);
+          border-radius: 12px;
+          display: grid;
+          grid-template-columns: auto 1fr auto auto auto;
+          gap: 10px;
+          align-items: center;
+        }
+        .fit-quick-label {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+        }
+        .fit-quick select,
+        .fit-quick input {
+          appearance: none;
+          border: 1px solid var(--ps-ink-10);
+          background: var(--ps-paper);
+          padding: 7px 10px;
+          border-radius: 8px;
+          font-family: inherit;
+          font-size: 13px;
+          color: var(--ps-ink);
+        }
+        .fit-bw {
+          display: grid;
+          grid-template-columns: 180px 1fr auto;
+          gap: 16px;
+          margin-top: 12px;
+          padding: 14px 16px;
+          background: #fff;
+          border: 1px solid var(--ps-ink-10);
+          border-radius: 12px;
+          align-items: center;
+        }
+        .fit-bw-big {
+          font-family: var(--ps-serif);
+          font-size: 40px;
+          letter-spacing: -0.02em;
+          line-height: 1;
+          color: var(--ps-ink);
+        }
+        .fit-bw-big span {
+          font-size: 16px;
+          color: var(--ps-ink-50);
+          margin-left: 4px;
+        }
+        .fit-bw-cap {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+          margin-top: 2px;
+        }
+        .fit-bw-sub {
+          font-size: 12px;
+          color: var(--ps-ink-70);
+          margin-top: 6px;
+        }
+        .fit-bw-chart {
+          display: flex;
+          justify-content: flex-end;
+          overflow: hidden;
+        }
+        .fit-bw-chart svg {
+          width: 100%;
+          height: 50px;
+        }
+        .fit-bw-form {
+          display: flex;
+          gap: 8px;
+        }
+        .fit-bw-form input {
+          width: 110px;
+          padding: 7px 10px;
+          border-radius: 8px;
+          border: 1px solid var(--ps-ink-10);
+          background: var(--ps-paper);
+          font-family: inherit;
+          font-size: 13px;
+        }
+        .fit-log {
+          margin-top: 12px;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        .fit-log-row {
+          display: grid;
+          grid-template-columns: 140px 1fr;
+          gap: 12px;
+          padding: 10px 14px;
+          background: #fff;
+          border: 1px solid var(--ps-ink-08);
+          border-radius: 8px;
+          font-size: 12.5px;
+        }
+        .fit-log-date {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: var(--ps-ink-60);
+        }
+        .fit-log-lifts {
+          font-family: var(--ps-mono);
+          font-size: 11.5px;
+          color: var(--ps-ink-70);
+          line-height: 1.4;
+        }
+        .fit-empty {
+          font-size: 13px;
+          color: var(--ps-ink-60);
+          font-style: italic;
+          padding: 14px 0;
+        }
+        @media (max-width: 900px) {
+          .fit-week { grid-template-columns: repeat(7, 90px); overflow-x: auto; }
+          .fit-lifts { grid-template-columns: 1fr 1fr; }
+          .fit-bw { grid-template-columns: 1fr; }
+          .fit-quick { grid-template-columns: 1fr 1fr; }
+        }
+      `}</style>
     </DashboardLayout>
   );
 }
