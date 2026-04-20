@@ -11,6 +11,17 @@ const UPGRADE_FRAMEWORKS = [
   { id: "pre-mortem", label: "Pre-mortem" },
 ];
 
+// Six needs — UI label + storage key (the canonical store uses
+// `love_connection` for Connection to stay compatible with onboarding).
+const NEEDS_META = [
+  { key: "certainty", label: "Certainty", example: "Daily planning block + fixed AM routine", risk: "Over-planning to avoid hard conversations" },
+  { key: "variety", label: "Variety", example: "Two novelty blocks per week", risk: "Context-switching when work feels boring" },
+  { key: "significance", label: "Significance", example: "Ship one visible win every Friday", risk: "Chasing recognition over meaningful progress" },
+  { key: "love_connection", label: "Connection", example: "No-phone dinner + weekly friend check-in", risk: "Isolating when stressed" },
+  { key: "growth", label: "Growth", example: "One book, one workout program, one new skill", risk: "Learning without shipping" },
+  { key: "contribution", label: "Contribution", example: "One meaningful contribution weekly", risk: "Over-giving until I'm empty" },
+];
+
 const MODES = [
   { id: "immerse", label: "Immerse", sub: "Feel it", icon: "◐" },
   { id: "compose", label: "Compose", sub: "Build the board", icon: "▦" },
@@ -57,6 +68,12 @@ export default function VisionPage() {
   const [upgrades, setUpgrades] = useState(null);
   const [upgradeLoading, setUpgradeLoading] = useState(false);
   const [upgradeError, setUpgradeError] = useState("");
+  const [needsStrategies, setNeedsStrategies] = useState(() =>
+    Object.fromEntries(NEEDS_META.map((n) => [n.key, ""]))
+  );
+  const [needsRisks, setNeedsRisks] = useState(() =>
+    Object.fromEntries(NEEDS_META.map((n) => [n.key, ""]))
+  );
   const saveTimer = useRef(null);
 
   useEffect(() => {
@@ -95,6 +112,18 @@ export default function VisionPage() {
       setPhotoUrl(p.photo_url || "");
       setBoardUrl(p.vision_board_image_url || "");
       setFieldImages(p.vision_field_images || {});
+      const storedStrats = p.human_needs_strategies || {};
+      const storedRisks = p.needs_risk_patterns || {};
+      setNeedsStrategies(
+        Object.fromEntries(
+          NEEDS_META.map((n) => [n.key, storedStrats[n.key] || ""])
+        )
+      );
+      setNeedsRisks(
+        Object.fromEntries(
+          NEEDS_META.map((n) => [n.key, storedRisks[n.key] || ""])
+        )
+      );
     })();
     return () => {
       cancelled = true;
@@ -119,6 +148,8 @@ export default function VisionPage() {
       photo_url: photoUrl || undefined,
       vision_board_image_url: boardUrl || undefined,
       vision_field_images: fieldImages,
+      human_needs_strategies: { ...needsStrategies },
+      needs_risk_patterns: { ...needsRisks },
     };
   }, [
     profile,
@@ -131,6 +162,8 @@ export default function VisionPage() {
     photoUrl,
     boardUrl,
     fieldImages,
+    needsStrategies,
+    needsRisks,
   ]);
 
   useEffect(() => {
@@ -161,6 +194,8 @@ export default function VisionPage() {
     photoUrl,
     boardUrl,
     fieldImages,
+    needsStrategies,
+    needsRisks,
   ]);
 
   const outcomeList = useMemo(
@@ -560,6 +595,44 @@ export default function VisionPage() {
                   value={leverage}
                   onChange={(e) => setLeverage(e.target.value)}
                 />
+              </div>
+
+              <div className="vis-field vis-needs-block">
+                <label className="vis-field-label">Six human needs</label>
+                <div className="vis-field-sub">
+                  For each need: the strategy that fills it well, plus the
+                  pattern that trips you up. Rarely edited; the Weekly Review
+                  rescores these.
+                </div>
+                <div className="vis-needs-grid">
+                  {NEEDS_META.map((n) => (
+                    <div key={n.key} className="vis-need-card">
+                      <div className="vis-need-label">{n.label}</div>
+                      <textarea
+                        className="vis-input vis-need-input"
+                        placeholder={`Strategy — e.g. "${n.example}"`}
+                        value={needsStrategies[n.key] || ""}
+                        onChange={(e) =>
+                          setNeedsStrategies((s) => ({
+                            ...s,
+                            [n.key]: e.target.value,
+                          }))
+                        }
+                      />
+                      <textarea
+                        className="vis-input vis-need-input vis-need-risk"
+                        placeholder={`Risk — e.g. "${n.risk}"`}
+                        value={needsRisks[n.key] || ""}
+                        onChange={(e) =>
+                          setNeedsRisks((r) => ({
+                            ...r,
+                            [n.key]: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <div className="vis-field-grid">
@@ -1023,6 +1096,42 @@ export default function VisionPage() {
           line-height: 1.55;
         }
         .vis-textarea { min-height: 110px; resize: vertical; }
+        .vis-needs-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+          margin-top: 8px;
+        }
+        .vis-need-card {
+          background: var(--ps-paper);
+          border: 1px solid var(--ps-ink-08);
+          border-radius: 10px;
+          padding: 10px 12px;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        .vis-need-label {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: var(--ps-ink-60);
+        }
+        .vis-need-input {
+          min-height: 48px;
+          font-size: 12.5px;
+          padding: 8px 10px;
+        }
+        .vis-need-risk {
+          border-color: var(--ps-clay-soft) !important;
+          color: var(--ps-ink-70) !important;
+        }
+        @media (max-width: 700px) {
+          .vis-needs-grid {
+            grid-template-columns: 1fr;
+          }
+        }
 
         .vis-align { display: flex; flex-direction: column; gap: 22px; }
         .vis-align-hero {
