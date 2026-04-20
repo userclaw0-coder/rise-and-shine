@@ -7,6 +7,9 @@
 import { createClient } from "@supabase/supabase-js";
 import { getAuthenticatedUserId } from "../../../lib/api-auth";
 import { chatCompletion } from "../../../lib/ai-provider";
+import { getToolDefinitions, executeTool } from "../../../lib/jarvis-tools";
+
+const MAX_TOOL_ROUNDS = 5;
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -190,20 +193,115 @@ ${JSON.stringify(payload, null, 2)}`;
       });
     }
 
-    const result = await chatCompletion({ system, messages });
+    // Tools are only available on follow-up questions, not on initial
+    // page-load reads — keeps the first observation fast and
+    // observation-only.
+    const tools = question ? getToolDefinitions() : undefined;
 
-    const note = (result?.content || "").trim();
-    if (!note) {
+    const toolSystemAddendum = question
+      ? `
+
+You have tools available for editing the user's data: create_task,
+update_task, complete_task, create_subtasks, create_project,
+update_project, update_project_knowledge, add_project_resource,
+reorder_project_tasks, set_task_dependency, create_idea, add_daily_note,
+plus read tools (get_backlog, get_categories, get_task_details, get_profile,
+suggest_next_actions, etc.). Use them WHEN the user explicitly asks you to
+DO something (edit, create, update, complete, prioritize, label, reorder).
+
+Workflow when the user asks you to act:
+1. If you need to find a task/project/category by name, call the relevant
+   get_* tool first to look up its UUID. NEVER guess UUIDs.
+2. Make the change with create_task / update_task / complete_task / etc.
+3. Confirm in 1-2 sentences what you did, citing the title.
+
+If the user is just asking a question, answer in 2-4 sentences without
+calling tools.`
+      : "";
+
+    const finalSystem = system + toolSystemAddendum;
+
+    const toolCallSummaries = [];
+    let currentMessages = [...messages];
+    let finalContent = "";
+    let rounds = 0;
+
+    while (rounds < MAX_TOOL_ROUNDS) {
+      rounds++;
+      const result = await chatCompletion({
+        system: finalSystem,
+        messages: currentMessages,
+        tools,
+      });
+
+      const roundContent = (result?.content || "").trim();
+      const roundToolCalls = result?.toolCalls || null;
+
+      if (!roundToolCalls || roundToolCalls.length === 0) {
+        finalContent = roundContent;
+        break;
+      }
+
+      // Replay the assistant's tool-call message back into the loop
+      currentMessages.push({
+        role: "assistant",
+        content: roundContent,
+        tool_calls: roundToolCalls,
+      });
+
+      // Execute each tool, push result messages back in
+      for (const tc of roundToolCalls) {
+        let toolResult;
+        try {
+          toolResult = await executeTool(tc.name, tc.args, userId);
+          toolCallSummaries.push({
+            name: tc.name,
+            args: tc.args,
+            ok: true,
+          });
+        } catch (toolErr) {
+          toolResult = {
+            error: `Tool execution failed: ${toolErr.message || toolErr}`,
+          };
+          toolCallSummaries.push({
+            name: tc.name,
+            args: tc.args,
+            ok: false,
+            error: toolResult.error,
+          });
+        }
+        currentMessages.push({
+          role: "tool_result",
+          tool_use_id: tc.id,
+          content: JSON.stringify(toolResult),
+        });
+      }
+
+      if (result.stopReason === "end_turn") {
+        finalContent = roundContent;
+        break;
+      }
+    }
+
+    const note = (finalContent || "").trim();
+    if (!note && toolCallSummaries.length === 0) {
       return res.status(502).json({ error: "AI returned no content." });
     }
 
-    // Persist this exchange so it survives reload + cross-device.
+    // Persist user question + final assistant text to chat_messages
+    // (not the tool_call rows — they only matter within the turn).
     if (question) {
       await saveMessage(userId, scope, "user", question);
     }
-    await saveMessage(userId, scope, "assistant", note);
+    if (note) {
+      await saveMessage(userId, scope, "assistant", note);
+    }
 
-    return res.json({ ok: true, note });
+    return res.json({
+      ok: true,
+      note,
+      tool_calls: toolCallSummaries,
+    });
   } catch (err) {
     return res
       .status(err?.status || 500)

@@ -150,10 +150,6 @@ export default function PSCoach({
     async ({ question } = {}) => {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
-      const history = messages
-        .filter((m) => m.role === "user" || m.role === "assistant")
-        .slice(-6)
-        .map((m) => ({ role: m.role, content: m.content }));
       const res = await fetch("/api/coach/page-note", {
         method: "POST",
         headers: {
@@ -164,7 +160,6 @@ export default function PSCoach({
           scope,
           payload: payload || {},
           question: question || "",
-          history,
         }),
       });
       if (!res.ok) {
@@ -172,9 +167,12 @@ export default function PSCoach({
         throw new Error(body?.error || "Coach unavailable");
       }
       const data = await res.json();
-      return (data.note || "").trim();
+      return {
+        note: (data.note || "").trim(),
+        toolCalls: Array.isArray(data.tool_calls) ? data.tool_calls : [],
+      };
     },
-    [scope, payload, messages]
+    [scope, payload]
   );
 
   const fetchInitial = useCallback(async () => {
@@ -182,10 +180,8 @@ export default function PSCoach({
     setLoading(true);
     setError("");
     try {
-      const text = await postCoach({});
+      const { note: text } = await postCoach({});
       if (text) {
-        // Server already persisted this assistant message, but it
-        // doesn't return the row — append optimistically.
         const next = [
           ...messages,
           { role: "assistant", content: text, at: Date.now() },
@@ -271,11 +267,16 @@ export default function PSCoach({
     setMessages(withUser);
     cacheConvo(scope, withUser);
     try {
-      const text = await postCoach({ question: q });
-      if (text) {
+      const { note: text, toolCalls } = await postCoach({ question: q });
+      if (text || (toolCalls && toolCalls.length > 0)) {
         const withAssistant = [
           ...withUser,
-          { role: "assistant", content: text, at: Date.now() },
+          {
+            role: "assistant",
+            content: text,
+            toolCalls,
+            at: Date.now(),
+          },
         ];
         setMessages(withAssistant);
         cacheConvo(scope, withAssistant);
@@ -355,11 +356,46 @@ export default function PSCoach({
               <div className="ps-coach-loading">Coach is listening…</div>
             )}
             {messages.map((m, i) => (
-              <div
-                key={i}
-                className={"ps-bubble " + (m.role === "user" ? "user" : "coach")}
-              >
-                {m.content}
+              <div key={i} className="ps-bubble-wrap">
+                {m.toolCalls && m.toolCalls.length > 0 && (
+                  <div className="ps-tool-list">
+                    {m.toolCalls.map((tc, j) => (
+                      <div
+                        key={j}
+                        className={
+                          "ps-tool-chip" + (tc.ok === false ? " err" : "")
+                        }
+                        title={
+                          tc.error || JSON.stringify(tc.args || {}, null, 2)
+                        }
+                      >
+                        <span className="ps-tool-chip-mark">
+                          {tc.ok === false ? "⚠" : "✓"}
+                        </span>
+                        <span className="ps-tool-chip-name">{tc.name}</span>
+                        {tc.args?.title && (
+                          <span className="ps-tool-chip-arg">
+                            {String(tc.args.title).slice(0, 32)}
+                          </span>
+                        )}
+                        {!tc.args?.title && tc.args?.name && (
+                          <span className="ps-tool-chip-arg">
+                            {String(tc.args.name).slice(0, 32)}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {m.content && (
+                  <div
+                    className={
+                      "ps-bubble " + (m.role === "user" ? "user" : "coach")
+                    }
+                  >
+                    {m.content}
+                  </div>
+                )}
               </div>
             ))}
             {sending && (
@@ -540,6 +576,51 @@ export default function PSCoach({
           border-radius: 10px;
           color: var(--ps-clay);
           font-size: 12px;
+        }
+        .ps-bubble-wrap {
+          display: flex;
+          flex-direction: column;
+        }
+        .ps-tool-list {
+          margin: 4px 14px 0;
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+          align-self: flex-start;
+          max-width: 86%;
+        }
+        .ps-tool-chip {
+          background: var(--ps-sage-soft);
+          color: var(--ps-sage);
+          border: 1px solid rgba(107, 143, 113, 0.3);
+          padding: 4px 8px;
+          border-radius: 6px;
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.04em;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .ps-tool-chip.err {
+          background: var(--ps-clay-soft);
+          color: var(--ps-clay);
+          border-color: rgba(184, 92, 62, 0.28);
+        }
+        .ps-tool-chip-mark {
+          font-size: 11px;
+          font-weight: 700;
+        }
+        .ps-tool-chip-name {
+          font-weight: 600;
+        }
+        .ps-tool-chip-arg {
+          color: var(--ps-ink-60);
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
         .ps-bubble {
           padding: 10px 14px;
