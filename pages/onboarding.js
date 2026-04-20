@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import DashboardLayout from "../components/DashboardLayout";
+import Head from "next/head";
 import { useAuth } from "../hooks/useAuth";
 import {
   getUserProfile,
@@ -75,6 +75,43 @@ const STEPS = [
   "Brain dump, resources, constraints",
   "Time & energy",
   "Strategic focus",
+];
+
+// Maps the 6 production steps onto the design's 5 narrative stages.
+const STEP_TO_STAGE = [0, 1, 1, 2, 3, 4];
+const STAGES = [
+  { id: "destination", idx: "01", label: "Destination", sub: "Identity & vision" },
+  { id: "needs", idx: "02", label: "Human needs", sub: "What you need to thrive" },
+  { id: "current", idx: "03", label: "Current situation", sub: "Brain dump, resources, constraints" },
+  { id: "time", idx: "04", label: "Time & energy", sub: "When you actually work" },
+  { id: "action", idx: "05", label: "Strategic focus", sub: "First move" },
+];
+
+const STEP_EYEBROWS = [
+  "Part 01 · Destination",
+  "Part 02 · Human needs · Strategies & outcomes",
+  "Part 02 · Human needs · Assessment",
+  "Part 03 · Current situation",
+  "Part 04 · Time & energy",
+  "Part 05 · Strategic focus",
+];
+
+const STEP_TITLES = [
+  "Who are you becoming?",
+  "How do you actually thrive?",
+  "Score your six human needs.",
+  "Clear your head, name your resources.",
+  "When does the work actually happen?",
+  "Pick the focus. Name the first move.",
+];
+
+const STEP_SUBS = [
+  "Identity attributes, the life domains that matter, and 1–3 outcomes that would make the next year count.",
+  "For each of the six human needs, name a healthy strategy and a pattern that trips you up.",
+  "Rate each need on a 1–10 scale. No judgement — just where you are right now.",
+  "Dump everything that's rattling around. We'll separate tasks, projects, and ideas — plus what you have to work with and what stands in the way.",
+  "How many focused hours per week, when you're sharpest, and when you need to rest.",
+  "Pick a top 3 to focus on this quarter, and the single smallest action you could take today.",
 ];
 
 export default function OnboardingPage() {
@@ -200,9 +237,21 @@ export default function OnboardingPage() {
 
   if (isCheckingAuth || !user || loading) {
     return (
-      <DashboardLayout>
-        <p style={{ fontSize: 14, color: "#6b7280" }}>Loading…</p>
-      </DashboardLayout>
+      <div className="ob-loading">
+        <p>Loading…</p>
+        <style jsx>{`
+          .ob-loading {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #ece6da;
+            color: #655e4f;
+            font-size: 14px;
+            font-family: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+          }
+        `}</style>
+      </div>
     );
   }
 
@@ -908,183 +957,454 @@ export default function OnboardingPage() {
     );
   }
 
+  const activeStage = STEP_TO_STAGE[step];
+  const progress = ((step + 1) / STEPS.length) * 100;
+
   return (
-    <DashboardLayout>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "baseline",
-          marginBottom: 16,
-          gap: 12,
-        }}
-      >
-        <div>
-          <h1
-            style={{
-              fontSize: 22,
-              fontWeight: 600,
-              margin: 0,
-              letterSpacing: "-0.02em",
-            }}
-          >
-            Onboarding
-          </h1>
-          <p
-            style={{
-              margin: "4px 0 0",
-              fontSize: 13,
-              color: "#6b7280",
-            }}
-          >
-            6 short steps to tune Rise &amp; Shine to your life.
-          </p>
-        </div>
-      </div>
-      <section
-        style={{
-          padding: 16,
-          borderRadius: 16,
-          border: "1px solid #e5e7eb",
-          background: "#ffffff",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: 12,
-            gap: 8,
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ fontSize: 12, color: "#6b7280" }}>
-            Step {step + 1} of {STEPS.length}:{" "}
-            <strong>{STEPS[step]}</strong>
+    <>
+      <Head>
+        <title>Onboarding · Rise &amp; Shine</title>
+      </Head>
+      <div className="ob-app">
+        <aside className="ob-rail">
+          <div className="ob-brand">
+            <div className="ob-brand-mark">r</div>
+            <div>
+              <div className="ob-brand-title">Rise &amp; Shine</div>
+              <div className="ob-brand-sub">Setting up</div>
+            </div>
           </div>
-          {savedMsg && (
-            <div style={{ fontSize: 12, color: "#059669" }}>{savedMsg}</div>
-          )}
-        </div>
-        {error && (
-          <p style={{ fontSize: 13, color: "#b91c1c", marginBottom: 8 }}>
-            {error}
-          </p>
-        )}
-        {stepErrors.length > 0 && (
-          <ul style={{ margin: "0 0 10px", paddingLeft: 18, color: "#b91c1c", fontSize: 12 }}>
-            {stepErrors.slice(0, 4).map((msg, idx) => (
-              <li key={`${msg}-${idx}`}>{msg}</li>
+
+          <div className="ob-stages">
+            {STAGES.map((s, i) => (
+              <div
+                key={s.id}
+                className={
+                  "ob-stage" +
+                  (i === activeStage
+                    ? " active"
+                    : i < activeStage
+                    ? " done"
+                    : "")
+                }
+              >
+                <span className="ob-stage-idx">{s.idx}</span>
+                <div className="ob-stage-body">
+                  <div className="ob-stage-label">{s.label}</div>
+                  <div className="ob-stage-sub">{s.sub}</div>
+                </div>
+              </div>
             ))}
-            {stepErrors.length > 4 && <li>+{stepErrors.length - 4} more…</li>}
-          </ul>
-        )}
-        {renderStep()}
-        <div
-          style={{
-            marginTop: 16,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 8,
-          }}
-        >
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              type="button"
-              onClick={() => setStep((s) => Math.max(0, s - 1))}
-              disabled={step === 0}
-              style={{
-                fontSize: 13,
-                padding: "6px 12px",
-                borderRadius: 999,
-                border: "1px solid #e5e7eb",
-                background: step === 0 ? "#f9fafb" : "#ffffff",
-                color: "#4b5563",
-                cursor: step === 0 ? "default" : "pointer",
-              }}
-            >
-              Back
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (step === STEPS.length - 1) return;
-                setError("");
-                if (!validateStep(step)) return;
-                setStep((s) => Math.min(STEPS.length - 1, s + 1));
-              }}
-              disabled={step === STEPS.length - 1}
-              style={{
-                fontSize: 13,
-                padding: "6px 12px",
-                borderRadius: 999,
-                border: "1px solid #e5e7eb",
-                background:
-                  step === STEPS.length - 1 ? "#f9fafb" : "#ffffff",
-                color: "#111827",
-                cursor:
-                  step === STEPS.length - 1 ? "default" : "pointer",
-              }}
-            >
-              Next
-            </button>
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
+
+          <div className="ob-rail-foot">
             <button
               type="button"
+              className="ob-skip-link"
               onClick={handleSkipForNow}
-              style={{
-                fontSize: 13,
-                padding: "6px 10px",
-                borderRadius: 999,
-                border: "1px solid #e5e7eb",
-                background: "#ffffff",
-                color: "#4b5563",
-                cursor: "pointer",
-              }}
             >
-              Later
-            </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving}
-              style={{
-                fontSize: 13,
-                padding: "6px 14px",
-                borderRadius: 999,
-                border: "1px solid #111827",
-                background: "#111827",
-                color: "#ffffff",
-                cursor: saving ? "wait" : "pointer",
-              }}
-            >
-              {saving ? "Saving…" : "Save profile"}
-            </button>
-            <button
-              type="button"
-              onClick={handleCompleteOnboarding}
-              disabled={saving || step !== STEPS.length - 1}
-              style={{
-                fontSize: 13,
-                padding: "6px 14px",
-                borderRadius: 999,
-                border: "1px solid #059669",
-                background:
-                  step === STEPS.length - 1 ? "#059669" : "#f9fafb",
-                color: step === STEPS.length - 1 ? "#ffffff" : "#6b7280",
-                cursor:
-                  saving || step !== STEPS.length - 1 ? "default" : "pointer",
-              }}
-            >
-              Complete onboarding
+              Skip for now →
             </button>
           </div>
-        </div>
-      </section>
-    </DashboardLayout>
+        </aside>
+
+        <main className="ob-canvas">
+          <div className="ob-content">
+            <div className="ob-progress-wrap">
+              <div className="ob-progress-meta">
+                <span>
+                  Step {step + 1} of {STEPS.length}
+                </span>
+                {savedMsg && (
+                  <span className="ob-saved">{savedMsg}</span>
+                )}
+              </div>
+              <div className="ob-progress-bar">
+                <div
+                  className="ob-progress-fill"
+                  style={{ width: progress + "%" }}
+                />
+              </div>
+            </div>
+
+            <div className="ob-eyebrow">{STEP_EYEBROWS[step]}</div>
+            <h1 className="ob-title">{STEP_TITLES[step]}</h1>
+            <p className="ob-sub">{STEP_SUBS[step]}</p>
+
+            {error && <div className="ob-error">{error}</div>}
+            {stepErrors.length > 0 && (
+              <div className="ob-errors">
+                <div className="ob-errors-cap">Before you move on</div>
+                <ul>
+                  {stepErrors.slice(0, 4).map((msg, idx) => (
+                    <li key={`${msg}-${idx}`}>{msg}</li>
+                  ))}
+                  {stepErrors.length > 4 && (
+                    <li>+{stepErrors.length - 4} more…</li>
+                  )}
+                </ul>
+              </div>
+            )}
+
+            <div className="ob-step-card">{renderStep()}</div>
+
+            <div className="ob-nav">
+              <div className="ob-nav-left">
+                <button
+                  type="button"
+                  className="ob-btn"
+                  onClick={() => setStep((s) => Math.max(0, s - 1))}
+                  disabled={step === 0}
+                >
+                  ← Back
+                </button>
+                <button
+                  type="button"
+                  className="ob-btn"
+                  onClick={() => {
+                    if (step === STEPS.length - 1) return;
+                    setError("");
+                    if (!validateStep(step)) return;
+                    setStep((s) => Math.min(STEPS.length - 1, s + 1));
+                  }}
+                  disabled={step === STEPS.length - 1}
+                >
+                  Next →
+                </button>
+              </div>
+              <div className="ob-nav-right">
+                <button
+                  type="button"
+                  className="ob-btn"
+                  onClick={handleSave}
+                  disabled={saving}
+                >
+                  {saving ? "Saving…" : "Save draft"}
+                </button>
+                <button
+                  type="button"
+                  className="ob-btn ob-btn-primary"
+                  onClick={handleCompleteOnboarding}
+                  disabled={saving || step !== STEPS.length - 1}
+                >
+                  {step === STEPS.length - 1
+                    ? "Complete → Today"
+                    : "Complete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+
+      <style jsx global>{`
+        html,
+        body,
+        #__next {
+          margin: 0;
+          padding: 0;
+          min-height: 100vh;
+        }
+        body {
+          background: #ece6da;
+        }
+        .ob-app {
+          display: grid;
+          grid-template-columns: 280px 1fr;
+          min-height: 100vh;
+          background:
+            radial-gradient(1400px 800px at 15% -10%, #f5e7cf 0%, transparent 55%),
+            radial-gradient(1000px 600px at 90% 110%, #efdcc8 0%, transparent 55%),
+            #ece6da;
+          color: var(--ps-ink);
+          font-family: var(--ps-sans);
+        }
+        .ob-rail {
+          border-right: 1px solid var(--ps-ink-08);
+          background: rgba(255, 251, 243, 0.55);
+          padding: 28px 22px 20px;
+          display: flex;
+          flex-direction: column;
+          gap: 18px;
+          position: sticky;
+          top: 0;
+          max-height: 100vh;
+        }
+        .ob-brand {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-bottom: 16px;
+        }
+        .ob-brand-mark {
+          width: 28px;
+          height: 28px;
+          border-radius: 6px;
+          background: linear-gradient(135deg, var(--ps-accent), var(--ps-clay));
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #fff;
+          font-family: var(--ps-serif);
+          font-size: 15px;
+          font-style: italic;
+        }
+        .ob-brand-title {
+          font-size: 13px;
+          font-weight: 500;
+          letter-spacing: -0.01em;
+        }
+        .ob-brand-sub {
+          font-family: var(--ps-mono);
+          font-size: 9px;
+          color: var(--ps-ink-50);
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          margin-top: 2px;
+        }
+        .ob-stages {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          flex: 1;
+        }
+        .ob-stage {
+          display: grid;
+          grid-template-columns: 28px 1fr;
+          gap: 10px;
+          padding: 10px 12px;
+          border-radius: 8px;
+          align-items: start;
+          border: 1px solid transparent;
+          opacity: 0.5;
+        }
+        .ob-stage.done {
+          opacity: 0.75;
+        }
+        .ob-stage.active {
+          background: var(--ps-ink);
+          color: var(--ps-bg);
+          opacity: 1;
+        }
+        .ob-stage.active .ob-stage-idx,
+        .ob-stage.active .ob-stage-sub {
+          color: rgba(250, 247, 242, 0.6);
+        }
+        .ob-stage-idx {
+          font-family: var(--ps-mono);
+          font-size: 11px;
+          color: var(--ps-ink-40);
+          letter-spacing: 0.06em;
+          padding-top: 2px;
+        }
+        .ob-stage-label {
+          font-size: 13px;
+          font-weight: 500;
+        }
+        .ob-stage-sub {
+          font-family: var(--ps-mono);
+          font-size: 9.5px;
+          color: var(--ps-ink-50);
+          letter-spacing: 0.05em;
+          margin-top: 2px;
+          text-transform: uppercase;
+        }
+        .ob-rail-foot {
+          padding-top: 14px;
+          border-top: 1px solid var(--ps-ink-08);
+        }
+        .ob-skip-link {
+          appearance: none;
+          border: none;
+          background: transparent;
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: var(--ps-ink-60);
+          cursor: pointer;
+          padding: 0;
+        }
+        .ob-skip-link:hover {
+          color: var(--ps-accent);
+        }
+        .ob-canvas {
+          display: flex;
+          justify-content: center;
+          padding: 40px 32px 80px;
+        }
+        .ob-content {
+          width: 100%;
+          max-width: 720px;
+        }
+        .ob-progress-wrap {
+          margin-bottom: 28px;
+        }
+        .ob-progress-meta {
+          display: flex;
+          justify-content: space-between;
+          align-items: baseline;
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+          margin-bottom: 8px;
+        }
+        .ob-saved {
+          color: var(--ps-sage);
+        }
+        .ob-progress-bar {
+          height: 3px;
+          background: var(--ps-ink-08);
+          border-radius: 2px;
+          overflow: hidden;
+        }
+        .ob-progress-fill {
+          height: 100%;
+          background: var(--ps-accent);
+          transition: width 240ms ease;
+        }
+        .ob-eyebrow {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+          margin-bottom: 10px;
+        }
+        .ob-title {
+          font-family: var(--ps-serif);
+          font-size: 36px;
+          font-weight: 400;
+          letter-spacing: -0.02em;
+          line-height: 1.1;
+          margin: 0 0 12px;
+          color: var(--ps-ink);
+        }
+        .ob-sub {
+          font-size: 14px;
+          color: var(--ps-ink-60);
+          line-height: 1.55;
+          margin: 0 0 28px;
+        }
+        .ob-error {
+          background: var(--ps-clay-soft);
+          color: var(--ps-clay);
+          border: 1px solid rgba(184, 92, 62, 0.22);
+          padding: 10px 14px;
+          border-radius: 10px;
+          font-size: 13px;
+          margin-bottom: 14px;
+        }
+        .ob-errors {
+          background: var(--ps-clay-soft);
+          border: 1px solid rgba(184, 92, 62, 0.22);
+          border-radius: 10px;
+          padding: 12px 14px;
+          margin-bottom: 14px;
+        }
+        .ob-errors-cap {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: var(--ps-clay);
+          margin-bottom: 6px;
+        }
+        .ob-errors ul {
+          margin: 0;
+          padding-left: 18px;
+          color: var(--ps-ink-80);
+          font-size: 12.5px;
+          line-height: 1.55;
+        }
+        .ob-step-card {
+          background: #fff;
+          border: 1px solid var(--ps-ink-10);
+          border-radius: 14px;
+          padding: 22px 24px;
+          margin-bottom: 24px;
+        }
+        .ob-step-card label {
+          color: var(--ps-ink);
+        }
+        .ob-step-card input[type="text"],
+        .ob-step-card input[type="number"],
+        .ob-step-card textarea,
+        .ob-step-card select {
+          border-color: var(--ps-ink-10) !important;
+          font-family: inherit !important;
+          color: var(--ps-ink) !important;
+        }
+        .ob-nav {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+        .ob-nav-left,
+        .ob-nav-right {
+          display: flex;
+          gap: 8px;
+        }
+        .ob-btn {
+          appearance: none;
+          border: 1px solid var(--ps-ink-15);
+          background: #fff;
+          padding: 8px 16px;
+          border-radius: 8px;
+          font-family: var(--ps-mono);
+          font-size: 11px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: var(--ps-ink-70);
+          cursor: pointer;
+          transition: border-color 120ms, color 120ms;
+        }
+        .ob-btn:hover:not(:disabled) {
+          border-color: var(--ps-ink);
+          color: var(--ps-ink);
+        }
+        .ob-btn:disabled {
+          opacity: 0.4;
+          cursor: not-allowed;
+        }
+        .ob-btn-primary {
+          background: var(--ps-ink);
+          color: var(--ps-bg);
+          border-color: var(--ps-ink);
+        }
+        .ob-btn-primary:hover:not(:disabled) {
+          background: #000;
+          color: var(--ps-bg);
+        }
+        @media (max-width: 900px) {
+          .ob-app {
+            grid-template-columns: 1fr;
+          }
+          .ob-rail {
+            position: static;
+            max-height: none;
+          }
+          .ob-stages {
+            flex-direction: row;
+            overflow-x: auto;
+            flex: 0 0 auto;
+          }
+          .ob-stage {
+            min-width: 180px;
+          }
+          .ob-canvas {
+            padding: 24px 18px 60px;
+          }
+          .ob-title {
+            font-size: 28px;
+          }
+        }
+      `}</style>
+    </>
   );
 }
 
