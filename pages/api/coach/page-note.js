@@ -50,10 +50,47 @@ const SCOPE_PROMPTS = {
     "You are on the Notes page. One paragraph (2-3 sentences). Notice patterns across notes — a theme the user keeps re-writing, pinned notes worth surfacing, or a topic that would benefit from a pinned entry. End with a concrete nudge. Plain prose, no markdown.",
 };
 
-export default async function handler(req, res) {
-  if (req.method !== "POST")
-    return res.status(405).json({ error: "POST only" });
+async function loadHistory(userId, scope, limit = 30) {
+  const { data, error } = await supabase
+    .from("chat_messages")
+    .select("id, role, content, created_at")
+    .eq("user_id", userId)
+    .eq("scope", scope)
+    .in("role", ["user", "assistant"])
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) return [];
+  return (data || [])
+    .reverse()
+    .filter((m) => m && (m.role === "user" || m.role === "assistant"));
+}
 
+async function saveMessage(userId, scope, role, content) {
+  if (!content || !content.trim()) return null;
+  const { data, error } = await supabase
+    .from("chat_messages")
+    .insert({
+      user_id: userId,
+      role,
+      content: content.slice(0, 8000),
+      scope,
+    })
+    .select("id, role, content, created_at")
+    .single();
+  if (error) return null;
+  return data;
+}
+
+async function clearHistory(userId, scope) {
+  const { error } = await supabase
+    .from("chat_messages")
+    .delete()
+    .eq("user_id", userId)
+    .eq("scope", scope);
+  return !error;
+}
+
+export default async function handler(req, res) {
   let userId;
   try {
     userId = await getAuthenticatedUserId(req);
@@ -61,11 +98,39 @@ export default async function handler(req, res) {
     return res.status(err.status || 401).json({ error: err.message });
   }
 
+  // GET: return saved conversation for this scope
+  if (req.method === "GET") {
+    const rawScope = String(req.query?.scope || "");
+    const scope = SCOPE_ALIASES[rawScope] || rawScope;
+    if (!SCOPE_PROMPTS[scope]) {
+      return res.status(400).json({ error: `unknown scope: ${rawScope}` });
+    }
+    const messages = await loadHistory(userId, scope, 30);
+    return res.json({ ok: true, messages });
+  }
+
+  // DELETE: clear conversation for this scope
+  if (req.method === "DELETE") {
+    const rawScope = String(req.query?.scope || "");
+    const scope = SCOPE_ALIASES[rawScope] || rawScope;
+    if (!SCOPE_PROMPTS[scope]) {
+      return res.status(400).json({ error: `unknown scope: ${rawScope}` });
+    }
+    await clearHistory(userId, scope);
+    return res.json({ ok: true });
+  }
+
+  if (req.method !== "POST")
+    return res.status(405).json({ error: "GET, POST, or DELETE" });
+
   const rawScope = String(req.body?.scope || "");
   const scope = SCOPE_ALIASES[rawScope] || rawScope;
   const payload = req.body?.payload || {};
   const question = String(req.body?.question || "").trim().slice(0, 1000);
-  const history = Array.isArray(req.body?.history) ? req.body.history.slice(-8) : [];
+  // Server is the source of truth — pull recent history rather than
+  // trusting client-supplied scrollback.
+  const stored = await loadHistory(userId, scope, 12);
+  const history = stored.map((m) => ({ role: m.role, content: m.content }));
 
   if (!SCOPE_PROMPTS[scope]) {
     return res
@@ -131,6 +196,12 @@ ${JSON.stringify(payload, null, 2)}`;
     if (!note) {
       return res.status(502).json({ error: "AI returned no content." });
     }
+
+    // Persist this exchange so it survives reload + cross-device.
+    if (question) {
+      await saveMessage(userId, scope, "user", question);
+    }
+    await saveMessage(userId, scope, "assistant", note);
 
     return res.json({ ok: true, note });
   } catch (err) {

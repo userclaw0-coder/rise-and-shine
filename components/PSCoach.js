@@ -41,7 +41,7 @@ function storageKey(scope) {
   return `rs-coach-convo-${scope || "default"}`;
 }
 
-function loadConvo(scope) {
+function loadCachedConvo(scope) {
   if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(storageKey(scope));
@@ -56,13 +56,49 @@ function loadConvo(scope) {
   }
 }
 
-function saveConvo(scope, messages) {
+function cacheConvo(scope, messages) {
   if (typeof window === "undefined") return;
   try {
     const trimmed = messages.slice(-MAX_STORED_MESSAGES);
     localStorage.setItem(storageKey(scope), JSON.stringify(trimmed));
   } catch {
     // localStorage full or unavailable — silent
+  }
+}
+
+async function fetchServerConvo(scope) {
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) return null;
+    const res = await fetch(
+      `/api/coach/page-note?scope=${encodeURIComponent(scope)}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return Array.isArray(data?.messages) ? data.messages : [];
+  } catch {
+    return null;
+  }
+}
+
+async function deleteServerConvo(scope) {
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) return;
+    await fetch(
+      `/api/coach/page-note?scope=${encodeURIComponent(scope)}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+  } catch {
+    // silent
   }
 }
 
@@ -94,12 +130,15 @@ export default function PSCoach({
   onToggle,
 }) {
   const meta = ScopeMeta({ scope });
-  const [messages, setMessages] = useState(() => loadConvo(scope));
+  const [messages, setMessages] = useState(() => loadCachedConvo(scope));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [bootstrapped, setBootstrapped] = useState(() => loadConvo(scope).length > 0);
+  const [bootstrapped, setBootstrapped] = useState(
+    () => loadCachedConvo(scope).length > 0
+  );
+  const [hydrated, setHydrated] = useState(false);
   const bodyRef = useRef(null);
 
   const effectiveSuggestions =
@@ -145,9 +184,14 @@ export default function PSCoach({
     try {
       const text = await postCoach({});
       if (text) {
-        const next = [{ role: "assistant", content: text, at: Date.now() }];
+        // Server already persisted this assistant message, but it
+        // doesn't return the row — append optimistically.
+        const next = [
+          ...messages,
+          { role: "assistant", content: text, at: Date.now() },
+        ];
         setMessages(next);
-        saveConvo(scope, next);
+        cacheConvo(scope, next);
       }
       setBootstrapped(true);
     } catch (err) {
@@ -155,16 +199,38 @@ export default function PSCoach({
     } finally {
       setLoading(false);
     }
-  }, [scope, collapsed, postCoach]);
+  }, [scope, collapsed, postCoach, messages]);
 
-  // When scope changes (page navigation), load that scope's saved
-  // conversation. Don't reset to empty — that wipes memory on every
-  // page change.
+  // Show cached convo immediately on scope change (instant, no flash),
+  // then hydrate from the server so cross-device memory wins. Falls
+  // back to whatever cache had if the network fails.
   useEffect(() => {
-    const saved = loadConvo(scope);
-    setMessages(saved);
-    setBootstrapped(saved.length > 0);
+    let cancelled = false;
+    setHydrated(false);
+    const cached = loadCachedConvo(scope);
+    setMessages(cached);
+    setBootstrapped(cached.length > 0);
     setError("");
+
+    (async () => {
+      const fromServer = await fetchServerConvo(scope);
+      if (cancelled) return;
+      if (fromServer && fromServer.length > 0) {
+        setMessages(fromServer);
+        setBootstrapped(true);
+        cacheConvo(scope, fromServer);
+      } else if (fromServer && fromServer.length === 0 && cached.length > 0) {
+        // Server says this scope was cleared elsewhere — respect it.
+        setMessages([]);
+        setBootstrapped(false);
+        cacheConvo(scope, []);
+      }
+      setHydrated(true);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [scope]);
 
   // Auto-fetch initial coach note only after the page has data to
@@ -174,10 +240,9 @@ export default function PSCoach({
   const payloadHasContent = isPayloadMeaningful(payload);
   useEffect(() => {
     if (collapsed || !scope || bootstrapped || loading) return;
+    if (!hydrated) return; // wait until server hydration finishes
     if (!payloadReady) return;
     if (!payloadHasContent) {
-      // Wait one tick for the page's data to arrive — if it stays empty
-      // after a short delay, fire anyway so the user gets *some* greeting.
       const t = setTimeout(() => {
         if (!bootstrapped && !loading) fetchInitial();
       }, 1500);
@@ -185,7 +250,7 @@ export default function PSCoach({
     }
     fetchInitial();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collapsed, scope, bootstrapped, payloadReady, payloadHasContent]);
+  }, [collapsed, scope, bootstrapped, hydrated, payloadReady, payloadHasContent]);
 
   useEffect(() => {
     if (bodyRef.current) {
@@ -204,7 +269,7 @@ export default function PSCoach({
       { role: "user", content: q, at: Date.now() },
     ];
     setMessages(withUser);
-    saveConvo(scope, withUser);
+    cacheConvo(scope, withUser);
     try {
       const text = await postCoach({ question: q });
       if (text) {
@@ -213,7 +278,7 @@ export default function PSCoach({
           { role: "assistant", content: text, at: Date.now() },
         ];
         setMessages(withAssistant);
-        saveConvo(scope, withAssistant);
+        cacheConvo(scope, withAssistant);
       }
     } catch (err) {
       setError(err.message || "Coach unavailable.");
@@ -222,11 +287,12 @@ export default function PSCoach({
     }
   }
 
-  function clearConversation() {
+  async function clearConversation() {
     setMessages([]);
     setBootstrapped(false);
     setError("");
-    saveConvo(scope, []);
+    cacheConvo(scope, []);
+    await deleteServerConvo(scope);
   }
 
   function handleKeyDown(e) {
