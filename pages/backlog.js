@@ -1,3003 +1,864 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/router";
-import { DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors } from "@dnd-kit/core";
-import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import BacklogStrategicTaskCard from "../components/BacklogStrategicTaskCard";
+import Head from "next/head";
 import DashboardLayout from "../components/DashboardLayout";
-import Modal from "../components/Modal";
-import PageHeader from "../components/PageHeader";
 import { useAuth } from "../hooks/useAuth";
-import {
-  createCategory,
-  updateCategory,
-  deleteCategory,
-  getUserProfile,
-  upsertUserProfile,
-} from "../lib/db";
-import {
-  assignCollaborativeTask,
-  createCollaborativeTask,
-  ensureCollaborativeSubcategory,
-  loadCollaborativeBacklog,
-  loadWorkspaceOrders,
-  saveCollaborativeProjectWorkspace,
-  updateCollaborativeTask,
-  updateCollaborativeTaskStatus,
-  setCollaborativeTaskTags,
-} from "../lib/collaborationClient";
-import { isMissingPrioritizationMetadata } from "../lib/task-enrichment";
 import { supabase } from "../lib/supabaseClient";
-import {
-  HUMAN_NEED_STRATEGY_KEYS as LIFE_DOMAIN_KEYS,
-  getHumanNeedStrategyLabel,
-} from "../lib/humanNeedStrategies";
-import { computeTaskScore } from "../lib/scoring";
-import {
-  isTaskNeedingAlignment,
-  isTaskNeedingSubtasks,
-  isStaleDoingTask,
-} from "../lib/weeklyImprovementContext";
+import { updateTaskStatusWithEvent } from "../lib/db";
 
-const STATUS_FILTERS = [
-  { value: "todo_doing", label: "Todo & Doing" },
-  { value: "todo", label: "Todo only" },
-  { value: "doing", label: "Doing only" },
-  { value: "done", label: "Done only" },
-  { value: "archived", label: "Archived" },
-  { value: "all", label: "All statuses" },
+const CATEGORY_COLORS = [
+  "var(--ps-clay)",
+  "var(--ps-indigo)",
+  "var(--ps-plum)",
+  "var(--ps-accent)",
+  "var(--ps-gold)",
+  "var(--ps-sage)",
+  "var(--ps-ink)",
 ];
 
-const STANDARD_TAGS = [
-  "quick-win",
-  "high-leverage",
-  "urgent",
-  "blocked",
-  "waiting",
-];
+const PRI_META = {
+  P0: { label: "Do now", color: "var(--ps-clay)", soft: "var(--ps-clay-soft)" },
+  P1: { label: "This week", color: "var(--ps-accent)", soft: "var(--ps-accent-soft)" },
+  P2: { label: "Soon", color: "var(--ps-indigo)", soft: "var(--ps-indigo-soft)" },
+  P3: { label: "Someday", color: "var(--ps-ink-50)", soft: "var(--ps-ink-05)" },
+};
 
-const COMFORTABLE_GRID_COLUMNS =
-  "minmax(200px, 3fr) minmax(140px, 1.5fr) 86px minmax(120px, 1.1fr) 90px 130px minmax(120px, 1fr) minmax(100px, 0.9fr) minmax(100px, 1fr)";
-
-/** Sort controls shared by strategic card view (+ legacy comfortable row for nested tasks in compact mode) */
-const BACKLOG_SORT_KEYS = [
-  { key: "title", label: "Title" },
-  { key: "category", label: "Category" },
-  { key: "score", label: "Score" },
-  { key: "priority", label: "Priority" },
-  { key: "due", label: "Due" },
-  { key: "status", label: "Status" },
-  { key: "outcome", label: "Outcome" },
-  { key: "domain", label: "Domain" },
-  { key: "tags", label: "Tags" },
-];
-
-function lifeDomainLabel(key, profile) {
-  return getHumanNeedStrategyLabel(key);
+function toCode(pri) {
+  if (pri === "Critical") return "P0";
+  if (pri === "High") return "P1";
+  if (pri === "Medium") return "P2";
+  return "P3";
 }
 
-function normalize(str) {
-  return (str || "").toLowerCase();
-}
-
-function localDateKey(d) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function extractTagNames(task) {
-  if (!task || !task.tags) return [];
-  const result = [];
-  for (const t of task.tags) {
-    if (!t) continue;
-    if (typeof t === "string") {
-      result.push(t);
-    } else if (t.tag && t.tag.name) {
-      result.push(t.tag.name);
-    } else if (t.name) {
-      result.push(t.name);
-    }
-  }
-  return result;
-}
-
-function makeTagText(task) {
-  const names = extractTagNames(task);
-  return names.join(", ");
-}
-
-function SortableBacklogCard({ id, children }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id });
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-    zIndex: isDragging ? 10 : undefined,
-  };
-  return (
-    <div ref={setNodeRef} style={style} className="sortable-task-card">
-      <div {...attributes} {...listeners} className="sortable-task-card__handle" title="Drag to reorder">
-        <span className="material-symbols-outlined">drag_indicator</span>
-      </div>
-      <div className="sortable-task-card__content">
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function parseTagText(text) {
-  return (text || "")
-    .split(",")
-    .map((t) => t.trim())
-    .filter((t) => t.length > 0);
-}
-
-function formatEnrichmentPatch(patch) {
-  const parts = [];
-  if (patch?.priority) parts.push(`priority → ${patch.priority}`);
-  if (patch?.effort_hours != null) parts.push(`effort → ${patch.effort_hours}h`);
-  return parts.length > 0 ? parts.join(" · ") : "tags only";
-}
-
-function formatEnrichmentStatus(report) {
-  if (!report) return null;
-  if (report.ai_status === "ok") {
-    return `AI ok · ${report.batches || 0} batch${report.batches === 1 ? "" : "es"} of ${report.batch_size || 25}`;
-  }
-  if (typeof report.ai_status === "string" && report.ai_status.startsWith("fallback:")) {
-    return `Fallback used · ${report.ai_status.slice("fallback:".length)}`;
-  }
-  return report.ai_status || null;
+function fmtDue(d) {
+  if (!d) return null;
+  const date = new Date(d + "T00:00:00");
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const diff = Math.round((date - now) / 86400000);
+  if (diff === 0) return "today";
+  if (diff === 1) return "tomorrow";
+  if (diff === -1) return "yesterday";
+  if (diff < 0) return Math.abs(diff) + "d overdue";
+  if (diff < 7) return "in " + diff + "d";
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 export default function BacklogPage() {
-  const router = useRouter();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
   const [tasks, setTasks] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [categoryOrder, setCategoryOrder] = useState([]);
-  const [tags, setTags] = useState([]);
-  const [workspaceOrders, setWorkspaceOrders] = useState({});
-  const backlogSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
-  );
-  const [profile, setProfile] = useState(null);
+  const [view, setView] = useState("matrix");
+  const [groupBy, setGroupBy] = useState("project");
+  const [priorityFilter, setPriorityFilter] = useState([]);
+  const [projectFilter, setProjectFilter] = useState([]);
+  const [hideDone, setHideDone] = useState(true);
+  const [selectedId, setSelectedId] = useState(null);
 
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("todo_doing");
-  const [categoryFilter, setCategoryFilter] = useState("");
-  const [subcategoryFilter, setSubcategoryFilter] = useState("");
-  const [tagFilter, setTagFilter] = useState("");
-  const [quickFilter, setQuickFilter] = useState("");
-  const [newCategoryName, setNewCategoryName] = useState("");
-  const [addingCategory, setAddingCategory] = useState(false);
-
-  const [categoryEditorOpen, setCategoryEditorOpen] = useState(false);
-  const [categoryEdits, setCategoryEdits] = useState({});
-  const [savingCategories, setSavingCategories] = useState(false);
-
-  const [addTaskOpen, setAddTaskOpen] = useState(false);
-  const [modalTitle, setModalTitle] = useState("");
-  const [modalCategoryId, setModalCategoryId] = useState("");
-  const [modalSubcategoryText, setModalSubcategoryText] = useState("");
-  const [modalPriority, setModalPriority] = useState("Medium");
-  const [modalStatus, setModalStatus] = useState("todo");
-  const [modalDueDate, setModalDueDate] = useState("");
-  const [modalEffortHours, setModalEffortHours] = useState("");
-  const [modalMoveToTop, setModalMoveToTop] = useState(false);
-  const [modalTagsText, setModalTagsText] = useState("");
-  const [addingTask, setAddingTask] = useState(false);
-
-  const [enriching, setEnriching] = useState(false);
-  const [enrichReport, setEnrichReport] = useState(null);
-  const [enrichmentStartedAt, setEnrichmentStartedAt] = useState(null);
-  const [enrichmentProgressPct, setEnrichmentProgressPct] = useState(0);
-
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!user) return;
-
-    async function load() {
-      try {
-        setLoading(true);
-        setError("");
-        const [data, ordersData] = await Promise.all([
-          loadCollaborativeBacklog(true),
-          loadWorkspaceOrders().catch(() => ({ orders: {} })),
-        ]);
-        setWorkspaceOrders(ordersData.orders || {});
-        const enriched =
-          (data.tasks || []).map((t) => ({
-            ...t,
-            _tagsText: t._tagsText ?? makeTagText(t),
-            _subcategoryText: (t._subcategoryText ?? t?.subcategory?.name) || "",
-          })) || [];
-        setTasks(enriched);
-        const catData = data.categories || [];
-        setCategories(catData);
-        const ids = catData.map((c) => c.id);
-        const validId = (id) => typeof id === "string" && ids.includes(id);
-        const serverOrder = data?.profile?.preferences?.category_order_ids;
-        const validServer =
-          Array.isArray(serverOrder) && serverOrder.every(validId)
-            ? serverOrder.filter(validId)
-            : null;
-        let stored = null;
-        if (!validServer && typeof window !== "undefined") {
-          try {
-            stored = JSON.parse(window.localStorage.getItem(`rs_category_order_${user.id}`) || "null");
-          } catch {
-            stored = null;
-          }
-        }
-        const validStored =
-          Array.isArray(stored) && stored.every((id) => typeof id === "string")
-            ? stored
-            : null;
-        const orderSource = validServer || validStored;
-        const merged = [
-          ...(orderSource || []).filter((id) => ids.includes(id)),
-          ...ids.filter((id) => !(orderSource || []).includes(id)),
-        ];
-        setCategoryOrder(merged);
-        setTags(data.tags || []);
-        setProfile(data.profile || null);
-      } catch (e) {
-        setError(e.message || "Failed to load backlog.");
-      } finally {
-        setLoading(false);
-      }
+    setLoading(true);
+    setError("");
+    try {
+      const [catRes, taskRes] = await Promise.all([
+        supabase
+          .from("categories")
+          .select("id, name")
+          .eq("user_id", user.id)
+          .order("name", { ascending: true }),
+        supabase
+          .from("tasks")
+          .select(
+            "id, title, status, priority, effort_hours, due_date, category_id, subcategory_id, created_at, outcome_ids, primary_life_domain, life_domains"
+          )
+          .eq("user_id", user.id)
+          .is("archived_at", null)
+          .order("priority", { ascending: false })
+          .order("due_date", { ascending: true, nullsFirst: false })
+          .order("created_at", { ascending: true }),
+      ]);
+      if (catRes.error) throw new Error(catRes.error.message);
+      if (taskRes.error) throw new Error(taskRes.error.message);
+      setCategories(catRes.data || []);
+      setTasks(taskRes.data || []);
+    } catch (err) {
+      setError(err.message || "Failed to load.");
+    } finally {
+      setLoading(false);
     }
-
-    load();
   }, [user]);
 
-  // Apply quick filters from Analytics links.
   useEffect(() => {
-    if (!router.isReady) return;
-    const q = String(router.query.quick || "").trim();
-    if (!q) return;
+    load();
+  }, [load]);
 
-    setQuickFilter(q);
-    // ensure we’re looking at open tasks by default for these quick views
-    setStatusFilter("todo_doing");
-    setSearch("");
-    setCategoryFilter("");
-    setSubcategoryFilter("");
-    setTagFilter("");
-  }, [router.isReady, router.query.quick]);
-
-  useEffect(() => {
-    if (!user) return;
-    if (!categoryOrder || categoryOrder.length === 0) return;
-    const storageKey = `rs_category_order_${user.id}`;
-    try {
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(storageKey, JSON.stringify(categoryOrder));
-      }
-    } catch {
-      // ignore storage errors
-    }
-  }, [categoryOrder, user]);
-
-  const orderedCategories = useMemo(() => {
-    if (!categories || categories.length === 0) return [];
-    if (!categoryOrder || categoryOrder.length === 0) return categories;
-    const byId = new Map(categories.map((c) => [c.id, c]));
-    const inOrder = categoryOrder
-      .map((id) => byId.get(id))
-      .filter(Boolean);
-    const remaining = categories.filter((c) => !categoryOrder.includes(c.id));
-    return [...inOrder, ...remaining];
-  }, [categories, categoryOrder]);
-
-  async function persistCategoryOrderToServer(order) {
-    if (!user || !order?.length) return;
-    try {
-      const res = await getUserProfile(user.id);
-      const existing = res?.data?.profile || {};
-      const prefs = { ...(existing.preferences || {}), category_order_ids: order };
-      await upsertUserProfile(user.id, { ...existing, preferences: prefs });
-    } catch (_) {
-      // localStorage already updated; server persist is best-effort
-    }
-  }
-
-  function handleCategoryDrop(sourceId, targetId) {
-    if (!sourceId || !targetId || sourceId === targetId) return;
-    const base =
-      categoryOrder && categoryOrder.length
-        ? categoryOrder.filter((id) => categories.some((c) => c.id === id))
-        : categories.map((c) => c.id);
-    const fromIndex = base.indexOf(sourceId);
-    const toIndex = base.indexOf(targetId);
-    if (fromIndex === -1 || toIndex === -1) return;
-    const next = base.slice();
-    const [moved] = next.splice(fromIndex, 1);
-    next.splice(toIndex, 0, moved);
-    setCategoryOrder(next);
-    persistCategoryOrderToServer(next);
-  }
-
-  function handleOpenCategoryEditor() {
-    const edits = {};
-    for (const c of categories) {
-      edits[c.id] = c.name;
-    }
-    setCategoryEdits(edits);
-    setCategoryEditorOpen(true);
-  }
-
-  function handleCategoryEditChange(id, value) {
-    setCategoryEdits((prev) => ({ ...prev, [id]: value }));
-  }
-
-  async function handleSaveCategoryChanges() {
-    if (!user) return;
-    setSavingCategories(true);
-    setError("");
-    let hadError = false;
-    try {
-      for (const c of categories) {
-        const nextName = (categoryEdits[c.id] ?? c.name).trim();
-        if (!nextName || nextName === c.name) continue;
-        // eslint-disable-next-line no-await-in-loop
-        const res = await updateCategory(user.id, c.id, { name: nextName });
-        if (res.error) {
-          setError(res.error.message || "Failed to update category.");
-          hadError = true;
-          break;
-        }
-      }
-      if (!hadError) {
-        const fresh = await loadCollaborativeBacklog(true);
-        setCategories(fresh.categories || []);
-        setCategoryEditorOpen(false);
-      }
-    } finally {
-      setSavingCategories(false);
-    }
-  }
-
-  async function handleDeleteCategoryClicked(id) {
-    if (!user || !id) return;
-    const confirmed = window.confirm(
-      "Delete this project and ALL its tasks (including archived)? This cannot be undone."
-    );
-    if (!confirmed) return;
-    setSavingCategories(true);
-    setError("");
-    try {
-      const res = await deleteCategory(user.id, id);
-      if (res.error) {
-        setError(res.error.message || "Failed to delete category.");
-      } else {
-        const fresh = await loadCollaborativeBacklog(true);
-        setCategories(fresh.categories || []);
-        setCategoryOrder((prev) => prev.filter((cid) => cid !== id));
-        setCategoryEdits((prev) => {
-          const next = { ...prev };
-          delete next[id];
-          return next;
-        });
-      }
-    } finally {
-      setSavingCategories(false);
-    }
-  }
-
-  const childrenByParent = useMemo(() => {
-    const m = new Map();
-    for (const t of tasks || []) {
-      if (!t.parent_task_id) continue;
-      const list = m.get(t.parent_task_id) || [];
-      list.push(t);
-      m.set(t.parent_task_id, list);
-    }
+  const colorMap = useMemo(() => {
+    const m = {};
+    categories.forEach((c, i) => {
+      m[c.id] = CATEGORY_COLORS[i % CATEGORY_COLORS.length];
+    });
     return m;
-  }, [tasks]);
+  }, [categories]);
 
-  const rootTasks = useMemo(
-    () => (tasks || []).filter((t) => !t.parent_task_id),
-    [tasks]
-  );
+  const catMap = useMemo(() => {
+    const m = {};
+    for (const c of categories) m[c.id] = c;
+    return m;
+  }, [categories]);
 
-  const estimatedEligibleCount = useMemo(
-    () => (tasks || []).filter((t) => isMissingPrioritizationMetadata({
-      priority: t.priority,
-      effort_hours: t.effort_hours,
-      tags: extractTagNames(t),
-    })).length,
-    [tasks]
-  );
-
-  useEffect(() => {
-    if (!enriching) {
-      setEnrichmentProgressPct(0);
-      return undefined;
+  const counts = useMemo(() => {
+    const pri = { P0: 0, P1: 0, P2: 0, P3: 0 };
+    const proj = {};
+    for (const t of tasks) {
+      if (hideDone && t.status === "done") continue;
+      pri[toCode(t.priority)] += 1;
+      if (t.category_id) proj[t.category_id] = (proj[t.category_id] || 0) + 1;
     }
+    return { pri, proj };
+  }, [tasks, hideDone]);
 
-    const estimatedBatches = Math.max(1, Math.ceil((estimatedEligibleCount || 1) / 10));
-    const estimatedTotalMs = estimatedBatches * 5000;
+  const visible = useMemo(() => {
+    let list = [...tasks];
+    if (hideDone) list = list.filter((t) => t.status !== "done");
+    if (priorityFilter.length > 0)
+      list = list.filter((t) => priorityFilter.includes(toCode(t.priority)));
+    if (projectFilter.length > 0)
+      list = list.filter((t) => projectFilter.includes(t.category_id));
+    return list;
+  }, [tasks, priorityFilter, projectFilter, hideDone]);
 
-    const tick = () => {
-      if (!enrichmentStartedAt) return;
-      const elapsed = Date.now() - enrichmentStartedAt;
-      const pct = Math.min(95, Math.max(8, Math.round((elapsed / estimatedTotalMs) * 100)));
-      setEnrichmentProgressPct(pct);
-    };
+  const selected = tasks.find((t) => t.id === selectedId) || null;
 
-    tick();
-    const id = setInterval(tick, 300);
-    return () => clearInterval(id);
-  }, [enriching, enrichmentStartedAt, estimatedEligibleCount]);
-
-  const filteredRootTasks = useMemo(() => {
-    const q = normalize(search);
-    const tagNeedle = normalize(tagFilter);
-    const todayLocal = localDateKey(new Date());
-    const quick = String(quickFilter || "").toLowerCase();
-
-    const filtered = rootTasks.filter((t) => {
-      const titleMatch = !q || normalize(t.title).includes(q);
-
-      let statusOk = true;
-      if (statusFilter === "todo_doing") {
-        statusOk = t.status === "todo" || t.status === "doing";
-      } else if (statusFilter !== "all") {
-        statusOk = t.status === statusFilter;
-      }
-
-      let categoryOk = true;
-      if (categoryFilter) {
-        categoryOk = t.category_id === categoryFilter;
-      }
-
-      let subcategoryOk = true;
-      if (subcategoryFilter) {
-        subcategoryOk = t.subcategory_id === subcategoryFilter;
-      }
-
-      let tagOk = true;
-      if (tagNeedle) {
-        const names = extractTagNames(t).map(normalize);
-        tagOk = names.includes(tagNeedle);
-      }
-
-      let quickOk = true;
-      if (quick === "overdue") {
-        quickOk =
-          !!t.due_date && localDateKey(new Date(t.due_date)) < todayLocal;
-      } else if (quick === "critical_high") {
-        quickOk = t.priority === "Critical" || t.priority === "High";
-      } else if (quick === "needs_alignment") {
-        quickOk = isTaskNeedingAlignment(t);
-      } else if (quick === "needs_split") {
-        quickOk = isTaskNeedingSubtasks(t);
-      } else if (quick === "stale_doing") {
-        quickOk = isStaleDoingTask(t);
-      } else if (quick === "priority_cleanup") {
-        const score = computeTaskScore({
-          ...t,
-          tags: extractTagNames(t),
-        }).score;
-        quickOk = (!t.priority || t.priority === "Medium") && score >= 70;
-      }
-
-      return titleMatch && statusOk && categoryOk && subcategoryOk && tagOk && quickOk;
-    });
-
-    return filtered
-      .map((t) => {
-        const scoring = computeTaskScore({
-          ...t,
-          tags: extractTagNames(t),
-        });
-        return {
-          ...t,
-          _aiPriorityScore: scoring.score,
-        };
-      });
-  }, [
-    rootTasks,
-    search,
-    statusFilter,
-    categoryFilter,
-    subcategoryFilter,
-    tagFilter,
-    quickFilter,
-  ]);
-
-  const [comfortableSortKey, setComfortableSortKey] = useState("score");
-  const [comfortableSortDir, setComfortableSortDir] = useState("desc");
-
-  const PRIORITY_ORDER = { Critical: 4, High: 3, Medium: 2, Low: 1 };
-  const STATUS_ORDER = { todo: 0, doing: 1, done: 2, archived: 3 };
-  function compareTasksForSort(a, b) {
-    const key = comfortableSortKey;
-    const dir = comfortableSortDir === "asc" ? 1 : -1;
-    const catName = (t) =>
-      t.category?.name ?? categories.find((c) => c.id === t.category_id)?.name ?? "";
-
-    let cmp = 0;
-    if (key === "score") cmp = (a._aiPriorityScore ?? 0) - (b._aiPriorityScore ?? 0);
-    else if (key === "title") {
-      cmp = String(a.title || "").localeCompare(String(b.title || ""), undefined, {
-        sensitivity: "base",
-      });
-    } else if (key === "category") {
-      cmp = catName(a).localeCompare(catName(b), undefined, { sensitivity: "base" });
-    } else if (key === "priority") {
-      cmp = (PRIORITY_ORDER[a.priority] ?? 0) - (PRIORITY_ORDER[b.priority] ?? 0);
-    } else if (key === "due") {
-      const da = a.due_date ? new Date(a.due_date).getTime() : 0;
-      const db = b.due_date ? new Date(b.due_date).getTime() : 0;
-      cmp = da - db;
-    } else if (key === "status") {
-      cmp = (STATUS_ORDER[a.status] ?? 0) - (STATUS_ORDER[b.status] ?? 0);
-    } else if (key === "outcome") {
-      cmp = String((Array.isArray(a.outcome_ids) && a.outcome_ids[0]) || "").localeCompare(
-        String((Array.isArray(b.outcome_ids) && b.outcome_ids[0]) || ""),
-        undefined,
-        { sensitivity: "base" }
-      );
-    } else if (key === "domain") {
-      cmp = String(a.primary_life_domain || "").localeCompare(
-        String(b.primary_life_domain || ""),
-        undefined,
-        { sensitivity: "base" }
-      );
-    } else if (key === "tags") {
-      cmp = (a._tagsText || "").localeCompare(b._tagsText || "", undefined, {
-        sensitivity: "base",
-      });
-    }
-
-    if (cmp !== 0) return dir * cmp;
-    return String(a.title || "").localeCompare(String(b.title || ""), undefined, {
-      sensitivity: "base",
-    });
-  }
-
-  const sortedRootTasks = useMemo(() => {
-    // Group by category, apply per-project manual order, then sort unordered remainder
-    const ordered = [];
-    const unordered = [];
-
-    for (const t of filteredRootTasks) {
-      const catId = t.category_id;
-      const projectOrder = catId ? (workspaceOrders[catId]?.task_order_ids || []) : [];
-      const idx = projectOrder.indexOf(t.id);
-      if (idx >= 0) {
-        ordered.push({ task: t, orderIdx: idx, catId });
-      } else {
-        unordered.push(t);
-      }
-    }
-
-    // Manually ordered tasks first (by their position in project order)
-    ordered.sort((a, b) => a.orderIdx - b.orderIdx);
-    // Unordered tasks sorted by the selected sort key
-    unordered.sort(compareTasksForSort);
-
-    return [...ordered.map((o) => o.task), ...unordered];
-  }, [filteredRootTasks, comfortableSortKey, comfortableSortDir, categories, workspaceOrders]);
-
-  const [collapsedParents, setCollapsedParents] = useState({});
-  /** Strategic view: expand all subtasks on a parent card */
-  const [expandedSubtasksByParent, setExpandedSubtasksByParent] = useState({});
-  const [expandedTagPillsByTask, setExpandedTagPillsByTask] = useState({});
-  const [quickCapture, setQuickCapture] = useState("");
-  const [isCompact, setIsCompact] = useState(false);
-  const [filtersExpanded, setFiltersExpanded] = useState(false);
-  const [compactListMode, setCompactListMode] = useState(false);
-
-  function handleComfortableSort(key) {
-    const same = comfortableSortKey === key;
-    const nextDir = same ? (comfortableSortDir === "asc" ? "desc" : "asc") : (["title", "category", "outcome", "domain", "tags"].includes(key) ? "asc" : "desc");
-    setComfortableSortKey(key);
-    setComfortableSortDir(nextDir);
-  }
-
-  useEffect(() => {
-    if (typeof window === "undefined") return undefined;
-    try {
-      const stored = window.localStorage.getItem("backlog-compact-list");
-      setCompactListMode(stored === "1");
-    } catch (_) {}
-    return undefined;
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return undefined;
-    const media = window.matchMedia("(max-width: 980px)");
-    const onChange = () => setIsCompact(media.matches);
-    onChange();
-    media.addEventListener("change", onChange);
-    return () => media.removeEventListener("change", onChange);
-  }, []);
-
-  function setCompactListModeAndSave(value) {
-    setCompactListMode(value);
-    try {
-      window.localStorage.setItem("backlog-compact-list", value ? "1" : "0");
-    } catch (_) {}
-  }
-
-  function toggleCollapsed(taskId) {
-    setCollapsedParents((prev) => ({
-      ...prev,
-      [taskId]: !prev[taskId],
-    }));
-  }
-
-  function updateTaskLocal(taskId, patch) {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? { ...t, ...patch } : t))
+  async function toggleStatus(t) {
+    const nextStatus = t.status === "done" ? "todo" : "done";
+    setTasks((ts) =>
+      ts.map((x) => (x.id === t.id ? { ...x, status: nextStatus } : x))
     );
-  }
-
-  async function handleStatusChange(task, nextStatus) {
-    if (!user) return;
-    try {
-      const res = await updateCollaborativeTaskStatus(task.id, nextStatus);
-      updateTaskLocal(task.id, {
-        ...(res.task || {}),
-        status: nextStatus,
-        archived_at:
-          nextStatus === "archived" ? new Date().toISOString() : null,
-      });
-    } catch (e) {
-      setError(e.message);
-      return;
-    }
-  }
-
-  async function handleInlineSave(taskId, patch) {
-    if (!user) return;
-    try {
-      const res = await updateCollaborativeTask(taskId, patch);
-      updateTaskLocal(taskId, res.task || patch);
-    } catch (e) {
-      setError(e.message);
-      return;
-    }
-  }
-
-  async function handleSubcategorySave(task) {
-    if (!user) return;
-    const categoryId = task.category_id || null;
-    const name = String(task._subcategoryText || "").trim();
-    if (!categoryId) {
-      setError("Select a category before setting a subcategory.");
-      return;
-    }
-    if (!name) {
-      await handleInlineSave(task.id, { subcategory_id: null });
-      updateTaskLocal(task.id, { subcategory_id: null, subcategory: null, _subcategoryText: "" });
-      return;
-    }
-    let subcategory = null;
-    try {
-      const subRes = await ensureCollaborativeSubcategory(categoryId, name);
-      subcategory = subRes.subcategory || null;
-    } catch (e) {
-      setError(e.message || "Failed to save subcategory.");
-      return;
-    }
-    if (!subcategory?.id) return;
-    try {
-      const saveRes = await updateCollaborativeTask(task.id, { subcategory_id: subcategory.id });
-      updateTaskLocal(task.id, {
-        ...(saveRes.task || {}),
-        subcategory_id: subcategory.id,
-        subcategory: { name: subcategory.name },
-        _subcategoryText: subcategory.name,
-      });
-    } catch (e) {
-      setError(e.message || "Failed to save subcategory.");
-      return;
-    }
-  }
-
-  async function handleTagsSave(taskId, tagsText) {
-    if (!user) return;
-    const names = parseTagText(tagsText);
-    try {
-      await setCollaborativeTaskTags(taskId, names);
-      updateTaskLocal(taskId, {
-        _tagsText: tagsText,
-        tags: names.map((name) => ({ name })),
-      });
-    } catch (e) {
-      setError(e.message);
-      return;
-    }
-  }
-
-  async function handleAssignTask(task, assigneeUserId) {
-    if (!user || !task?.id) return;
-    try {
-      const res = await assignCollaborativeTask(task.id, assigneeUserId);
-      updateTaskLocal(task.id, { assignees: res.assignees || [] });
-    } catch (e) {
-      setError(e.message || "Failed to assign task.");
-    }
-  }
-
-  const openAddTaskModal = useCallback(
-    (prefillTitle) => {
-      setModalTitle(typeof prefillTitle === "string" ? prefillTitle : "");
-      setModalCategoryId(categoryFilter || (categories[0]?.id ?? ""));
-      setModalSubcategoryText("");
-      setModalPriority("Medium");
-      setModalStatus("todo");
-      setModalDueDate("");
-      setModalEffortHours("");
-      setModalMoveToTop(false);
-      setModalTagsText("");
-      setError("");
-      setAddTaskOpen(true);
-    },
-    [categoryFilter, categories]
-  );
-
-  useEffect(() => {
-    function onKeyDown(e) {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        openAddTaskModal();
-      }
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [openAddTaskModal]);
-
-  async function handleAddTaskFromModal() {
-    if (!user || !modalTitle.trim()) return;
-    const categoryId = modalCategoryId || categories[0]?.id;
-    if (!categoryId) {
-      setError("Create a category first (e.g. under Filter by).");
-      return;
-    }
-    setAddingTask(true);
-    setError("");
-    let subcategoryId = null;
-    const subName = (modalSubcategoryText || "").trim();
-    if (subName) {
-      const cat = categories.find((c) => c.id === categoryId);
-      const existing = (cat?.subcategories || []).find(
-        (s) => (s.name || "").trim().toLowerCase() === subName.toLowerCase()
-      );
-      if (existing) {
-        subcategoryId = existing.id;
-      } else {
-        let subcategory = null;
-        try {
-          const subRes = await ensureCollaborativeSubcategory(categoryId, subName);
-          subcategory = subRes.subcategory || null;
-        } catch (e) {
-          setError(e.message || "Failed to create subcategory.");
-          setAddingTask(false);
-          return;
-        }
-        if (subcategory?.id) subcategoryId = subcategory.id;
-      }
-    }
-    const parsedTags = parseTagText(modalTagsText);
-    const finalTags = modalMoveToTop
-      ? Array.from(new Set(["fire-fighting", ...parsedTags]))
-      : parsedTags;
-    const finalStatus = modalMoveToTop ? "todo" : (modalStatus || "todo");
-    let createdTask = null;
-    try {
-      const res = await createCollaborativeTask({
-        title: modalTitle.trim(),
-        status: finalStatus,
-        priority: modalMoveToTop ? "Critical" : (modalPriority || "Medium"),
-        effort_hours: modalEffortHours === "" ? null : Number(modalEffortHours),
-        due_date: modalDueDate || null,
-        category_id: categoryId,
-        subcategory_id: subcategoryId,
-        tags: finalTags,
-      });
-      createdTask = res.task || null;
-    } catch (e) {
-      setError(e.message);
-      setAddingTask(false);
-      return;
-    }
-    const created = {
-      ...createdTask,
-      _tagsText: finalTags.join(", "),
-      _subcategoryText: subName || (createdTask?.subcategory?.name ?? ""),
-      tags: finalTags.map((name) => ({ name })),
-    };
-    setTasks((prev) => [created, ...prev]);
-    setAddTaskOpen(false);
-    setAddingTask(false);
-  }
-
-  async function handleAddSubtask(parent) {
-    if (!user) return;
-    const title = `Subtask of ${parent.title}`;
-    let createdTask = null;
-    try {
-      const res = await createCollaborativeTask({
-        title,
-        status: "todo",
-        parent_task_id: parent.id,
-        category_id: parent.category_id || null,
-        subcategory_id: parent.subcategory_id || null,
-      });
-      createdTask = res.task || null;
-    } catch (e) {
-      setError(e.message);
-      return;
-    }
-    const created = { ...createdTask, _tagsText: "", _subcategoryText: parent?.subcategory?.name || "" };
-    setTasks((prev) => [...prev, created]);
-    setCollapsedParents((prev) => ({
-      ...prev,
-      [parent.id]: false,
-    }));
-  }
-
-  async function handleAddCategory() {
-    if (!user || !newCategoryName.trim()) return;
-    setAddingCategory(true);
-    setError("");
-    const res = await createCategory(user.id, newCategoryName.trim());
+    const res = await updateTaskStatusWithEvent(user.id, t.id, nextStatus);
     if (res.error) {
-      setError(res.error.message);
-      setAddingCategory(false);
-      return;
-    }
-    const fresh = await loadCollaborativeBacklog(true);
-    setCategories(fresh.categories || []);
-    setNewCategoryName("");
-    setAddingCategory(false);
-  }
-
-  async function runPrioritizationEnrichment(apply = false) {
-    if (!user || enriching) return;
-    setEnriching(true);
-    setEnrichmentStartedAt(Date.now());
-    setEnrichmentProgressPct(8);
-    setError("");
-
-    try {
-      const { data } = await supabase.auth.getSession();
-      const token = data?.session?.access_token;
-      if (!token) {
-        setError("Auth session missing. Please refresh and sign in again.");
-        return;
-      }
-
-      const res = await fetch("/api/tasks/enrich-prioritization", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ apply, dry_run: !apply }),
-      });
-
-      const payload = await res.json().catch(() => ({}));
-      if (!res.ok || !payload?.ok) {
-        setError(payload?.error || "Failed to run enrichment.");
-        return;
-      }
-
-      setEnrichmentProgressPct(100);
-      setEnrichReport(payload);
-
-      if (apply) {
-        const fresh = await loadCollaborativeBacklog(true);
-        const refreshed = (fresh.tasks || []).map((t) => ({
-          ...t,
-          _tagsText: t._tagsText ?? makeTagText(t),
-          _subcategoryText: (t._subcategoryText ?? t?.subcategory?.name) || "",
-        }));
-        setTasks(refreshed);
-      }
-    } catch (e) {
-      setError(e?.message || "Failed to run enrichment.");
-    } finally {
-      setEnriching(false);
-      setTimeout(() => setEnrichmentProgressPct(0), 800);
+      setTasks((ts) =>
+        ts.map((x) => (x.id === t.id ? { ...x, status: t.status } : x))
+      );
     }
   }
 
-  function renderTaskRow(task, depth) {
-    const children = childrenByParent.get(task.id) || [];
-    const sortedChildren = [...children].sort(compareTasksForSort);
-    const hasChildren = children.length > 0;
-    const isCollapsed = collapsedParents[task.id];
-    const isDone = task.status === "done";
+  function togglePriorityFilter(p) {
+    setPriorityFilter((f) => (f.includes(p) ? f.filter((x) => x !== p) : [...f, p]));
+  }
 
-    const tagText = task._tagsText ?? makeTagText(task);
-
-    const compactTableChrome = compactListMode && !isCompact;
-
-    const titleInput = (
-      <input
-        type="text"
-        value={task.title || ""}
-        onChange={(e) =>
-          updateTaskLocal(task.id, { title: e.target.value })
-        }
-        onBlur={(e) =>
-          handleInlineSave(task.id, { title: e.target.value })
-        }
-        style={{
-          width: "100%",
-          minWidth: 0,
-          fontSize: compactTableChrome ? 12 : isCompact ? 15 : 14,
-          lineHeight: 1.4,
-          padding: compactTableChrome ? "4px 6px" : isCompact ? "10px 12px" : "8px 10px",
-          borderRadius: compactTableChrome ? 4 : 8,
-          border: "1px solid #e5e7eb",
-          background: "#ffffff",
-          textDecoration: isDone ? "line-through" : "none",
-          color: isDone ? "#6b7280" : "#111827",
-        }}
-        placeholder="Task title…"
-      />
+  function toggleProjectFilter(id) {
+    setProjectFilter((f) =>
+      f.includes(id) ? f.filter((x) => x !== id) : [...f, id]
     );
+  }
 
-    const checkboxControl = (
-      <label
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          minWidth: compactTableChrome ? 20 : isCompact ? 44 : 24,
-          minHeight: compactTableChrome ? 20 : isCompact ? 44 : 24,
-          cursor: "pointer",
-          flexShrink: 0,
-        }}
-        title="Mark complete"
-      >
-        <input
-          type="checkbox"
-          checked={isDone}
-          onChange={(e) => handleStatusChange(task, e.target.checked ? "done" : "todo")}
-          style={{
-            width: compactTableChrome ? 14 : isCompact ? 22 : 18,
-            height: compactTableChrome ? 14 : isCompact ? 22 : 18,
-            cursor: "pointer",
-          }}
-        />
-      </label>
-    );
-
-    // Wide compact table is unusable on narrow viewports (title column minmax(0,*) collapses).
-    // Mobile uses the same card row as "Strategic" compact mode.
-    if (compactListMode && !isCompact) {
-      return (
-        <div key={task.id}>
-          <div
-            style={{
-              display: "grid",
-              // 10 tracks = title + category + pri + hrs + due + status + outcome + domain + actions + tags
-              gridTemplateColumns:
-                "minmax(160px, 2fr) minmax(100px, 1fr) 72px 52px 78px 92px 72px 56px 88px minmax(100px, 1.1fr)",
-              gap: 6,
-              alignItems: "center",
-              padding: "4px 0",
-              borderBottom: "1px solid #f3f4f6",
-              fontSize: 12,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
-              <div style={{ width: depth * 8 }} />
-              {checkboxControl}
-              {hasChildren && (
-                <button
-                  type="button"
-                  onClick={() => toggleCollapsed(task.id)}
-                  style={{
-                    border: "none",
-                    background: "transparent",
-                    padding: 2,
-                    cursor: "pointer",
-                    fontSize: 10,
-                    color: "#6b7280",
-                  }}
-                >
-                  {isCollapsed ? "▶" : "▼"}
-                </button>
-              )}
-              {!hasChildren && depth > 0 && <span style={{ fontSize: 10, color: "#d1d5db" }}>•</span>}
-              <div style={{ flex: 1, minWidth: 0 }}>{titleInput}</div>
-            </div>
-            <select
-              value={task.category_id || ""}
-              onChange={(e) => {
-                const cid = e.target.value || null;
-                updateTaskLocal(task.id, {
-                  category_id: cid,
-                  subcategory_id: null,
-                  _subcategoryText: "",
-                  subcategory: null,
-                });
-                handleInlineSave(task.id, { category_id: cid, subcategory_id: null });
-              }}
-              style={{ fontSize: 11, padding: "3px 6px", borderRadius: 4, border: "1px solid #e5e7eb", background: "#fff" }}
-            >
-              <option value="">Cat</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-            <select
-              value={task.priority || "Medium"}
-              onChange={(e) => handleInlineSave(task.id, { priority: e.target.value })}
-              style={{ fontSize: 11, padding: "3px 6px", borderRadius: 4, border: "1px solid #e5e7eb", background: "#fff" }}
-            >
-              <option value="Critical">P1</option>
-              <option value="High">P2</option>
-              <option value="Medium">P3</option>
-              <option value="Low">P4</option>
-            </select>
-            <input
-              type="number"
-              step="0.25"
-              value={task.effort_hours ?? ""}
-              placeholder="h"
-              onChange={(e) => updateTaskLocal(task.id, { effort_hours: e.target.value === "" ? null : Number(e.target.value) })}
-              onBlur={(e) => handleInlineSave(task.id, { effort_hours: e.target.value === "" ? null : Number(e.target.value) })}
-              style={{ fontSize: 11, padding: "3px 4px", width: 36, borderRadius: 4, border: "1px solid #e5e7eb", background: "#fff" }}
-            />
-            <input
-              type="date"
-              value={task.due_date || ""}
-              onChange={(e) => {
-                updateTaskLocal(task.id, { due_date: e.target.value || null });
-                handleInlineSave(task.id, { due_date: e.target.value || null });
-              }}
-              style={{ fontSize: 11, padding: "3px 4px", borderRadius: 4, border: "1px solid #e5e7eb", background: "#fff" }}
-            />
-            <select
-              value={task.status || "todo"}
-              onChange={(e) => handleStatusChange(task, e.target.value)}
-              style={{ fontSize: 11, padding: "3px 6px", borderRadius: 4, border: "1px solid #e5e7eb", background: "#fff" }}
-            >
-              <option value="todo">Todo</option>
-              <option value="doing">Doing</option>
-              <option value="done">Done</option>
-              <option value="archived">Arch</option>
-            </select>
-            <select
-              value={(Array.isArray(task.outcome_ids) && task.outcome_ids[0]) || ""}
-              onChange={(e) => {
-                const v = e.target.value || null;
-                const outcome_ids = v ? [v] : [];
-                updateTaskLocal(task.id, { outcome_ids });
-                handleInlineSave(task.id, { outcome_ids, primary_life_domain: task.primary_life_domain || undefined, alignment_source: "user" });
-              }}
-              title="Outcome"
-              style={{ fontSize: 11, padding: "3px 4px", borderRadius: 4, border: "1px solid #e5e7eb", background: "#fff", minWidth: 0 }}
-            >
-              <option value="">Outcome</option>
-              {(profile?.desired_outcomes || []).map((o) => (
-                <option key={o.id || o.title} value={o.id || o.title}>{(o.title || o.id || "").slice(0, 20)}</option>
-              ))}
-            </select>
-            <select
-              value={task.primary_life_domain || ""}
-              onChange={(e) => {
-                const v = e.target.value || null;
-                updateTaskLocal(task.id, { primary_life_domain: v });
-                handleInlineSave(task.id, { outcome_ids: task.outcome_ids, primary_life_domain: v || null, alignment_source: "user" });
-              }}
-              title="Domain"
-              style={{ fontSize: 11, padding: "3px 4px", borderRadius: 4, border: "1px solid #e5e7eb", background: "#fff", minWidth: 0 }}
-            >
-              <option value="">Domain</option>
-              {LIFE_DOMAIN_KEYS.map((key) => (
-                <option key={key} value={key}>{key.slice(0, 6)}</option>
-              ))}
-            </select>
-            <div style={{ display: "flex", gap: 4, flexWrap: "wrap", minWidth: 0 }}>
-              <button type="button" onClick={() => handleAddSubtask(task)} style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, border: "1px solid #e5e7eb", background: "#f9fafb", cursor: "pointer" }}>+Sub</button>
-              {task.status === "archived" ? (
-                <button type="button" onClick={() => handleStatusChange(task, "todo")} style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, border: "1px solid #86efac", background: "#ecfdf5", cursor: "pointer" }}>Restore</button>
-              ) : (
-                <button type="button" onClick={() => handleStatusChange(task, "archived")} style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, border: "1px solid #fecaca", background: "#fef2f2", color: "#b91c1c", cursor: "pointer" }}>Archive</button>
-              )}
-            </div>
-            <input
-              type="text"
-              value={tagText}
-              onChange={(e) => updateTaskLocal(task.id, { _tagsText: e.target.value })}
-              onBlur={(e) => handleTagsSave(task.id, e.target.value)}
-              placeholder="tags"
-              style={{ width: "100%", minWidth: 0, fontSize: 11, padding: "3px 6px", borderRadius: 4, border: "1px solid #e5e7eb", background: "#fff" }}
-            />
-          </div>
-          {!isCollapsed && sortedChildren.map((child) => renderTaskRow(child, depth + 1))}
-        </div>
-      );
+  const matrixBuckets = useMemo(() => {
+    const q1 = [], q2 = [], q3 = [], q4 = [];
+    for (const t of visible) {
+      const code = toCode(t.priority);
+      const urgent = t.due_date && new Date(t.due_date + "T00:00:00") <= new Date(Date.now() + 3 * 86400000);
+      const important = code === "P0" || code === "P1";
+      if (urgent && important) q1.push(t);
+      else if (!urgent && important) q2.push(t);
+      else if (urgent && !important) q3.push(t);
+      else q4.push(t);
     }
+    return { q1, q2, q3, q4 };
+  }, [visible]);
 
-    if (isCompact) {
-      return (
-        <div key={task.id}>
-          <div
-            style={{
-              marginBottom: 12,
-              padding: 14,
-              borderRadius: 12,
-              border: "1px solid #e5e7eb",
-              background: "#ffffff",
-              boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 10 }}>
-              <div style={{ width: depth * 16 }} />
-              {checkboxControl}
-              {hasChildren && (
-                <button
-                  type="button"
-                  onClick={() => toggleCollapsed(task.id)}
-                  style={{
-                    border: "none",
-                    background: "transparent",
-                    padding: 8,
-                    cursor: "pointer",
-                    fontSize: 14,
-                    color: "#6b7280",
-                    minWidth: 44,
-                    minHeight: 44,
-                  }}
-                  aria-label={isCollapsed ? "Expand subtasks" : "Collapse subtasks"}
-                >
-                  {isCollapsed ? "▶" : "▼"}
-                </button>
-              )}
-              {!hasChildren && depth > 0 && (
-                <span style={{ fontSize: 12, color: "#9ca3af", alignSelf: "center" }}>•</span>
-              )}
-              <div style={{ flex: 1, minWidth: 0 }}>{titleInput}</div>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 8,
-                marginLeft: depth * 16 + 56,
-                fontSize: 13,
-                color: "#4b5563",
-              }}
-            >
-              <select
-                value={task.category_id || ""}
-                onChange={(e) => {
-                  const cid = e.target.value || null;
-                  updateTaskLocal(task.id, {
-                    category_id: cid,
-                    subcategory_id: null,
-                    _subcategoryText: "",
-                    subcategory: null,
-                  });
-                  handleInlineSave(task.id, { category_id: cid, subcategory_id: null });
-                }}
-                style={{
-                  fontSize: 13,
-                  padding: "8px 10px",
-                  borderRadius: 8,
-                  border: "1px solid #e5e7eb",
-                  background: "#ffffff",
-                  minHeight: 44,
-                }}
-              >
-                <option value="">Category…</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-              <input
-                type="text"
-                value={task._subcategoryText ?? task?.subcategory?.name ?? ""}
-                placeholder="Subcategory"
-                onChange={(e) => updateTaskLocal(task.id, { _subcategoryText: e.target.value })}
-                onBlur={() => handleSubcategorySave(task)}
-                list={task.category_id ? `subcategory-options-${task.category_id}` : undefined}
-                style={{
-                  fontSize: 13,
-                  padding: "8px 10px",
-                  borderRadius: 8,
-                  border: "1px solid #e5e7eb",
-                  background: "#ffffff",
-                  minHeight: 44,
-                  width: 120,
-                }}
-              />
-              <select
-                value={task.priority || "Medium"}
-                onChange={(e) =>
-                  handleInlineSave(task.id, { priority: e.target.value })
-                }
-                style={{
-                  fontSize: 13,
-                  padding: "8px 10px",
-                  borderRadius: 8,
-                  border: "1px solid #e5e7eb",
-                  background: "#ffffff",
-                  minHeight: 44,
-                }}
-              >
-                <option value="Critical">Critical</option>
-                <option value="High">High</option>
-                <option value="Medium">Medium</option>
-                <option value="Low">Low</option>
-              </select>
-              <input
-                type="number"
-                step="0.25"
-                value={task.effort_hours ?? ""}
-                placeholder="hrs"
-                onChange={(e) =>
-                  updateTaskLocal(task.id, {
-                    effort_hours: e.target.value === "" ? null : Number(e.target.value),
-                  })
-                }
-                onBlur={(e) =>
-                  handleInlineSave(task.id, {
-                    effort_hours:
-                      e.target.value === "" ? null : Number(e.target.value),
-                  })
-                }
-                style={{
-                  fontSize: 13,
-                  padding: "8px 10px",
-                  width: 64,
-                  borderRadius: 8,
-                  border: "1px solid #e5e7eb",
-                  background: "#ffffff",
-                  minHeight: 44,
-                }}
-              />
-              <input
-                type="date"
-                value={task.due_date || ""}
-                onChange={(e) => {
-                  updateTaskLocal(task.id, { due_date: e.target.value || null });
-                  handleInlineSave(task.id, { due_date: e.target.value || null });
-                }}
-                style={{
-                  fontSize: 13,
-                  padding: "8px 10px",
-                  borderRadius: 8,
-                  border: "1px solid #e5e7eb",
-                  background: "#ffffff",
-                  minHeight: 44,
-                }}
-              />
-            </div>
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 8,
-                marginLeft: depth * 16 + 56,
-                marginTop: 8,
-                alignItems: "center",
-              }}
-            >
-              <select
-                value={task.status || "todo"}
-                onChange={(e) => handleStatusChange(task, e.target.value)}
-                style={{
-                  fontSize: 13,
-                  padding: "8px 10px",
-                  borderRadius: 8,
-                  border: "1px solid #e5e7eb",
-                  background: "#ffffff",
-                  minHeight: 44,
-                }}
-              >
-                <option value="todo">Todo</option>
-                <option value="doing">Doing</option>
-                <option value="done">Done</option>
-                <option value="archived">Archived</option>
-              </select>
-              <button
-                type="button"
-                onClick={() => handleAddSubtask(task)}
-                style={{
-                  fontSize: 13,
-                  padding: "8px 14px",
-                  minHeight: 44,
-                  borderRadius: 8,
-                  border: "1px solid #e5e7eb",
-                  background: "#f9fafb",
-                  cursor: "pointer",
-                }}
-              >
-                + Subtask
-              </button>
-              {task.status === "archived" ? (
-                <button
-                  type="button"
-                  onClick={() => handleStatusChange(task, "todo")}
-                  style={{
-                    fontSize: 13,
-                    padding: "8px 14px",
-                    minHeight: 44,
-                    borderRadius: 8,
-                    border: "1px solid #86efac",
-                    background: "#ecfdf5",
-                    cursor: "pointer",
-                  }}
-                >
-                  Restore
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => handleStatusChange(task, "archived")}
-                  style={{
-                    fontSize: 13,
-                    padding: "8px 14px",
-                    minHeight: 44,
-                    borderRadius: 8,
-                    border: "1px solid #fecaca",
-                    background: "#fef2f2",
-                    color: "#b91c1c",
-                    cursor: "pointer",
-                  }}
-                >
-                  Archive
-                </button>
-              )}
-            </div>
-            {compactListMode && (
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: 8,
-                  marginLeft: depth * 16 + 56,
-                  marginTop: 8,
-                  alignItems: "center",
-                }}
-              >
-                <select
-                  value={(Array.isArray(task.outcome_ids) && task.outcome_ids[0]) || ""}
-                  onChange={(e) => {
-                    const v = e.target.value || null;
-                    const outcome_ids = v ? [v] : [];
-                    updateTaskLocal(task.id, { outcome_ids });
-                    handleInlineSave(task.id, {
-                      outcome_ids,
-                      primary_life_domain: task.primary_life_domain || undefined,
-                      alignment_source: "user",
-                    });
-                  }}
-                  style={{
-                    fontSize: 13,
-                    padding: "8px 10px",
-                    borderRadius: 8,
-                    border: "1px solid #e5e7eb",
-                    background: "#ffffff",
-                    minHeight: 44,
-                    flex: "1 1 160px",
-                    minWidth: 0,
-                  }}
-                >
-                  <option value="">Outcome…</option>
-                  {(profile?.desired_outcomes || []).map((o) => (
-                    <option key={o.id || o.title} value={o.id || o.title}>
-                      {(o.title || o.id || "").slice(0, 48)}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={task.primary_life_domain || ""}
-                  onChange={(e) => {
-                    const v = e.target.value || null;
-                    updateTaskLocal(task.id, { primary_life_domain: v });
-                    handleInlineSave(task.id, {
-                      outcome_ids: task.outcome_ids,
-                      primary_life_domain: v || null,
-                      alignment_source: "user",
-                    });
-                  }}
-                  style={{
-                    fontSize: 13,
-                    padding: "8px 10px",
-                    borderRadius: 8,
-                    border: "1px solid #e5e7eb",
-                    background: "#ffffff",
-                    minHeight: 44,
-                    flex: "1 1 140px",
-                    minWidth: 0,
-                  }}
-                >
-                  <option value="">Human need strategy…</option>
-                  {LIFE_DOMAIN_KEYS.map((key) => (
-                    <option key={key} value={key}>
-                      {lifeDomainLabel(key, profile) || key}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-            <div style={{ marginLeft: depth * 16 + 56, marginTop: 8 }}>
-              <input
-                type="text"
-                value={tagText}
-                onChange={(e) =>
-                  updateTaskLocal(task.id, { _tagsText: e.target.value })
-                }
-                onBlur={(e) => handleTagsSave(task.id, e.target.value)}
-                placeholder="Tags (comma separated)"
-                style={{
-                  width: "100%",
-                  fontSize: 13,
-                  padding: "8px 10px",
-                  borderRadius: 8,
-                  border: "1px solid #e5e7eb",
-                  background: "#ffffff",
-                  minHeight: 44,
-                }}
-              />
-            </div>
-          </div>
-          {!isCollapsed &&
-            sortedChildren.map((child) => renderTaskRow(child, depth + 1))}
-        </div>
-      );
+  const grouped = useMemo(() => {
+    const groups = new Map();
+    for (const t of visible) {
+      let key, label;
+      if (groupBy === "project") {
+        key = t.category_id || "none";
+        label = catMap[t.category_id]?.name || "Uncategorised";
+      } else if (groupBy === "priority") {
+        key = toCode(t.priority);
+        label = `${key} · ${PRI_META[key].label}`;
+      } else if (groupBy === "date") {
+        key = t.due_date || "no-date";
+        label = t.due_date
+          ? new Date(t.due_date + "T00:00:00").toLocaleDateString(undefined, {
+              weekday: "short",
+              month: "short",
+              day: "numeric",
+            })
+          : "No due date";
+      } else {
+        key = t.category_id || "none";
+        label = catMap[t.category_id]?.name || "Uncategorised";
+      }
+      if (!groups.has(key))
+        groups.set(key, { key, label, items: [], color: colorMap[t.category_id] || "var(--ps-ink-30)" });
+      groups.get(key).items.push(t);
     }
+    return [...groups.values()];
+  }, [visible, groupBy, catMap, colorMap]);
 
+  function TaskRow({ t }) {
+    const code = toCode(t.priority);
+    const isDone = t.status === "done";
     return (
-      <div key={task.id}>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: COMFORTABLE_GRID_COLUMNS,
-            gap: 6,
-            alignItems: "center",
-            padding: "8px 0",
-            borderBottom: "1px solid #f3f4f6",
+      <button
+        type="button"
+        className={`act-row${isDone ? " done" : ""}${selectedId === t.id ? " selected" : ""}`}
+        onClick={() => setSelectedId(t.id)}
+      >
+        <span
+          className="act-row-pri"
+          style={{ background: PRI_META[code].color }}
+          title={`${code} · ${PRI_META[code].label}`}
+        >
+          {code}
+        </span>
+        <span
+          className="act-row-dot"
+          style={{ background: colorMap[t.category_id] || "var(--ps-ink-30)" }}
+        />
+        <div className="act-row-body">
+          <div className="act-row-title">{t.title}</div>
+          <div className="act-row-meta">
+            <span className="act-row-proj">
+              {catMap[t.category_id]?.name || "—"}
+            </span>
+            {t.due_date && (
+              <span className="act-row-due">{fmtDue(t.due_date)}</span>
+            )}
+            {t.effort_hours > 0 && (
+              <span className="act-row-effort">
+                {Math.round(t.effort_hours * 60)}m
+              </span>
+            )}
+          </div>
+        </div>
+        <span
+          className={`act-check${isDone ? " checked" : ""}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleStatus(t);
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-            <div style={{ width: depth * 12 }} />
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 28,
-                flexShrink: 0,
-              }}
-            >
-              {checkboxControl}
-            </div>
-            {hasChildren && (
-              <button
-                type="button"
-                onClick={() => toggleCollapsed(task.id)}
-                style={{
-                  border: "none",
-                  background: "transparent",
-                  padding: 4,
-                  cursor: "pointer",
-                  fontSize: 12,
-                  color: "#6b7280",
-                }}
-              >
-                {isCollapsed ? "▶" : "▼"}
-              </button>
-            )}
-            {!hasChildren && depth > 0 && (
-              <span style={{ fontSize: 10, color: "#d1d5db" }}>•</span>
-            )}
-            <div style={{ flex: 1, minWidth: 0, alignSelf: "stretch", display: "flex" }}>
-              <textarea
-                rows={2}
-                value={task.title || ""}
-                onChange={(e) =>
-                  updateTaskLocal(task.id, { title: e.target.value })
-                }
-                onBlur={(e) =>
-                  handleInlineSave(task.id, { title: e.target.value })
-                }
-                style={{
-                  width: "100%",
-                  minWidth: 0,
-                  minHeight: 52,
-                  maxHeight: 88,
-                  resize: "none",
-                  overflowY: "auto",
-                  overflowX: "hidden",
-                  fontSize: 13,
-                  lineHeight: 1.35,
-                  padding: "6px 8px",
-                  borderRadius: 6,
-                  border: "1px solid #e5e7eb",
-                  background: "#ffffff",
-                  textDecoration: isDone ? "line-through" : "none",
-                  color: isDone ? "#6b7280" : "#111827",
-                }}
-                placeholder="Task title…"
-              />
-            </div>
-          </div>
-
-          <div style={{ display: "flex", gap: 6, flexWrap: "nowrap", minWidth: 0 }}>
-            <select
-              value={task.category_id || ""}
-              onChange={(e) => {
-                const cid = e.target.value || null;
-                updateTaskLocal(task.id, {
-                  category_id: cid,
-                  subcategory_id: null,
-                  _subcategoryText: "",
-                  subcategory: null,
-                });
-                handleInlineSave(task.id, { category_id: cid, subcategory_id: null });
-              }}
-              style={{
-                flex: 1,
-                minWidth: 0,
-                fontSize: 13,
-                padding: "6px 8px",
-                borderRadius: 8,
-                border: "1px solid #e5e7eb",
-                background: "#ffffff",
-              }}
-            >
-              <option value="">Category…</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-            <input
-              type="text"
-              value={task._subcategoryText ?? task?.subcategory?.name ?? ""}
-              placeholder="Subcategory…"
-              onChange={(e) => updateTaskLocal(task.id, { _subcategoryText: e.target.value })}
-              onBlur={() => handleSubcategorySave(task)}
-              list={task.category_id ? `subcategory-options-${task.category_id}` : undefined}
-              style={{
-                flex: 1,
-                minWidth: 0,
-                fontSize: 13,
-                padding: "6px 8px",
-                borderRadius: 8,
-                border: "1px solid #e5e7eb",
-                background: "#ffffff",
-              }}
-            />
-          </div>
-
-          {!isCompact && (
-            <div style={{ display: "flex", alignItems: "center" }}>
-              <div
-                title="AI priority score derived from current prioritization model"
-                style={{
-                  minWidth: 82,
-                  textAlign: "center",
-                  fontSize: 12,
-                  padding: "6px 8px",
-                  borderRadius: 999,
-                  border: "1px solid #dbeafe",
-                  background: "#eff6ff",
-                  color: "#1d4ed8",
-                  fontWeight: 600,
-                }}
-              >
-                {Number.isFinite(task._aiPriorityScore) ? task._aiPriorityScore.toFixed(1) : "—"}
-              </div>
-            </div>
-          )}
-
-          <div style={{ display: "flex", gap: 6, flexWrap: "nowrap", alignItems: "center" }}>
-            <select
-              value={task.priority || "Medium"}
-              onChange={(e) =>
-                handleInlineSave(task.id, { priority: e.target.value })
-              }
-              style={{
-                flex: 1,
-                minWidth: 0,
-                fontSize: 13,
-                padding: "6px 8px",
-                borderRadius: 8,
-                border: "1px solid #e5e7eb",
-                background: "#ffffff",
-              }}
-            >
-              <option value="Critical">Critical</option>
-              <option value="High">High</option>
-              <option value="Medium">Medium</option>
-              <option value="Low">Low</option>
-            </select>
-            <input
-              type="number"
-              step="0.25"
-              value={task.effort_hours ?? ""}
-              placeholder="hrs"
-              onChange={(e) =>
-                updateTaskLocal(task.id, {
-                  effort_hours: e.target.value === "" ? null : Number(e.target.value),
-                })
-              }
-              onBlur={(e) =>
-                handleInlineSave(task.id, {
-                  effort_hours:
-                    e.target.value === "" ? null : Number(e.target.value),
-                })
-              }
-              style={{
-                width: 56,
-                fontSize: 13,
-                padding: "6px 8px",
-                borderRadius: 8,
-                border: "1px solid #e5e7eb",
-                background: "#ffffff",
-              }}
-            />
-          </div>
-
-          <input
-            type="date"
-            value={task.due_date || ""}
-            onChange={(e) => {
-              updateTaskLocal(task.id, { due_date: e.target.value || null });
-              handleInlineSave(task.id, { due_date: e.target.value || null });
-            }}
-            style={{
-              fontSize: 13,
-              padding: "6px 8px",
-              borderRadius: 8,
-              border: "1px solid #e5e7eb",
-              background: "#ffffff",
-            }}
-          />
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <select
-              value={task.status || "todo"}
-              onChange={(e) => handleStatusChange(task, e.target.value)}
-              style={{
-                fontSize: 13,
-                padding: "6px 8px",
-                borderRadius: 8,
-                border: "1px solid #e5e7eb",
-                background: "#ffffff",
-              }}
-            >
-              <option value="todo">Todo</option>
-              <option value="doing">Doing</option>
-              <option value="done">Done</option>
-              <option value="archived">Archived</option>
-            </select>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              <button
-                type="button"
-                onClick={() => handleAddSubtask(task)}
-                style={{
-                  fontSize: 12,
-                  padding: "6px 10px",
-                  borderRadius: 8,
-                  border: "1px solid #e5e7eb",
-                  background: "#f9fafb",
-                  cursor: "pointer",
-                }}
-              >
-                + Subtask
-              </button>
-              {task.status === "archived" ? (
-                <button
-                  type="button"
-                  onClick={() => handleStatusChange(task, "todo")}
-                  style={{
-                    fontSize: 12,
-                    padding: "6px 10px",
-                    borderRadius: 8,
-                    border: "1px solid #86efac",
-                    background: "#ecfdf5",
-                    cursor: "pointer",
-                  }}
-                >
-                  Restore
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => handleStatusChange(task, "archived")}
-                  style={{
-                    fontSize: 12,
-                    padding: "6px 10px",
-                    borderRadius: 8,
-                    border: "1px solid #fecaca",
-                    background: "#fef2f2",
-                    color: "#b91c1c",
-                    cursor: "pointer",
-                  }}
-                >
-                  Archive
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div style={{ minWidth: 0 }}>
-            <select
-              value={(Array.isArray(task.outcome_ids) && task.outcome_ids[0]) || ""}
-              onChange={(e) => {
-                const v = e.target.value || null;
-                const outcome_ids = v ? [v] : [];
-                updateTaskLocal(task.id, { outcome_ids });
-                handleInlineSave(task.id, { outcome_ids, primary_life_domain: task.primary_life_domain || undefined, alignment_source: "user" });
-              }}
-              title="Outcome (Vision)"
-              style={{
-                width: "100%",
-                fontSize: 12,
-                padding: "5px 6px",
-                borderRadius: 6,
-                border: "1px solid #e5e7eb",
-                background: "#ffffff",
-              }}
-            >
-              <option value="">Outcome…</option>
-              {(profile?.desired_outcomes || []).map((o) => (
-                <option key={o.id || o.title} value={o.id || o.title}>
-                  {(o.title || o.id || "").slice(0, 40)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <select
-              value={task.primary_life_domain || ""}
-              onChange={(e) => {
-                const v = e.target.value || null;
-                updateTaskLocal(task.id, { primary_life_domain: v });
-                handleInlineSave(task.id, { outcome_ids: task.outcome_ids, primary_life_domain: v || null, alignment_source: "user" });
-              }}
-              title="Human need strategy"
-              style={{
-                width: "100%",
-                fontSize: 12,
-                padding: "5px 6px",
-                borderRadius: 6,
-                border: "1px solid #e5e7eb",
-                background: "#ffffff",
-              }}
-            >
-              <option value="">Domain…</option>
-              {LIFE_DOMAIN_KEYS.map((key) => (
-                <option key={key} value={key}>
-                  {lifeDomainLabel(key, profile) || key}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div style={{ minWidth: 0 }} title="e.g. quick-win, high-leverage, urgent">
-            <input
-              type="text"
-              value={tagText}
-              onChange={(e) =>
-                updateTaskLocal(task.id, { _tagsText: e.target.value })
-              }
-              onBlur={(e) => handleTagsSave(task.id, e.target.value)}
-              placeholder="Tags"
-              style={{
-                width: "100%",
-                fontSize: 12,
-                padding: "5px 6px",
-                borderRadius: 6,
-                border: "1px solid #e5e7eb",
-                background: "#ffffff",
-              }}
-            />
-          </div>
-        </div>
-
-        {!isCollapsed &&
-          sortedChildren.map((child) => renderTaskRow(child, depth + 1))}
-      </div>
+          {isDone ? "✓" : ""}
+        </span>
+      </button>
     );
   }
 
-  if (!user || loading) {
+  if (!user) {
     return (
       <DashboardLayout>
-        <p style={{ fontSize: 14, color: "var(--rs-on-surface-variant)" }}>Loading…</p>
+        <p style={{ fontSize: 14, color: "#6b7280" }}>Loading…</p>
       </DashboardLayout>
     );
   }
 
   return (
     <DashboardLayout>
-      <div>
-        <PageHeader
-          eyebrow="Strategic productivity"
-          title="Action Items"
-          subtitle="Manage initiatives, subtasks, tags, and AI-scored priority — card view keeps the critical path visible. Open each project workspace from Projects in the sidebar."
-        />
-
-        {error && (
-          <p style={{ color: "#b91c1c", fontSize: 13, marginBottom: 8 }}>
-            {error}
-          </p>
-        )}
-
-        {/* Top bar: Search + Filters toggle (mobile) + Add task — always visible */}
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 10,
-            marginBottom: 12,
-            alignItems: "center",
-          }}
-        >
-          <input
-            type="text"
-            placeholder="Search intent…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="rs-input"
-            style={{
-              flex: "1 1 200px",
-              minWidth: 0,
-              fontSize: 14,
-              padding: "10px 14px",
-              borderRadius: "var(--rs-radius-md)",
-            }}
-          />
-          {isCompact && (
-            <button
-              type="button"
-              onClick={() => setFiltersExpanded((e) => !e)}
-              style={{
-                fontSize: 14,
-                padding: "10px 16px",
-                minHeight: 44,
-                borderRadius: 10,
-                border: "1px solid #e5e7eb",
-                background: filtersExpanded ? "#f3f4f6" : "#ffffff",
-                color: "#374151",
-                cursor: "pointer",
-                fontWeight: 500,
-              }}
-            >
-              {filtersExpanded ? "Hide filters" : "Filters"}
-            </button>
-          )}
-          <div
-            style={{
-              display: "flex",
-              border: "1px solid #e5e7eb",
-              borderRadius: 10,
-              overflow: "hidden",
-              background: "#f9fafb",
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => setCompactListModeAndSave(false)}
-              style={{
-                fontSize: 13,
-                padding: "8px 14px",
-                minHeight: 44,
-                border: "none",
-                background: !compactListMode ? "#ffffff" : "transparent",
-                color: !compactListMode ? "#111827" : "#6b7280",
-                cursor: "pointer",
-                fontWeight: !compactListMode ? 500 : 400,
-                boxShadow: !compactListMode ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
-              }}
-            >
-              Strategic
-            </button>
-            <button
-              type="button"
-              onClick={() => setCompactListModeAndSave(true)}
-              style={{
-                fontSize: 13,
-                padding: "8px 14px",
-                minHeight: 44,
-                border: "none",
-                background: compactListMode ? "#ffffff" : "transparent",
-                color: compactListMode ? "#111827" : "#6b7280",
-                cursor: "pointer",
-                fontWeight: compactListMode ? 500 : 400,
-                boxShadow: compactListMode ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
-              }}
-            >
-              Compact list
-            </button>
-          </div>
-          <button type="button" onClick={() => openAddTaskModal()} className="rs-btn-primary" style={{ minHeight: 44 }}>
-            + Add task
-          </button>
-        </div>
-
-        {!compactListMode && (
-          <form
-            className="rs-backlog-capture"
-            onSubmit={(e) => {
-              e.preventDefault();
-              const v = quickCapture.trim();
-              if (v) {
-                openAddTaskModal(v);
-                setQuickCapture("");
-              }
-            }}
-          >
-            <span className="material-symbols-outlined" aria-hidden>
-              add
-            </span>
-            <input
-              value={quickCapture}
-              onChange={(e) => setQuickCapture(e.target.value)}
-              placeholder="Capture a new strategic task…"
-              aria-label="Quick capture task title"
-            />
-            <span className="rs-backlog-capture__hint">⌘K · Ctrl+K</span>
-          </form>
-        )}
-
-        {/* Filter sections — hidden on mobile unless filters expanded */}
-        {(!isCompact || filtersExpanded) && (
-          <>
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 6,
-            marginBottom: 10,
-            alignItems: "center",
-          }}
-        >
-          <span style={{ fontSize: 13, color: "#6b7280", marginRight: 4 }}>
-            Show:
-          </span>
-          <button
-            type="button"
-            onClick={() => setStatusFilter("todo_doing")}
-            className={`rs-filter-pill${statusFilter === "todo_doing" ? " rs-filter-pill--active" : ""}`}
-          >
-            Todo &amp; Doing
-          </button>
-          <button
-            type="button"
-            onClick={() => setStatusFilter("done")}
-            className={`rs-filter-pill${statusFilter === "done" ? " rs-filter-pill--active" : ""}`}
-          >
-            Completed
-          </button>
-          <button
-            type="button"
-            onClick={() => setStatusFilter("archived")}
-            className={`rs-filter-pill${statusFilter === "archived" ? " rs-filter-pill--active" : ""}`}
-          >
-            Archived
-          </button>
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 6,
-            marginBottom: 10,
-            alignItems: "center",
-          }}
-        >
-          <span style={{ fontSize: 12, color: "#6b7280", marginRight: 4 }}>
-            Improve:
-          </span>
-          <button
-            type="button"
-            onClick={() => setQuickFilter("")}
-            className={`rs-filter-pill${!quickFilter ? " rs-filter-pill--active" : ""}`}
-          >
-            All
-          </button>
-          <button
-            type="button"
-            onClick={() => setQuickFilter("needs_alignment")}
-            className={`rs-filter-pill${quickFilter === "needs_alignment" ? " rs-filter-pill--active" : ""}`}
-          >
-            Needs alignment
-          </button>
-          <button
-            type="button"
-            onClick={() => setQuickFilter("needs_split")}
-            className={`rs-filter-pill${quickFilter === "needs_split" ? " rs-filter-pill--active" : ""}`}
-          >
-            Needs subtasks
-          </button>
-          <button
-            type="button"
-            onClick={() => setQuickFilter("stale_doing")}
-            className={`rs-filter-pill${quickFilter === "stale_doing" ? " rs-filter-pill--active" : ""}`}
-          >
-            Stale doing
-          </button>
-          <button
-            type="button"
-            onClick={() => setQuickFilter("priority_cleanup")}
-            className={`rs-filter-pill${quickFilter === "priority_cleanup" ? " rs-filter-pill--active" : ""}`}
-          >
-            Priority cleanup
-          </button>
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 6,
-            marginBottom: 10,
-            alignItems: "center",
-          }}
-        >
-          <span style={{ fontSize: 12, color: "#6b7280", marginRight: 4 }}>
-            Category (drag to prioritize):
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              setCategoryFilter("");
-              setSubcategoryFilter("");
-            }}
-            className={`rs-filter-pill${!categoryFilter ? " rs-filter-pill--active" : ""}`}
-          >
-            All focus
-          </button>
-          {orderedCategories.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              draggable
-              onDragStart={(e) => {
-                e.dataTransfer.effectAllowed = "move";
-                e.dataTransfer.setData("text/plain", c.id);
-              }}
-              onDragOver={(e) => {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = "move";
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                const sourceId = e.dataTransfer.getData("text/plain");
-                handleCategoryDrop(sourceId, c.id);
-              }}
-              onClick={() => {
-                setCategoryFilter(c.id);
-                setSubcategoryFilter("");
-              }}
-              className={`rs-filter-pill${categoryFilter === c.id ? " rs-filter-pill--active" : ""}`}
-              title="Drag to change category priority (left = highest)"
-            >
-              {c.name}
-            </button>
-          ))}
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 8,
-            marginBottom: 10,
-            alignItems: "center",
-          }}
-        >
-          <span style={{ fontSize: 12, color: "#6b7280", marginRight: 4 }}>
-            Filter by:
-          </span>
-          <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <span style={{ fontSize: 12, color: "#6b7280" }}>Category</span>
-            <select
-              value={categoryFilter}
-              onChange={(e) => {
-                setCategoryFilter(e.target.value || "");
-                setSubcategoryFilter("");
-              }}
-              style={{
-                fontSize: 13,
-                padding: "6px 8px",
-                borderRadius: 999,
-                border: "1px solid #e5e7eb",
-                background: "#ffffff",
-                minWidth: 140,
-              }}
-            >
-              <option value="">All categories</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <span style={{ fontSize: 12, color: "#6b7280" }}>Subcategory</span>
-            <select
-              value={subcategoryFilter}
-              onChange={(e) => setSubcategoryFilter(e.target.value || "")}
-              style={{
-                fontSize: 13,
-                padding: "6px 8px",
-                borderRadius: 999,
-                border: "1px solid #e5e7eb",
-                background: "#ffffff",
-                minWidth: 140,
-              }}
-            >
-              <option value="">All subcategories</option>
-              {categories
-                .find((c) => c.id === categoryFilter)
-                ?.subcategories?.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-            </select>
-          </label>
-          {categoryFilter ? (
-            <Link
-              href={`/category/${categoryFilter}`}
-              className="rs-btn-ghost"
-              style={{ fontSize: 13, textDecoration: "none", whiteSpace: "nowrap" }}
-            >
-              Project workspace →
-            </Link>
-          ) : null}
-          <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <span style={{ fontSize: 12, color: "#6b7280" }}>Tag</span>
-            <select
-              value={tagFilter}
-              onChange={(e) => setTagFilter(e.target.value || "")}
-              style={{
-                fontSize: 13,
-                padding: "6px 8px",
-                borderRadius: 999,
-                border: "1px solid #e5e7eb",
-                background: "#ffffff",
-                minWidth: 140,
-              }}
-            >
-              <option value="">Any tag</option>
-              {STANDARD_TAGS.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-              {tags.map((t) => (
-                <option key={t.id} value={t.name}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <div
-          id="rs-backlog-add-category"
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 8,
-            marginBottom: 10,
-            alignItems: "center",
-          }}
-        >
-          <span style={{ fontSize: 12, color: "#6b7280", marginRight: 4 }}>
-            Add category:
-          </span>
-          <input
-            type="text"
-            placeholder="New category name"
-            value={newCategoryName}
-            onChange={(e) => setNewCategoryName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleAddCategory()}
-            style={{
-              fontSize: 13,
-              padding: "6px 8px",
-              width: 180,
-              borderRadius: 999,
-              border: "1px solid #e5e7eb",
-              background: "#ffffff",
-            }}
-          />
-          <button
-            type="button"
-            onClick={handleAddCategory}
-            disabled={!newCategoryName.trim() || addingCategory}
-            style={{
-              fontSize: 13,
-              padding: "6px 12px",
-              borderRadius: 999,
-              border: "1px solid #059669",
-              background: "#059669",
-              color: "#ffffff",
-              cursor: newCategoryName.trim() && !addingCategory ? "pointer" : "not-allowed",
-              opacity: newCategoryName.trim() && !addingCategory ? 1 : 0.6,
-            }}
-          >
-            {addingCategory ? "Adding…" : "Add category"}
-          </button>
-          <button
-            type="button"
-            onClick={handleOpenCategoryEditor}
-            style={{
-              fontSize: 13,
-              padding: "6px 12px",
-              borderRadius: 999,
-              border: "1px solid #4b5563",
-              background: "#ffffff",
-              color: "#111827",
-              cursor: "pointer",
-            }}
-          >
-            Edit categories
-          </button>
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 8,
-            marginBottom: 10,
-            alignItems: "center",
-          }}
-        >
-          <span style={{ fontSize: 13, color: "#6b7280" }}>Status:</span>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            style={{
-              fontSize: 13,
-              padding: "8px 12px",
-              borderRadius: 8,
-              border: "1px solid #e5e7eb",
-              background: "#ffffff",
-              minWidth: 160,
-            }}
-            title="Fine-grained status"
-          >
-            {STATUS_FILTERS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
-          </>
-        )}
-
-        <div
-          style={{
-            marginBottom: 10,
-            display: "flex",
-            gap: 8,
-            alignItems: "center",
-            flexWrap: "wrap",
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => runPrioritizationEnrichment(false)}
-            disabled={enriching}
-            style={{
-              fontSize: 13,
-              padding: "8px 14px",
-              borderRadius: 999,
-              border: "1px solid #2563eb",
-              background: "#eff6ff",
-              color: "#1d4ed8",
-              cursor: enriching ? "not-allowed" : "pointer",
-              opacity: enriching ? 0.6 : 1,
-            }}
-          >
-            {enriching ? "Enriching…" : "AI Enrich (dry run)"}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (window.confirm("Apply enrichment updates to missing task metadata now?")) {
-                runPrioritizationEnrichment(true);
-              }
-            }}
-            disabled={enriching}
-            style={{
-              fontSize: 13,
-              padding: "8px 14px",
-              borderRadius: 999,
-              border: "1px solid #059669",
-              background: "#ecfdf5",
-              color: "#047857",
-              cursor: enriching ? "not-allowed" : "pointer",
-              opacity: enriching ? 0.6 : 1,
-            }}
-          >
-            Apply enrichment
-          </button>
-          <span style={{ fontSize: 12, color: "#6b7280" }}>
-            Fills missing priority/effort/tags only across all eligible backlog tasks.
-          </span>
-        </div>
-
-        {enriching && (
-          <div
-            style={{
-              marginBottom: 10,
-              border: "1px solid #dbeafe",
-              borderRadius: 12,
-              padding: "10px 12px",
-              background: "#eff6ff",
-              fontSize: 12,
-              color: "#1e3a8a",
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-              <strong>Processing enrichment…</strong>
-              <span>estimated {enrichmentProgressPct}%</span>
-            </div>
-            <div style={{ height: 10, background: "#dbeafe", borderRadius: 999, overflow: "hidden" }}>
-              <div
-                style={{
-                  width: `${enrichmentProgressPct}%`,
-                  height: "100%",
-                  background: "linear-gradient(90deg, #2563eb, #60a5fa)",
-                  transition: "width 240ms ease",
-                }}
-              />
-            </div>
-            <div>
-              Running across approximately {estimatedEligibleCount || 0} eligible backlog tasks in AI batches of 10.
-            </div>
-          </div>
-        )}
-
-        {enrichReport && (
-          <div
-            style={{
-              marginBottom: 10,
-              border: "1px solid #e5e7eb",
-              borderRadius: 12,
-              padding: "10px 12px",
-              background: "#f9fafb",
-              fontSize: 12,
-              color: "#374151",
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
-            }}
-          >
-            <div>
-              <strong>{enrichReport.apply ? "Enrichment applied" : "Dry-run preview"}</strong>
-              {` · processed ${enrichReport.processed || 0}`}
-              {typeof enrichReport.total_eligible === "number" ? ` of ${enrichReport.total_eligible} eligible` : ""}
-              {` · updated ${(enrichReport.report?.updated || []).length}`}
-              {` · skipped ${(enrichReport.report?.skipped || []).length}`}
-              {` · errors ${(enrichReport.report?.errors || []).length}`}
-            </div>
-
-            {formatEnrichmentStatus(enrichReport) && (
-              <div style={{ color: enrichReport.ai_status === "ok" ? "#065f46" : "#92400e" }}>
-                {formatEnrichmentStatus(enrichReport)}
-              </div>
-            )}
-
-            {(enrichReport.report?.updated || []).length > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <div style={{ fontWeight: 600 }}>Preview of updates</div>
-                {(enrichReport.report?.updated || []).slice(0, 12).map((row) => (
-                  <div
-                    key={row.task_id}
-                    style={{
-                      border: "1px solid #e5e7eb",
-                      borderRadius: 10,
-                      padding: "8px 10px",
-                      background: "#ffffff",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 3,
-                    }}
+      <Head>
+        <title>Action items · Rise &amp; Shine</title>
+      </Head>
+      <div className="ps-page">
+        <div className="act-shell">
+          <aside className="act-rail">
+            <div className="ps-eyebrow">Action items</div>
+            <h1 className="act-title">Action items</h1>
+            <div className="act-rail-section">
+              <div className="act-rail-label">View</div>
+              <div className="act-view-toggle">
+                {[
+                  ["matrix", "Matrix"],
+                  ["list", "List"],
+                  ["all", "All"],
+                ].map(([id, l]) => (
+                  <button
+                    key={id}
+                    className={"act-vtog" + (view === id ? " active" : "")}
+                    onClick={() => setView(id)}
                   >
-                    <div style={{ fontWeight: 500 }}>{row.title}</div>
-                    <div style={{ color: "#4b5563" }}>{formatEnrichmentPatch(row.patch)}</div>
-                    <div style={{ color: "#6b7280" }}>
-                      tags: {(row.tags_before || []).join(", ") || "none"} → {(row.tags_after || []).join(", ") || "none"}
-                    </div>
-                    {row.enrichment?.rationale && (
-                      <div style={{ color: "#6b7280" }}>why: {row.enrichment.rationale}</div>
-                    )}
-                    {row.enrichment?.source && (
-                      <div style={{ color: "#6b7280" }}>source: {row.enrichment.source}</div>
-                    )}
-                  </div>
+                    {l}
+                  </button>
                 ))}
-                {(enrichReport.report?.updated || []).length > 12 && (
-                  <div style={{ color: "#6b7280" }}>
-                    Showing first 12 of {(enrichReport.report?.updated || []).length} updated tasks.
-                  </div>
+              </div>
+            </div>
+            <div className="act-rail-section">
+              <div className="act-rail-label">
+                Group by <span className="act-rail-hint">(list view)</span>
+              </div>
+              <div className="act-group-toggle">
+                {[
+                  ["project", "Project"],
+                  ["priority", "Priority"],
+                  ["date", "Due date"],
+                ].map(([id, l]) => (
+                  <button
+                    key={id}
+                    className={"act-gtog" + (groupBy === id ? " active" : "")}
+                    onClick={() => setGroupBy(id)}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="act-rail-section">
+              <div className="act-rail-label-row">
+                <span className="act-rail-label">Priority</span>
+                {priorityFilter.length > 0 && (
+                  <button
+                    className="act-rail-clear"
+                    onClick={() => setPriorityFilter([])}
+                  >
+                    clear
+                  </button>
                 )}
               </div>
-            )}
+              <div className="act-pri-rows">
+                {["P0", "P1", "P2", "P3"].map((p) => {
+                  const on = priorityFilter.includes(p);
+                  return (
+                    <button
+                      key={p}
+                      className={"act-pri-row" + (on ? " on" : "")}
+                      onClick={() => togglePriorityFilter(p)}
+                    >
+                      <span
+                        className="act-pri-badge"
+                        style={{ background: PRI_META[p].color }}
+                      />
+                      <span className="act-pri-code">{p}</span>
+                      <span className="act-pri-label">{PRI_META[p].label}</span>
+                      <span className="act-pri-count">{counts.pri[p]}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="act-rail-section">
+              <div className="act-rail-label-row">
+                <span className="act-rail-label">Projects</span>
+                {projectFilter.length > 0 && (
+                  <button
+                    className="act-rail-clear"
+                    onClick={() => setProjectFilter([])}
+                  >
+                    clear
+                  </button>
+                )}
+              </div>
+              <div className="act-proj-list">
+                {categories
+                  .filter((c) => counts.proj[c.id])
+                  .map((c) => {
+                    const on = projectFilter.includes(c.id);
+                    return (
+                      <button
+                        key={c.id}
+                        className={"act-proj-row" + (on ? " on" : "")}
+                        onClick={() => toggleProjectFilter(c.id)}
+                      >
+                        <span
+                          className="act-proj-dot"
+                          style={{ background: colorMap[c.id] }}
+                        />
+                        <span className="act-proj-name">{c.name}</span>
+                        <span className="act-proj-count">{counts.proj[c.id]}</span>
+                      </button>
+                    );
+                  })}
+              </div>
+            </div>
+            <div className="act-rail-section">
+              <label className="act-check-row">
+                <input
+                  type="checkbox"
+                  checked={hideDone}
+                  onChange={(e) => setHideDone(e.target.checked)}
+                />
+                <span>Hide completed</span>
+              </label>
+              <div className="act-rail-foot">
+                {visible.length} of {tasks.length} tasks
+              </div>
+            </div>
+          </aside>
 
-            {(enrichReport.report?.errors || []).length > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <div style={{ fontWeight: 600, color: "#991b1b" }}>Errors</div>
-                {(enrichReport.report?.errors || []).slice(0, 5).map((row) => (
-                  <div key={row.task_id} style={{ color: "#991b1b" }}>
-                    {row.title}: {row.error}
+          <main className="act-main">
+            {error && <div className="today-error">{error}</div>}
+            {loading ? (
+              <div className="act-empty">Loading…</div>
+            ) : view === "matrix" ? (
+              <div className="act-matrix">
+                {[
+                  { key: "q1", items: matrixBuckets.q1, label: "Do now", note: "Urgent & important", variant: "clay" },
+                  { key: "q2", items: matrixBuckets.q2, label: "Schedule", note: "Important, not urgent", variant: "accent" },
+                  { key: "q3", items: matrixBuckets.q3, label: "Quick wins", note: "Urgent, not important", variant: "indigo" },
+                  { key: "q4", items: matrixBuckets.q4, label: "Drop or defer", note: "Neither urgent nor important" },
+                ].map((q) => (
+                  <div
+                    key={q.key}
+                    className={"act-q" + (q.variant ? " act-q--" + q.variant : "")}
+                  >
+                    <div className="act-q-head">
+                      <div className="act-q-title">{q.label}</div>
+                      <div className="act-q-note">{q.note}</div>
+                      <div className="act-q-count">{q.items.length}</div>
+                    </div>
+                    <div className="act-q-items">
+                      {q.items.length === 0 ? (
+                        <div className="act-q-empty">—</div>
+                      ) : (
+                        q.items.slice(0, 24).map((t) => <TaskRow key={t.id} t={t} />)
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
-            )}
-          </div>
-        )}
-
-        <Modal
-          title="Add task"
-          open={addTaskOpen}
-          onClose={() => !addingTask && setAddTaskOpen(false)}
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}>Title</span>
-              <input
-                type="text"
-                placeholder="What needs to be done?"
-                value={modalTitle}
-                onChange={(e) => setModalTitle(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleAddTaskFromModal()}
-                autoFocus
-                style={{
-                  fontSize: 15,
-                  padding: "10px 12px",
-                  borderRadius: 8,
-                  border: "1px solid #e5e7eb",
-                  background: "#ffffff",
-                }}
-              />
-            </label>
-            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}>Category</span>
-              <select
-                value={modalCategoryId}
-                onChange={(e) => {
-                  setModalCategoryId(e.target.value || "");
-                  setModalSubcategoryText("");
-                }}
-                style={{
-                  fontSize: 14,
-                  padding: "10px 12px",
-                  borderRadius: 8,
-                  border: "1px solid #e5e7eb",
-                  background: "#ffffff",
-                }}
-              >
-                <option value="">Select category…</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
+            ) : view === "list" ? (
+              <div className="act-groups">
+                {grouped.map((g) => (
+                  <div key={g.key} className="act-group">
+                    <div className="act-group-head">
+                      <span
+                        className="act-group-stripe"
+                        style={{ background: g.color }}
+                      />
+                      <div className="act-group-label">{g.label}</div>
+                      <div className="act-group-count">{g.items.length}</div>
+                    </div>
+                    <div className="act-group-items">
+                      {g.items.map((t) => <TaskRow key={t.id} t={t} />)}
+                    </div>
+                  </div>
                 ))}
-              </select>
-            </label>
-            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}>Subcategory (optional)</span>
-              <input
-                type="text"
-                placeholder="Type or choose existing…"
-                value={modalSubcategoryText}
-                onChange={(e) => setModalSubcategoryText(e.target.value)}
-                list={modalCategoryId ? `subcategory-datalist-modal-${modalCategoryId}` : undefined}
-                style={{
-                  fontSize: 14,
-                  padding: "10px 12px",
-                  borderRadius: 8,
-                  border: "1px solid #e5e7eb",
-                  background: "#ffffff",
-                }}
-              />
-              {modalCategoryId && (
-                <datalist id={`subcategory-datalist-modal-${modalCategoryId}`}>
-                  {(categories.find((c) => c.id === modalCategoryId)?.subcategories || []).map((s) => (
-                    <option key={s.id} value={s.name} />
-                  ))}
-                </datalist>
-              )}
-            </label>
-            <div className="rs-form-grid-2">
-              <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <span style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}>Priority</span>
-                <select
-                  value={modalPriority}
-                  onChange={(e) => setModalPriority(e.target.value)}
-                  disabled={modalMoveToTop}
-                  style={{
-                    fontSize: 14,
-                    padding: "10px 12px",
-                    borderRadius: 8,
-                    border: "1px solid #e5e7eb",
-                    background: modalMoveToTop ? "#f3f4f6" : "#ffffff",
-                  }}
-                >
-                  <option value="Critical">Critical</option>
-                  <option value="High">High</option>
-                  <option value="Medium">Medium</option>
-                  <option value="Low">Low</option>
-                </select>
-              </label>
-              <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <span style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}>Status</span>
-                <select
-                  value={modalStatus}
-                  onChange={(e) => setModalStatus(e.target.value)}
-                  style={{
-                    fontSize: 14,
-                    padding: "10px 12px",
-                    borderRadius: 8,
-                    border: "1px solid #e5e7eb",
-                    background: "#ffffff",
-                  }}
-                >
-                  <option value="todo">todo</option>
-                  <option value="doing">doing</option>
-                  <option value="done">done</option>
-                  <option value="archived">archived</option>
-                </select>
-              </label>
-            </div>
-            <div className="rs-form-grid-2">
-              <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <span style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}>Due date</span>
-                <input
-                  type="date"
-                  value={modalDueDate}
-                  onChange={(e) => setModalDueDate(e.target.value)}
-                  style={{
-                    fontSize: 14,
-                    padding: "10px 12px",
-                    borderRadius: 8,
-                    border: "1px solid #e5e7eb",
-                    background: "#ffffff",
-                  }}
-                />
-              </label>
-              <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <span style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}>Effort hours</span>
-                <input
-                  type="number"
-                  step="0.25"
-                  min="0"
-                  value={modalEffortHours}
-                  onChange={(e) => setModalEffortHours(e.target.value)}
-                  style={{
-                    fontSize: 14,
-                    padding: "10px 12px",
-                    borderRadius: 8,
-                    border: "1px solid #e5e7eb",
-                    background: "#ffffff",
-                  }}
-                />
-              </label>
-            </div>
-            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}>Tags (optional, comma-separated)</span>
-              <input
-                type="text"
-                placeholder="e.g. quick-win, urgent"
-                value={modalTagsText}
-                onChange={(e) => setModalTagsText(e.target.value)}
-                style={{
-                  fontSize: 14,
-                  padding: "10px 12px",
-                  borderRadius: 8,
-                  border: "1px solid #e5e7eb",
-                  background: "#ffffff",
-                }}
-              />
-            </label>
-            <label
-              style={{
-                display: "flex",
-                alignItems: "flex-start",
-                gap: 10,
-                fontSize: 13,
-                color: "#374151",
-                padding: "10px 12px",
-                borderRadius: 8,
-                border: "1px solid #e5e7eb",
-                background: modalMoveToTop ? "#fef2f2" : "#f9fafb",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={modalMoveToTop}
-                onChange={(e) => setModalMoveToTop(e.target.checked)}
-                style={{ marginTop: 2 }}
-              />
-              <span>
-                <strong>Move to top</strong> — marks this as urgent today, auto-adds
-                <code style={{ marginLeft: 4 }}>fire-fighting</code>, and forces
-                <code style={{ marginLeft: 4 }}>Critical</code> priority.
-              </span>
-            </label>
-            {error && (
-              <p style={{ fontSize: 13, color: "#dc2626", margin: 0 }}>{error}</p>
-            )}
-            <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-              <button
-                type="button"
-                onClick={handleAddTaskFromModal}
-                disabled={!modalTitle.trim() || addingTask}
-                style={{
-                  fontSize: 14,
-                  padding: "10px 18px",
-                  minHeight: 44,
-                  borderRadius: 8,
-                  border: "none",
-                  background: "#111827",
-                  color: "#ffffff",
-                  cursor: modalTitle.trim() && !addingTask ? "pointer" : "not-allowed",
-                  opacity: modalTitle.trim() && !addingTask ? 1 : 0.6,
-                }}
-              >
-                {addingTask ? "Adding…" : "Add task"}
-              </button>
-              <button
-                type="button"
-                onClick={() => !addingTask && setAddTaskOpen(false)}
-                style={{
-                  fontSize: 14,
-                  padding: "10px 18px",
-                  minHeight: 44,
-                  borderRadius: 8,
-                  border: "1px solid #e5e7eb",
-                  background: "#ffffff",
-                  color: "#374151",
-                  cursor: "pointer",
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </Modal>
-
-        <Modal
-          title="Edit categories"
-          open={categoryEditorOpen}
-          onClose={() => !savingCategories && setCategoryEditorOpen(false)}
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <p style={{ fontSize: 12, color: "#6b7280", margin: 0 }}>
-              Reorder, rename, or delete categories. Order here controls priority from left (highest) to right (lowest) on the Action Items page.
-            </p>
-            <div
-              style={{
-                maxHeight: 260,
-                overflowY: "auto",
-                display: "flex",
-                flexDirection: "column",
-                gap: 6,
-              }}
-            >
-              {orderedCategories.map((c) => (
-                <div
-                  key={c.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
-                >
-                  <span style={{ cursor: "grab", fontSize: 14, userSelect: "none" }} title="Drag on the main page to change order">☰</span>
-                  <input
-                    type="text"
-                    value={categoryEdits[c.id] ?? c.name}
-                    onChange={(e) => handleCategoryEditChange(c.id, e.target.value)}
-                    style={{
-                      flex: 1,
-                      fontSize: 13,
-                      padding: "6px 8px",
-                      borderRadius: 6,
-                      border: "1px solid #e5e7eb",
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteCategoryClicked(c.id)}
-                    style={{
-                      fontSize: 12,
-                      padding: "4px 8px",
-                      borderRadius: 999,
-                      border: "1px solid #dc2626",
-                      background: "#fef2f2",
-                      color: "#b91c1c",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Delete
-                  </button>
-                </div>
-              ))}
-              {orderedCategories.length === 0 && (
-                <p style={{ fontSize: 12, color: "#9ca3af", marginTop: 4 }}>
-                  No categories yet. Add one from the main Action Items page first.
-                </p>
-              )}
-            </div>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8 }}>
-              <button
-                type="button"
-                onClick={() => setCategoryEditorOpen(false)}
-                disabled={savingCategories}
-                style={{
-                  fontSize: 13,
-                  padding: "6px 12px",
-                  borderRadius: 999,
-                  border: "1px solid #e5e7eb",
-                  background: "#ffffff",
-                  color: "#111827",
-                  cursor: "pointer",
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveCategoryChanges}
-                disabled={savingCategories}
-                style={{
-                  fontSize: 13,
-                  padding: "6px 14px",
-                  borderRadius: 999,
-                  border: "1px solid #111827",
-                  background: "#111827",
-                  color: "#ffffff",
-                  cursor: savingCategories ? "wait" : "pointer",
-                }}
-              >
-                {savingCategories ? "Saving…" : "Save changes"}
-              </button>
-            </div>
-          </div>
-        </Modal>
-
-        {/* One datalist per category — used by strategic cards + compact table */}
-        {categories.map((c) => (
-          <datalist key={c.id} id={`subcategory-options-${c.id}`}>
-            {(c.subcategories || []).map((s) => (
-              <option key={s.id} value={s.name} />
-            ))}
-          </datalist>
-        ))}
-
-        <div className="rs-backlog-sort-bar">
-          <span className="rs-backlog-sort-bar__label">Sort tasks</span>
-          {BACKLOG_SORT_KEYS.map(({ key, label }) => {
-            const active = comfortableSortKey === key;
-            const arrow = active ? (comfortableSortDir === "asc" ? " ↑" : " ↓") : "";
-            return (
-              <button
-                key={key}
-                type="button"
-                className={`rs-backlog-sort-btn${active ? " rs-backlog-sort-btn--active" : ""}`}
-                onClick={() => handleComfortableSort(key)}
-                title={`Sort by ${label} (${active && comfortableSortDir === "asc" ? "desc" : "asc"})`}
-              >
-                {label}
-                {arrow}
-              </button>
-            );
-          })}
-        </div>
-
-        {compactListMode ? (
-          <div
-            className="backlog-table-wrap"
-            style={{
-              marginTop: 6,
-              borderRadius: "var(--rs-radius-lg)",
-              border: "1px solid rgba(186, 177, 159, 0.18)",
-              background: "var(--rs-surface-raised)",
-              padding: isCompact ? 12 : "12px 14px",
-              overflowX: "auto",
-              boxShadow: "var(--rs-shadow-soft)",
-            }}
-          >
-            {!isCompact && (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns:
-                  "minmax(160px, 2fr) minmax(100px, 1fr) 72px 52px 78px 92px 72px 56px 88px minmax(100px, 1.1fr)",
-                gap: 6,
-                fontSize: 11,
-                fontWeight: 600,
-                color: "var(--rs-on-surface-variant)",
-                paddingBottom: 4,
-                borderBottom: "1px solid rgba(186, 177, 159, 0.15)",
-              }}
-            >
-              <div>Title</div>
-              <div>Category</div>
-              <div>Priority</div>
-              <div>Hrs</div>
-              <div>Due</div>
-              <div>Status</div>
-              <div>Outcome</div>
-              <div>Domain</div>
-              <div>Actions</div>
-              <div>Tags</div>
-            </div>
-            )}
-            {isCompact && (
-              <p
-                className="rs-backlog-compact-mobile-hint"
-                style={{
-                  fontSize: 12,
-                  color: "var(--rs-on-surface-variant)",
-                  margin: "0 0 10px",
-                  lineHeight: 1.45,
-                }}
-              >
-                On small screens, compact list shows as <strong>cards</strong> so task titles stay readable. Use{" "}
-                <strong>Strategic</strong> for the full initiative cards.
-              </p>
-            )}
-            <div>
-              {sortedRootTasks.length === 0 ? (
-                <p
-                  style={{
-                    fontSize: 14,
-                    color: "var(--rs-on-surface-variant)",
-                    margin: isCompact ? "20px 0" : "12px 0 4px",
-                    textAlign: "center",
-                  }}
-                >
-                  No tasks match your filters.
-                </p>
-              ) : (
-                sortedRootTasks.map((t) => renderTaskRow(t, 0))
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="rs-backlog-card-list">
-            {sortedRootTasks.length === 0 ? (
-              <p
-                style={{
-                  fontSize: 14,
-                  color: "var(--rs-on-surface-variant)",
-                  margin: "24px 0",
-                  textAlign: "center",
-                }}
-              >
-                No tasks match your filters.
-              </p>
+              </div>
             ) : (
-              <DndContext
-                sensors={backlogSensors}
-                collisionDetection={closestCenter}
-                onDragEnd={(event) => {
-                  const { active, over } = event;
-                  if (!over || active.id === over.id) return;
-                  // Find which category these tasks belong to and reorder within it
-                  const activeTask = sortedRootTasks.find((t) => t.id === active.id);
-                  if (!activeTask?.category_id) return;
-                  const catId = activeTask.category_id;
-                  const catTasks = sortedRootTasks.filter((t) => t.category_id === catId);
-                  const oldIdx = catTasks.findIndex((t) => t.id === active.id);
-                  const overTask = sortedRootTasks.find((t) => t.id === over.id);
-                  if (!overTask || overTask.category_id !== catId) return;
-                  const newIdx = catTasks.findIndex((t) => t.id === over.id);
-                  if (oldIdx < 0 || newIdx < 0) return;
-                  const newOrder = arrayMove(catTasks, oldIdx, newIdx).map((t) => t.id);
-                  setWorkspaceOrders((prev) => ({
-                    ...prev,
-                    [catId]: { ...prev[catId], task_order_ids: newOrder },
-                  }));
-                  saveCollaborativeProjectWorkspace(catId, { task_order_ids: newOrder });
-                }}
-              >
-                <SortableContext items={sortedRootTasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-                  {sortedRootTasks.map((t) => {
-                    const rawKids = (childrenByParent.get(t.id) || []);
-                    const catId = t.category_id;
-                    const subOrder = catId ? (workspaceOrders[catId]?.subtask_order_ids?.[t.id] || []) : [];
-                    let kids;
-                    if (subOrder.length > 0) {
-                      const kidMap = new Map(rawKids.map((k) => [k.id, k]));
-                      const ordered = subOrder.map((id) => kidMap.get(id)).filter(Boolean);
-                      const rest = rawKids.filter((k) => !subOrder.includes(k.id)).sort(compareTasksForSort);
-                      kids = [...ordered, ...rest];
-                    } else {
-                      kids = rawKids.slice().sort(compareTasksForSort);
-                    }
-                    return (
-                      <SortableBacklogCard key={t.id} id={t.id}>
-                        <BacklogStrategicTaskCard
-                          task={t}
-                          sortedChildren={kids}
-                          categories={categories}
-                          profile={profile}
-                          lifeDomainLabel={lifeDomainLabel}
-                          LIFE_DOMAIN_KEYS={LIFE_DOMAIN_KEYS}
-                          expandedSubtasks={!!expandedSubtasksByParent[t.id]}
-                          onToggleSubtasksExpanded={() =>
-                            setExpandedSubtasksByParent((p) => ({ ...p, [t.id]: !p[t.id] }))
-                          }
-                          expandedTagPills={!!expandedTagPillsByTask[t.id]}
-                          onToggleTagPills={() =>
-                            setExpandedTagPillsByTask((p) => ({ ...p, [t.id]: !p[t.id] }))
-                          }
-                          updateTaskLocal={updateTaskLocal}
-                          handleInlineSave={handleInlineSave}
-                          handleStatusChange={handleStatusChange}
-                          handleSubcategorySave={handleSubcategorySave}
-                          handleTagsSave={handleTagsSave}
-                          handleAddSubtask={handleAddSubtask}
-                          handleAssignTask={handleAssignTask}
-                          onReorderSubtasks={(parentId, newSubIds) => {
-                            const catId = t.category_id;
-                            if (!catId) return;
-                            const prev = workspaceOrders[catId]?.subtask_order_ids || {};
-                            const next = { ...prev, [parentId]: newSubIds };
-                            setWorkspaceOrders((wo) => ({
-                              ...wo,
-                              [catId]: { ...wo[catId], subtask_order_ids: next },
-                            }));
-                            saveCollaborativeProjectWorkspace(catId, { subtask_order_ids: next });
-                          }}
-                          memberOptions={categories.find((c) => c.id === t.category_id)?._members || []}
-                          tagText={t._tagsText ?? makeTagText(t)}
-                        />
-                      </SortableBacklogCard>
-                    );
-                  })}
-                </SortableContext>
-              </DndContext>
+              <div className="act-group">
+                <div className="act-group-items">
+                  {visible.map((t) => <TaskRow key={t.id} t={t} />)}
+                </div>
+              </div>
             )}
-          </div>
-        )}
+          </main>
+
+          {view !== "matrix" && selected && (
+            <aside className="act-inspect">
+              <div className="act-inspect-head">
+                <div className="act-inspect-breadcrumb">
+                  {catMap[selected.category_id]?.name || "—"}
+                </div>
+                <div
+                  className="act-inspect-pri"
+                  style={{ background: PRI_META[toCode(selected.priority)].soft, color: PRI_META[toCode(selected.priority)].color }}
+                >
+                  {toCode(selected.priority)} · {PRI_META[toCode(selected.priority)].label}
+                </div>
+              </div>
+              <h2 className="act-inspect-title">{selected.title}</h2>
+              <div className="act-inspect-stats">
+                {selected.effort_hours > 0 && (
+                  <div className="act-stat">
+                    <div className="act-stat-label">Effort</div>
+                    <div className="act-stat-v">{Math.round(selected.effort_hours * 60)}m</div>
+                  </div>
+                )}
+                {selected.due_date && (
+                  <div className="act-stat">
+                    <div className="act-stat-label">Due</div>
+                    <div className="act-stat-v">{fmtDue(selected.due_date)}</div>
+                  </div>
+                )}
+                <div className="act-stat">
+                  <div className="act-stat-label">Status</div>
+                  <div className="act-stat-v">{selected.status}</div>
+                </div>
+              </div>
+              <div className="act-inspect-actions">
+                <button
+                  className="ps-btn ps-btn--primary"
+                  onClick={() => toggleStatus(selected)}
+                >
+                  {selected.status === "done" ? "Mark open" : "Complete"}
+                </button>
+                <button
+                  className="ps-btn"
+                  onClick={() => setSelectedId(null)}
+                >
+                  Close
+                </button>
+              </div>
+            </aside>
+          )}
+        </div>
       </div>
-      <button
-        type="button"
-        className="rs-backlog-fab"
-        onClick={() => openAddTaskModal()}
-        aria-label="Add task"
-      >
-        <span className="material-symbols-outlined">add</span>
-      </button>
+
+      <style jsx global>{`
+        .act-shell {
+          display: grid;
+          grid-template-columns: 260px 1fr 320px;
+          gap: 24px;
+          max-width: 1400px;
+          margin: 0 auto;
+          padding: 32px 24px 80px;
+        }
+        .act-shell:not(:has(.act-inspect)) { grid-template-columns: 260px 1fr; }
+        .act-title {
+          font-family: var(--ps-serif);
+          font-size: 26px;
+          margin: 0 0 18px;
+          letter-spacing: -0.02em;
+        }
+        .act-rail {
+          display: flex;
+          flex-direction: column;
+          gap: 18px;
+          position: sticky;
+          top: 0;
+          align-self: start;
+        }
+        .act-rail-section { display: flex; flex-direction: column; gap: 8px; }
+        .act-rail-label {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+        }
+        .act-rail-label-row { display: flex; justify-content: space-between; align-items: center; }
+        .act-rail-hint { font-size: 9px; font-weight: 400; opacity: 0.7; margin-left: 4px; }
+        .act-rail-clear {
+          appearance: none;
+          border: none;
+          background: transparent;
+          font-family: var(--ps-mono);
+          font-size: 9px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+          cursor: pointer;
+        }
+        .act-rail-clear:hover { color: var(--ps-ink); }
+        .act-view-toggle, .act-group-toggle {
+          display: flex;
+          gap: 2px;
+          background: var(--ps-paper);
+          padding: 3px;
+          border-radius: 8px;
+          border: 1px solid var(--ps-ink-08);
+        }
+        .act-vtog, .act-gtog {
+          flex: 1;
+          appearance: none;
+          border: none;
+          background: transparent;
+          padding: 6px 10px;
+          border-radius: 5px;
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: var(--ps-ink-60);
+          cursor: pointer;
+        }
+        .act-vtog.active, .act-gtog.active {
+          background: var(--ps-ink);
+          color: var(--ps-bg);
+        }
+        .act-pri-rows, .act-proj-list { display: flex; flex-direction: column; gap: 2px; }
+        .act-pri-row, .act-proj-row {
+          appearance: none;
+          border: none;
+          background: transparent;
+          display: grid;
+          grid-template-columns: 8px auto 1fr auto;
+          gap: 8px;
+          align-items: center;
+          padding: 5px 8px;
+          border-radius: 6px;
+          cursor: pointer;
+          width: 100%;
+          text-align: left;
+          font-family: inherit;
+          color: var(--ps-ink-70);
+          font-size: 12.5px;
+        }
+        .act-pri-row:hover, .act-proj-row:hover { background: var(--ps-ink-05); color: var(--ps-ink); }
+        .act-pri-row.on, .act-proj-row.on { background: var(--ps-ink); color: var(--ps-bg); }
+        .act-pri-row.on .act-pri-count, .act-proj-row.on .act-proj-count { color: rgba(250,247,242,0.6); }
+        .act-pri-badge {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+        }
+        .act-pri-code {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.04em;
+        }
+        .act-pri-label { font-size: 12px; }
+        .act-pri-count, .act-proj-count {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          color: var(--ps-ink-40);
+        }
+        .act-proj-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 2px;
+        }
+        .act-proj-name {
+          font-size: 12px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .act-check-row {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          color: var(--ps-ink-60);
+          cursor: pointer;
+        }
+        .act-check-row input { accent-color: var(--ps-accent); }
+        .act-rail-foot {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          color: var(--ps-ink-50);
+          padding-top: 8px;
+          border-top: 1px solid var(--ps-ink-08);
+        }
+        .act-main { min-width: 0; }
+        .act-empty {
+          padding: 40px;
+          text-align: center;
+          color: var(--ps-ink-60);
+          font-size: 13px;
+        }
+        .act-matrix {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          grid-template-rows: 1fr 1fr;
+          gap: 14px;
+          min-height: 600px;
+        }
+        .act-q {
+          background: #fff;
+          border: 1px solid var(--ps-ink-10);
+          border-radius: 14px;
+          padding: 16px;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        .act-q--clay { background: var(--ps-clay-soft); border-color: rgba(184,92,62,0.18); }
+        .act-q--accent { background: var(--ps-accent-soft); border-color: rgba(185,115,22,0.2); }
+        .act-q--indigo { background: var(--ps-indigo-soft); border-color: rgba(74,107,143,0.2); }
+        .act-q-head { display: flex; align-items: baseline; gap: 8px; }
+        .act-q-title {
+          font-family: var(--ps-serif);
+          font-size: 16px;
+          letter-spacing: -0.01em;
+        }
+        .act-q-note {
+          font-size: 11px;
+          color: var(--ps-ink-60);
+          font-style: italic;
+        }
+        .act-q-count {
+          margin-left: auto;
+          font-family: var(--ps-mono);
+          font-size: 11px;
+          color: var(--ps-ink-50);
+        }
+        .act-q-items { display: flex; flex-direction: column; gap: 4px; overflow-y: auto; max-height: 320px; }
+        .act-q-empty {
+          font-family: var(--ps-serif);
+          font-size: 22px;
+          color: var(--ps-ink-30);
+          text-align: center;
+          padding: 20px;
+        }
+        .act-groups { display: flex; flex-direction: column; gap: 24px; }
+        .act-group {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        .act-group-head {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 6px 0;
+          border-bottom: 1px solid var(--ps-ink-10);
+          margin-bottom: 4px;
+        }
+        .act-group-stripe {
+          width: 3px;
+          height: 16px;
+          border-radius: 2px;
+        }
+        .act-group-label {
+          font-family: var(--ps-serif);
+          font-size: 15px;
+          letter-spacing: -0.01em;
+        }
+        .act-group-count {
+          margin-left: auto;
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          color: var(--ps-ink-50);
+        }
+        .act-group-items { display: flex; flex-direction: column; gap: 4px; }
+        .act-row {
+          appearance: none;
+          width: 100%;
+          border: 1px solid var(--ps-ink-08);
+          background: #fff;
+          border-radius: 10px;
+          padding: 10px 12px;
+          display: grid;
+          grid-template-columns: 32px 10px 1fr 28px;
+          gap: 10px;
+          align-items: center;
+          cursor: pointer;
+          text-align: left;
+          transition: border-color 120ms;
+        }
+        .act-row:hover { border-color: var(--ps-ink-30); }
+        .act-row.selected { border-color: var(--ps-accent); box-shadow: 0 0 0 3px var(--ps-accent-soft); }
+        .act-row.done { opacity: 0.5; }
+        .act-row-pri {
+          font-family: var(--ps-mono);
+          font-size: 9px;
+          font-weight: 700;
+          color: #fff;
+          padding: 3px 6px;
+          border-radius: 4px;
+          text-align: center;
+          letter-spacing: 0.04em;
+        }
+        .act-row-dot {
+          width: 10px;
+          height: 10px;
+          border-radius: 2px;
+        }
+        .act-row-body { min-width: 0; }
+        .act-row-title {
+          font-size: 13.5px;
+          color: var(--ps-ink);
+          font-weight: 450;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          margin-bottom: 2px;
+        }
+        .act-row.done .act-row-title { text-decoration: line-through; }
+        .act-row-meta {
+          display: flex;
+          gap: 10px;
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          color: var(--ps-ink-50);
+          letter-spacing: 0.04em;
+        }
+        .act-row-due { color: var(--ps-clay); }
+        .act-check {
+          width: 22px;
+          height: 22px;
+          border-radius: 5px;
+          border: 1.5px solid var(--ps-ink-30);
+          background: #fff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 13px;
+          color: var(--ps-bg);
+          cursor: pointer;
+        }
+        .act-check.checked { background: var(--ps-sage); border-color: var(--ps-sage); }
+        .act-inspect {
+          background: #fff;
+          border: 1px solid var(--ps-ink-10);
+          border-radius: 14px;
+          padding: 18px 20px;
+          position: sticky;
+          top: 0;
+          align-self: start;
+          max-height: calc(100vh - 80px);
+          overflow-y: auto;
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+        .act-inspect-head {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .act-inspect-breadcrumb {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+        }
+        .act-inspect-pri {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.04em;
+          padding: 3px 8px;
+          border-radius: 4px;
+        }
+        .act-inspect-title {
+          font-family: var(--ps-serif);
+          font-size: 22px;
+          letter-spacing: -0.015em;
+          line-height: 1.25;
+          margin: 0;
+        }
+        .act-inspect-stats {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 8px;
+        }
+        .act-stat {
+          background: var(--ps-paper);
+          border: 1px solid var(--ps-ink-08);
+          border-radius: 8px;
+          padding: 8px 10px;
+        }
+        .act-stat-label {
+          font-family: var(--ps-mono);
+          font-size: 9px;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+        }
+        .act-stat-v {
+          font-family: var(--ps-serif);
+          font-size: 16px;
+          letter-spacing: -0.01em;
+          margin-top: 4px;
+        }
+        .act-inspect-actions { display: flex; gap: 8px; }
+        @media (max-width: 1280px) {
+          .act-shell { grid-template-columns: 240px 1fr !important; }
+          .act-inspect { grid-column: 1 / -1; position: static; max-height: none; }
+        }
+        @media (max-width: 900px) {
+          .act-shell { grid-template-columns: 1fr !important; padding: 16px; }
+          .act-rail { position: static; }
+          .act-matrix { grid-template-columns: 1fr; min-height: unset; }
+        }
+      `}</style>
     </DashboardLayout>
   );
 }
-
