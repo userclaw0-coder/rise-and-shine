@@ -2,7 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import PSShell from "../../components/PSShell";
+import ProjectKnowledgeBase from "../../components/ProjectKnowledgeBase";
 import { useAuth } from "../../hooks/useAuth";
+import {
+  loadCollaborativeProject,
+  saveCollaborativeProjectWorkspace,
+} from "../../lib/collaborationClient";
 import { supabase } from "../../lib/supabaseClient";
 import {
   getUserProfile,
@@ -62,6 +67,11 @@ export default function ProjectPage() {
   const [breakdowns, setBreakdowns] = useState({});
   const [breakingDown, setBreakingDown] = useState(null);
   const [insertingTask, setInsertingTask] = useState(null);
+  const [knowledgeBase, setKnowledgeBase] = useState("");
+  const [resources, setResources] = useState([]);
+  const [mantra, setMantra] = useState("");
+  const [kbSaving, setKbSaving] = useState(false);
+  const [kbError, setKbError] = useState("");
 
   const color = PROJECT_COLORS[categoryIndex % PROJECT_COLORS.length];
 
@@ -118,6 +128,16 @@ export default function ProjectPage() {
         return { ...o, progress, taskCount: subset.length };
       });
       setOutcomes(withProgress);
+
+      // Load workspace (knowledge base + resources + mantra)
+      try {
+        const ws = await loadCollaborativeProject(categoryId);
+        setKnowledgeBase(ws?.knowledge_base || "");
+        setResources(ws?.workspace?.resources || []);
+        setMantra(ws?.workspace?.mantra || "");
+      } catch {
+        // silent — shared_project_workspaces row may not exist yet
+      }
     } catch (err) {
       setError(err.message || "Failed to load project.");
     } finally {
@@ -128,6 +148,22 @@ export default function ProjectPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  async function saveKb() {
+    if (!user || kbSaving) return;
+    setKbSaving(true);
+    setKbError("");
+    try {
+      await saveCollaborativeProjectWorkspace(categoryId, {
+        knowledge_base: knowledgeBase,
+        workspace: { resources, mantra },
+      });
+    } catch (err) {
+      setKbError(err.message || "Save failed.");
+    } finally {
+      setKbSaving(false);
+    }
+  }
 
   async function fetchOutcomes() {
     if (!user || outcomesLoading || !categoryId) return;
@@ -590,9 +626,61 @@ export default function ProjectPage() {
               </div>
             ))}
           </div>
+
+          <div className="pj-kb-wrap">
+            <div className="pj-kb-head">
+              <div>
+                <div className="ps-section-title" style={{ margin: 0 }}>
+                  Knowledge base &amp; resources
+                </div>
+                <div className="ps-section-sub">
+                  Specs, contacts, reference links. Jarvis reads this as project
+                  context.
+                </div>
+              </div>
+              <button
+                type="button"
+                className="ps-btn ps-btn--primary"
+                onClick={saveKb}
+                disabled={kbSaving}
+              >
+                {kbSaving ? "Saving…" : "Save KB"}
+              </button>
+            </div>
+            {kbError && <div className="today-error">{kbError}</div>}
+            <ProjectKnowledgeBase
+              knowledgeBase={knowledgeBase}
+              onKnowledgeBaseChange={setKnowledgeBase}
+              resources={resources}
+              onResourcesChange={setResources}
+              projectName={category?.name || "Project"}
+              mantra={mantra}
+              onSave={saveKb}
+              saving={kbSaving}
+            />
+          </div>
         </div>
 
       <style jsx global>{`
+        .pj-kb-wrap {
+          margin-top: 32px;
+          padding-top: 20px;
+          border-top: 1px solid var(--ps-ink-10);
+        }
+        .pj-kb-head {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 14px;
+          margin-bottom: 12px;
+          flex-wrap: wrap;
+        }
+        .pj-kb-wrap .pkb {
+          background: #fff;
+          border: 1px solid var(--ps-ink-10);
+          border-radius: 12px;
+          padding: 14px 16px;
+        }
         .pj-breadcrumb {
           display: flex;
           align-items: center;
