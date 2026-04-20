@@ -99,7 +99,13 @@ export default function TodayPage() {
         colorMap[c.id] = CATEGORY_COLORS[i % CATEGORY_COLORS.length];
       });
 
-      const taskIds = (planRes.data?.queue || []).map((s) => s.task_id).filter(Boolean);
+      // Only trust queue entries with an actual task_id — the old app
+      // sometimes stored 3-entry queues with nulls, which confused our
+      // "is it full?" checks elsewhere.
+      const validSlots = (planRes.data?.queue || []).filter(
+        (s) => s && s.task_id
+      );
+      const taskIds = validSlots.map((s) => s.task_id);
       let queueDetails = [];
       if (taskIds.length > 0) {
         const { data: queueRows } = await supabase
@@ -109,11 +115,13 @@ export default function TodayPage() {
           )
           .in("id", taskIds);
         const map = new Map((queueRows || []).map((t) => [t.id, t]));
-        queueDetails = (planRes.data?.queue || []).map((slot) => ({
-          slot: slot.slot,
-          type: slot.type,
-          task: map.get(slot.task_id) || null,
-        }));
+        queueDetails = validSlots
+          .map((slot) => ({
+            slot: slot.slot,
+            type: slot.type,
+            task: map.get(slot.task_id) || null,
+          }))
+          .filter((q) => q.task);
       }
       setQueueTasks(queueDetails);
 
@@ -207,10 +215,31 @@ export default function TodayPage() {
     return "Progress";
   }
 
+  // Keep only entries that have a real task_id and renumber slots
+  // contiguously. Nulls in the stored queue (from legacy data or old
+  // code paths) get cleaned out here on every write.
+  function compactQueue(slots) {
+    return (slots || [])
+      .filter((s) => s && s.task_id)
+      .slice(0, 3)
+      .map((s, i) => ({
+        slot: i + 1,
+        type: s.type || labelForTypeFallback(i),
+        task_id: s.task_id,
+      }));
+  }
+
+  function labelForTypeFallback(idx) {
+    if (idx === 0) return "Quick Win";
+    if (idx === 1) return "High Leverage";
+    return "Progress";
+  }
+
   async function savePlanQueue(nextQueue) {
     if (!user || !plan) return;
-    setPlan({ ...plan, queue: nextQueue });
-    const res = await updateDailyPlan(plan.id, { queue: nextQueue });
+    const compact = compactQueue(nextQueue);
+    setPlan({ ...plan, queue: compact });
+    const res = await updateDailyPlan(plan.id, { queue: compact });
     if (res.error) {
       setError(res.error.message || "Failed to save top 3.");
       return;
@@ -220,31 +249,38 @@ export default function TodayPage() {
 
   async function pinToTop3(task) {
     if (!user || !plan || !task) return;
-    const slots = [...(plan.queue || [])];
-    if (slots.find((s) => s?.task_id === task.id)) return;
-    if (slots.length >= 3) {
-      // Queue is full — replace the last slot
-      slots[slots.length - 1] = {
-        slot: slots.length,
-        type: labelForType(task),
-        task_id: task.id,
-      };
+    const filled = compactQueue(plan.queue);
+    if (filled.find((s) => s.task_id === task.id)) return;
+    let next;
+    if (filled.length < 3) {
+      next = [
+        ...filled,
+        {
+          slot: filled.length + 1,
+          type: labelForType(task),
+          task_id: task.id,
+        },
+      ];
     } else {
-      slots.push({
-        slot: slots.length + 1,
-        type: labelForType(task),
-        task_id: task.id,
-      });
+      // Queue is genuinely full — replace the last slot
+      next = [
+        ...filled.slice(0, 2),
+        {
+          slot: 3,
+          type: labelForType(task),
+          task_id: task.id,
+        },
+      ];
     }
-    await savePlanQueue(slots);
+    await savePlanQueue(next);
   }
 
   async function removeFromTop3(taskId) {
     if (!user || !plan) return;
-    const slots = (plan.queue || [])
-      .filter((s) => s?.task_id !== taskId)
-      .map((s, i) => ({ ...s, slot: i + 1 }));
-    await savePlanQueue(slots);
+    const filled = compactQueue(plan.queue).filter(
+      (s) => s.task_id !== taskId
+    );
+    await savePlanQueue(filled);
   }
 
   const refillQueue = useCallback(
@@ -277,17 +313,19 @@ export default function TodayPage() {
     [user, dateStr, refilling, load]
   );
 
-  // Auto-refill the queue on first load if it's empty — the user
-  // shouldn't have to hand-pick 3 tasks every morning. Only runs once
-  // per mount to avoid an infinite loop if no tasks qualify.
+  // Auto-refill the queue on first load if it has no real entries.
+  // "Real" means an actual task_id — legacy plans sometimes store 3
+  // empty slot objects, which a naive length check would treat as full.
   useEffect(() => {
     if (loading) return;
     if (autoRefillTried) return;
     if (!plan) return;
-    const hasQueue = (plan.queue || []).some((s) => s?.task_id);
-    if (!hasQueue) {
+    const filled = (plan.queue || []).filter((s) => s && s.task_id);
+    if (filled.length === 0) {
       setAutoRefillTried(true);
-      refillQueue({ force: false });
+      // force=true so the refill API rewrites even if a stale queue
+      // with null entries happens to have length 3.
+      refillQueue({ force: true });
     }
   }, [loading, plan, autoRefillTried, refillQueue]);
 
