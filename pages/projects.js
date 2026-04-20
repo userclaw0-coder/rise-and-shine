@@ -1,286 +1,296 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-
-import DashboardLayout from "../components/DashboardLayout";
-import PageHeader from "../components/PageHeader";
+import PSShell from "../components/PSShell";
 import { useAuth } from "../hooks/useAuth";
-import { loadCollaborativeProjects, loadWorkspaceOrders } from "../lib/collaborationClient";
+import { supabase } from "../lib/supabaseClient";
 
-function ProjectTile({ category, taskStats, mantra, nextAction }) {
-  const href = `/category/${category.id}`;
-  const { total, done, overdue, doing } = taskStats;
-  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-  const allDone = total > 0 && done === total;
+const COLORS = [
+  "var(--ps-clay)",
+  "var(--ps-indigo)",
+  "var(--ps-plum)",
+  "var(--ps-accent)",
+  "var(--ps-gold)",
+  "var(--ps-sage)",
+  "var(--ps-ink)",
+];
 
-  // Status: complete, active (has doing tasks), stale (overdue), idle
-  const status = allDone ? "complete" : overdue > 0 ? "attention" : doing > 0 ? "active" : "idle";
-  const statusColors = {
-    complete: { bg: "rgba(34, 197, 94, 0.1)", border: "rgba(34, 197, 94, 0.3)", dot: "#22c55e" },
-    active: { bg: "rgba(184, 134, 11, 0.06)", border: "rgba(184, 134, 11, 0.2)", dot: "#b8860b" },
-    attention: { bg: "rgba(239, 68, 68, 0.06)", border: "rgba(239, 68, 68, 0.2)", dot: "#ef4444" },
-    idle: { bg: "var(--rs-card-bg, #faf9f6)", border: "var(--rs-border, #e5e1d8)", dot: "#d1d5db" },
-  };
-  const sc = statusColors[status];
-
-  return (
-    <Link
-      href={href}
-      className="rs-project-tile"
-      style={{ background: sc.bg, borderColor: sc.border }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-        <span style={{ width: 8, height: 8, borderRadius: "50%", background: sc.dot, flexShrink: 0 }} />
-        <h2 className="rs-project-tile__title" style={{ margin: 0 }}>{category.name}</h2>
-      </div>
-
-      {mantra && (
-        <p style={{ fontSize: 12, color: "var(--rs-text-muted, #8a8478)", margin: "0 0 8px", lineHeight: 1.4, fontStyle: "italic" }}>
-          {mantra}
-        </p>
-      )}
-
-      {/* Progress bar */}
-      <div style={{ marginBottom: 8 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--rs-text-muted, #8a8478)", marginBottom: 3 }}>
-          <span>{done} of {total} tasks done</span>
-          <span>{pct}%</span>
-        </div>
-        <div
-          style={{
-            height: 4,
-            borderRadius: 2,
-            background: "var(--rs-border, #e5e1d8)",
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              height: "100%",
-              width: `${pct}%`,
-              borderRadius: 2,
-              background: allDone ? "#22c55e" : "var(--rs-accent, #b8860b)",
-              transition: "width 0.3s",
-            }}
-          />
-        </div>
-      </div>
-
-      {/* Next action */}
-      {nextAction && !allDone && (
-        <div style={{ fontSize: 12, color: "var(--rs-text, #3e3a33)", display: "flex", alignItems: "flex-start", gap: 4 }}>
-          <span className="material-symbols-outlined" style={{ fontSize: 14, marginTop: 1, color: "var(--rs-accent, #b8860b)" }}>
-            arrow_forward
-          </span>
-          <span style={{ lineHeight: 1.3 }}>{nextAction}</span>
-        </div>
-      )}
-
-      {allDone && total > 0 && (
-        <div style={{ fontSize: 12, color: "#22c55e", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
-          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>check_circle</span>
-          All tasks complete
-        </div>
-      )}
-
-      {overdue > 0 && (
-        <div style={{ fontSize: 11, color: "var(--rs-danger, #c0392b)", marginTop: 4, fontWeight: 500 }}>
-          {overdue} overdue
-        </div>
-      )}
-    </Link>
-  );
+function daysSince(iso) {
+  if (!iso) return null;
+  return Math.round((Date.now() - new Date(iso).getTime()) / 86400000);
 }
 
 export default function ProjectsPage() {
-  const { user, isCheckingAuth } = useAuth();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [categories, setCategories] = useState([]);
   const [tasks, setTasks] = useState([]);
-  const [profile, setProfile] = useState(null);
-  const [filterQ, setFilterQ] = useState("");
-  const [workspaceOrders, setWorkspaceOrders] = useState({});
 
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     setError("");
     try {
-      const [data, ordersData] = await Promise.all([
-        loadCollaborativeProjects(),
-        loadWorkspaceOrders().catch(() => ({ orders: {} })),
+      const [catRes, taskRes] = await Promise.all([
+        supabase
+          .from("categories")
+          .select("id, name")
+          .eq("user_id", user.id)
+          .order("name", { ascending: true }),
+        supabase
+          .from("tasks")
+          .select("id, category_id, status, priority, updated_at, effort_hours, due_date, title")
+          .eq("user_id", user.id)
+          .is("archived_at", null),
       ]);
-      setCategories(data.categories || []);
-      setTasks(data.tasks || []);
-      setProfile(data.profile || null);
-      setWorkspaceOrders(ordersData.orders || {});
-    } catch (e) {
-      setError(e.message || "Failed to load projects.");
+      if (catRes.error) throw new Error(catRes.error.message);
+      if (taskRes.error) throw new Error(taskRes.error.message);
+      setCategories(catRes.data || []);
+      setTasks(taskRes.data || []);
+    } catch (err) {
+      setError(err.message || "Failed to load projects.");
     } finally {
       setLoading(false);
     }
   }, [user]);
 
   useEffect(() => {
-    if (!user) return;
     load();
-  }, [user, load]);
+  }, [load]);
 
   const tiles = useMemo(() => {
-    const q = filterQ.trim().toLowerCase();
-    const today = new Date().toISOString().slice(0, 10);
-    const categoryOrderIds = profile?.preferences?.category_order_ids || [];
+    const priorityOrder = { Critical: 0, High: 1, Medium: 2, Low: 3 };
+    return categories.map((c, i) => {
+      const catTasks = tasks.filter((t) => t.category_id === c.id);
+      const open = catTasks.filter((t) => t.status !== "done").length;
+      const done = catTasks.filter((t) => t.status === "done").length;
+      const overdue = catTasks.filter(
+        (t) =>
+          t.status !== "done" &&
+          t.due_date &&
+          new Date(t.due_date + "T00:00:00") <
+            new Date(new Date().toDateString())
+      ).length;
+      const next = catTasks
+        .filter((t) => t.status !== "done")
+        .sort((a, b) => {
+          const ap = priorityOrder[a.priority] ?? 2;
+          const bp = priorityOrder[b.priority] ?? 2;
+          if (ap !== bp) return ap - bp;
+          return (a.due_date || "9999").localeCompare(b.due_date || "9999");
+        })[0];
+      const lastTouch = catTasks.reduce(
+        (a, t) => (t.updated_at && t.updated_at > a ? t.updated_at : a),
+        ""
+      );
+      const progress = open + done > 0 ? done / (open + done) : 0;
+      return {
+        id: c.id,
+        name: c.name,
+        color: COLORS[i % COLORS.length],
+        open,
+        done,
+        overdue,
+        next: next?.title || null,
+        lastTouchDays: lastTouch ? daysSince(lastTouch) : null,
+        progress,
+      };
+    });
+  }, [categories, tasks]);
 
-    const filtered = (categories || [])
-      .filter((c) => !q || String(c.name || "").toLowerCase().includes(q))
-      .map((cat) => {
-        const tasksInCat = (tasks || []).filter((t) => String(t.category_id) === String(cat.id));
-        const roots = tasksInCat.filter((t) => !t.parent_task_id);
-        const total = roots.length;
-        const done = roots.filter((t) => t.status === "done" || t.status === "archived").length;
-        const doing = roots.filter((t) => t.status === "doing").length;
-        const overdue = roots.filter(
-          (t) => t.due_date && t.due_date < today && t.status !== "done" && t.status !== "archived"
-        ).length;
-
-        // Find next action: use task_order_ids if set, else fall back to priority
-        const taskOrderIds = workspaceOrders[cat.id]?.task_order_ids || [];
-        const eligible = roots.filter((t) => {
-          if (t.status === "done" || t.status === "archived") return false;
-          const tags = Array.isArray(t.tags)
-            ? t.tags.map((tg) => (typeof tg === "string" ? tg : tg?.tag?.name || tg?.name)).filter(Boolean)
-            : [];
-          return !tags.some((tag) => tag.toLowerCase() === "blocked" || tag.toLowerCase() === "waiting" || tag.toLowerCase().startsWith("blocked-by:"));
-        });
-
-        let nextAction = null;
-        if (taskOrderIds.length > 0) {
-          const eligibleIds = new Set(eligible.map((t) => t.id));
-          const firstOrdered = taskOrderIds.find((id) => eligibleIds.has(id));
-          if (firstOrdered) {
-            nextAction = eligible.find((t) => t.id === firstOrdered)?.title || null;
-          }
-        }
-        if (!nextAction && eligible.length > 0) {
-          const priorityOrder = { Critical: 0, High: 1, Medium: 2, Low: 3 };
-          eligible.sort((a, b) => (priorityOrder[a.priority] ?? 2) - (priorityOrder[b.priority] ?? 2));
-          nextAction = eligible[0]?.title || null;
-        }
-
-        // Get mantra from workspace preferences
-        const ws = profile?.preferences?.project_workspaces?.[cat.id];
-        const mantra = ws?.mantra || "";
-
-        return {
-          category: cat,
-          taskStats: { total, done, doing, overdue },
-          nextAction,
-          mantra,
-        };
-      });
-
-    // Sort by category_order_ids from backlog page (user's manual project priority)
-    if (categoryOrderIds.length > 0) {
-      const orderMap = new Map(categoryOrderIds.map((id, i) => [id, i]));
-      filtered.sort((a, b) => {
-        const aComplete = a.taskStats.total > 0 && a.taskStats.done === a.taskStats.total;
-        const bComplete = b.taskStats.total > 0 && b.taskStats.done === b.taskStats.total;
-        if (aComplete !== bComplete) return aComplete ? 1 : -1;
-        const aIdx = orderMap.has(a.category.id) ? orderMap.get(a.category.id) : 999;
-        const bIdx = orderMap.has(b.category.id) ? orderMap.get(b.category.id) : 999;
-        return aIdx - bIdx;
-      });
-    } else {
-      filtered.sort((a, b) => {
-        const aComplete = a.taskStats.total > 0 && a.taskStats.done === a.taskStats.total;
-        const bComplete = b.taskStats.total > 0 && b.taskStats.done === b.taskStats.total;
-        if (aComplete !== bComplete) return aComplete ? 1 : -1;
-        return String(a.category.name).localeCompare(String(b.category.name));
-      });
-    }
-
-    return filtered;
-  }, [categories, tasks, profile, filterQ, workspaceOrders]);
-
-  if (isCheckingAuth || (!user && !loading)) {
-    return (
-      <DashboardLayout>
-        <p className="rs-page-muted">Sign in to view projects.</p>
-      </DashboardLayout>
-    );
-  }
-
-  if (!user || loading) {
-    return (
-      <DashboardLayout>
-        <p className="rs-page-muted">Loading…</p>
-      </DashboardLayout>
-    );
-  }
+  const coachPayload = {
+    total_projects: tiles.length,
+    projects: tiles.slice(0, 14).map((t) => ({
+      name: t.name,
+      open: t.open,
+      overdue: t.overdue,
+      last_touch_days: t.lastTouchDays,
+      next: t.next,
+    })),
+    stale_projects: tiles
+      .filter((t) => t.lastTouchDays != null && t.lastTouchDays > 7)
+      .map((t) => t.name),
+  };
 
   return (
-    <DashboardLayout>
-      <PageHeader
-        eyebrow="Projects"
-        title="Projects"
-        subtitle="Your active projects, ordered by priority. Each tile opens the full project workspace."
-        right={
-          <div className="rs-projects-filter">
-            <span className="material-symbols-outlined" aria-hidden>
-              filter_list
-            </span>
-            <input
-              type="search"
-              className="rs-projects-filter__input"
-              placeholder="Filter projects…"
-              value={filterQ}
-              onChange={(e) => setFilterQ(e.target.value)}
-              aria-label="Filter projects by name"
-            />
+    <PSShell scope="projects" title="Projects" coachPayload={coachPayload}>
+      <div className="ps-view">
+        <div className="ps-eyebrow">05 · Projects</div>
+        <h1 className="ps-title">Your portfolio.</h1>
+        <p className="ps-sub">
+          Each project carries outcomes, a task ladder, and a coach that knows
+          it. Open one to work on it.
+        </p>
+
+        {error && <div className="today-error">{error}</div>}
+
+        {loading ? (
+          <div className="pj-list-empty">Loading projects…</div>
+        ) : tiles.length === 0 ? (
+          <div className="pj-list-empty">
+            No projects yet. Create one in{" "}
+            <Link href="/backlog">Action items</Link>.
           </div>
+        ) : (
+          <div className="pj-list-grid">
+            {tiles.map((t) => (
+              <Link key={t.id} href={`/category/${t.id}`} className="pj-tile">
+                <div className="pj-tile-head">
+                  <span
+                    className="pj-tile-dot"
+                    style={{ background: t.color }}
+                  />
+                  <div className="pj-tile-name">{t.name}</div>
+                </div>
+                {t.next && (
+                  <div className="pj-tile-next">
+                    <span className="pj-tile-cap">Next</span>
+                    <span className="pj-tile-next-text">{t.next}</span>
+                  </div>
+                )}
+                <div className="pj-tile-meta">
+                  <span>
+                    <strong>{t.open}</strong> open
+                  </span>
+                  <span>
+                    <strong>{t.done}</strong> done
+                  </span>
+                  {t.overdue > 0 && (
+                    <span className="pj-tile-overdue">
+                      <strong>{t.overdue}</strong> overdue
+                    </span>
+                  )}
+                  {t.lastTouchDays != null && (
+                    <span className="pj-tile-touched">
+                      {t.lastTouchDays === 0
+                        ? "Today"
+                        : t.lastTouchDays === 1
+                        ? "1d ago"
+                        : `${t.lastTouchDays}d ago`}
+                    </span>
+                  )}
+                </div>
+                <div className="pj-tile-bar">
+                  <div
+                    className="pj-tile-bar-fill"
+                    style={{
+                      width: Math.round(t.progress * 100) + "%",
+                      background: t.color,
+                    }}
+                  />
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <style jsx global>{`
+        .pj-list-empty {
+          background: var(--ps-paper);
+          border: 1px dashed var(--ps-ink-15);
+          border-radius: 12px;
+          padding: 40px 24px;
+          text-align: center;
+          color: var(--ps-ink-60);
+          font-size: 13px;
+          margin-top: 18px;
         }
-      />
-
-      {error && (
-        <p style={{ color: "var(--rs-error)", fontSize: 14, marginBottom: 12 }}>{error}</p>
-      )}
-
-      {categories.length === 0 ? (
-        <div className="rs-projects-empty">
-          <p className="rs-projects-empty__title">No project categories yet</p>
-          <p className="rs-projects-empty__text">
-            Add a category on <Link href="/backlog#rs-backlog-add-category">Action Items</Link>, then return here to
-            see workspace tiles.
-          </p>
-        </div>
-      ) : tiles.length === 0 ? (
-        <p className="rs-page-muted">No projects match your filter.</p>
-      ) : (
-        <div className="rs-projects-grid">
-          {tiles.map(({ category, taskStats, nextAction, mantra }) => (
-            <ProjectTile
-              key={category.id}
-              category={category}
-              taskStats={taskStats}
-              nextAction={nextAction}
-              mantra={mantra}
-            />
-          ))}
-          <Link href="/backlog#rs-backlog-add-category" className="rs-project-tile rs-project-tile--new">
-            <span className="material-symbols-outlined rs-project-tile--new__icon" aria-hidden>
-              add
-            </span>
-            <span className="rs-project-tile--new__label">New project</span>
-            <span className="rs-project-tile--new__hint">Add a category on Action Items</span>
-          </Link>
-        </div>
-      )}
-
-      <Link href="/vision" className="rs-projects-fab" title="Open vision board" aria-label="Open vision board">
-        <span className="material-symbols-outlined" aria-hidden>
-          auto_awesome
-        </span>
-      </Link>
-    </DashboardLayout>
+        .pj-list-empty a { color: var(--ps-accent); }
+        .pj-list-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+          gap: 14px;
+          margin-top: 20px;
+        }
+        .pj-tile {
+          background: var(--ps-paper-soft);
+          border: 1px solid var(--ps-ink-08);
+          border-radius: 12px;
+          padding: 16px 18px;
+          text-decoration: none;
+          color: inherit;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          transition: border-color 120ms, box-shadow 120ms;
+        }
+        .pj-tile:hover {
+          border-color: var(--ps-ink-30);
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+        }
+        .pj-tile-head {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .pj-tile-dot {
+          width: 10px;
+          height: 10px;
+          border-radius: 3px;
+          flex-shrink: 0;
+        }
+        .pj-tile-name {
+          font-family: var(--ps-serif);
+          font-size: 18px;
+          letter-spacing: -0.01em;
+          color: var(--ps-ink);
+        }
+        .pj-tile-next {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          padding: 8px 10px;
+          background: #fff;
+          border-radius: 8px;
+          border: 1px dashed var(--ps-ink-10);
+        }
+        .pj-tile-cap {
+          font-family: var(--ps-mono);
+          font-size: 9px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+        }
+        .pj-tile-next-text {
+          font-size: 13px;
+          color: var(--ps-ink-80);
+          line-height: 1.4;
+        }
+        .pj-tile-meta {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.06em;
+          color: var(--ps-ink-60);
+          margin-top: 2px;
+        }
+        .pj-tile-meta strong {
+          color: var(--ps-ink);
+          font-weight: 600;
+        }
+        .pj-tile-overdue {
+          color: var(--ps-clay);
+        }
+        .pj-tile-overdue strong {
+          color: var(--ps-clay);
+        }
+        .pj-tile-touched {
+          margin-left: auto;
+        }
+        .pj-tile-bar {
+          height: 4px;
+          background: var(--ps-ink-08);
+          border-radius: 2px;
+          overflow: hidden;
+        }
+        .pj-tile-bar-fill {
+          height: 100%;
+          transition: width 300ms;
+        }
+      `}</style>
+    </PSShell>
   );
 }

@@ -232,12 +232,14 @@ export default function ChatPage() {
       <style jsx global>{`
         .jv-shell {
           display: grid;
-          grid-template-columns: 240px 1fr 320px;
-          gap: 24px;
-          max-width: 1400px;
+          grid-template-columns: 220px 1fr 300px;
+          gap: 20px;
           margin: 0 auto;
-          padding: 32px 24px 60px;
-          min-height: calc(100vh - 120px);
+          padding: 28px 28px 60px;
+          min-height: calc(100vh - 40px);
+        }
+        @media (max-width: 1380px) {
+          .jv-shell { grid-template-columns: 200px 1fr 260px; gap: 14px; padding: 20px 18px 40px; }
         }
         .jv-rail {
           display: flex;

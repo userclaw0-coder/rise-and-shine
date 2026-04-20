@@ -298,6 +298,7 @@ export default function VisionPage() {
       title="Vision & Goals"
       coachPayload={coachPayload}
       coachDisabled={mode === "immerse"}
+      shellHidden={mode === "immerse"}
     >
       <div className={mode === "immerse" ? "vis-immerse-shell" : ""}>
         <div

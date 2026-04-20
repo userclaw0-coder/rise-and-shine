@@ -21,6 +21,7 @@ export const PS_NAV_ALSO = [
   { id: "actions", href: "/backlog", label: "Action items" },
   { id: "notes", href: "/notes", label: "Notes" },
   { id: "analytics", href: "/analytics", label: "Analytics" },
+  { id: "account", href: "/account", label: "Account" },
 ];
 
 const SECTIONS = ["Foundations", "Daily", "Strategic"];
@@ -31,6 +32,7 @@ export default function PSShell({
   coachPayload,
   coachSuggestions,
   coachDisabled = false,
+  shellHidden = false,
   title,
   children,
 }) {
@@ -102,6 +104,23 @@ export default function PSShell({
 
   const initials = (user.email || "?").slice(0, 1).toUpperCase();
   const emailPrefix = (user.email || "").split("@")[0];
+
+  if (shellHidden) {
+    return (
+      <>
+        <Head>
+          <title>{title ? title + " · " : ""}Rise &amp; Shine</title>
+        </Head>
+        <div className="ps-fullbleed">{children}</div>
+        <style jsx global>{`
+          .ps-fullbleed {
+            min-height: 100vh;
+            width: 100%;
+          }
+        `}</style>
+      </>
+    );
+  }
 
   return (
     <>
