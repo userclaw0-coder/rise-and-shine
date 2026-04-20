@@ -4,6 +4,28 @@ import Link from "next/link";
 import PSShell from "../../components/PSShell";
 import ProjectKnowledgeBase from "../../components/ProjectKnowledgeBase";
 import { useAuth } from "../../hooks/useAuth";
+import { HUMAN_NEED_STRATEGY_LABELS } from "../../lib/humanNeedStrategies";
+
+const TYPE_TAG_LABELS = {
+  "quick-win": "Quick Win",
+  "high-leverage": "High Leverage",
+  progress: "Progress",
+  maintenance: "Maintenance",
+};
+
+function extractTagNames(row) {
+  return (row?.tags || [])
+    .map((t) => (typeof t === "string" ? t : t?.tag?.name || t?.name || ""))
+    .filter(Boolean);
+}
+
+function typeTagOf(row) {
+  const names = extractTagNames(row);
+  for (const t of ["quick-win", "high-leverage", "progress", "maintenance"]) {
+    if (names.includes(t)) return t;
+  }
+  return null;
+}
 import {
   loadCollaborativeProject,
   saveCollaborativeProjectWorkspace,
@@ -96,7 +118,7 @@ export default function ProjectPage() {
         supabase
           .from("tasks")
           .select(
-            "id, title, status, priority, effort_hours, due_date, parent_task_id, outcome_ids, created_at, updated_at"
+            "id, title, status, priority, effort_hours, due_date, parent_task_id, outcome_ids, primary_life_domain, created_at, updated_at, tags:task_tags(tag:tags(id, name))"
           )
           .eq("user_id", user.id)
           .eq("category_id", categoryId)
@@ -713,6 +735,22 @@ export default function ProjectPage() {
                             {t.priority && (
                               <span className="ps-tag">{t.priority}</span>
                             )}
+                            {typeTagOf(t) && (
+                              <span className="ps-tag pj-tag-type">
+                                {TYPE_TAG_LABELS[typeTagOf(t)]}
+                              </span>
+                            )}
+                            {t.primary_life_domain && (
+                              <span className="ps-tag pj-tag-need">
+                                {HUMAN_NEED_STRATEGY_LABELS[t.primary_life_domain] ||
+                                  t.primary_life_domain}
+                              </span>
+                            )}
+                            {(t.outcome_ids || []).length > 0 && (
+                              <span className="ps-tag pj-tag-outcome">
+                                → outcome
+                              </span>
+                            )}
                             {g.flag && (
                               <span className="ps-tag pj-tag-flag">⚑ Too big</span>
                             )}
@@ -1286,6 +1324,9 @@ export default function ProjectPage() {
           margin-top: 4px;
         }
         .pj-tag-flag { background: var(--ps-accent-soft); color: var(--ps-accent); }
+        .pj-tag-type { background: var(--ps-sage-soft); color: var(--ps-sage); }
+        .pj-tag-need { background: var(--ps-indigo-soft); color: var(--ps-indigo); }
+        .pj-tag-outcome { background: var(--ps-gold-soft); color: var(--ps-gold); }
         .pj-item-size {
           font-family: var(--ps-mono);
           font-size: 10px;

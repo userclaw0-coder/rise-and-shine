@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import PSShell from "../components/PSShell";
+import TaskDnaEditor from "../components/TaskDnaEditor";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabaseClient";
 import { updateTaskStatusWithEvent } from "../lib/db";
@@ -73,7 +74,7 @@ export default function BacklogPage() {
         supabase
           .from("tasks")
           .select(
-            "id, title, status, priority, effort_hours, due_date, category_id, subcategory_id, created_at, outcome_ids, primary_life_domain, life_domains"
+            "id, title, status, priority, effort_hours, due_date, category_id, subcategory_id, created_at, outcome_ids, primary_life_domain, life_domains, tags:task_tags(tag:tags(id, name))"
           )
           .eq("user_id", user.id)
           .is("archived_at", null)
@@ -657,6 +658,8 @@ export default function BacklogPage() {
                   Close
                 </button>
               </div>
+
+              <TaskDnaEditor task={selected} onSaved={() => load()} />
             </aside>
           )}
         </div>
