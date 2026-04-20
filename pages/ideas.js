@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Head from "next/head";
-import DashboardLayout from "../components/DashboardLayout";
+import PSShell from "../components/PSShell";
 import { useAuth } from "../hooks/useAuth";
 import {
   getIdeas,
@@ -193,20 +192,22 @@ export default function IdeasPage() {
     setEditing(false);
   }
 
-  if (!user) {
-    return (
-      <DashboardLayout>
-        <p style={{ fontSize: 14, color: "#6b7280" }}>Loading…</p>
-      </DashboardLayout>
-    );
-  }
+  if (!user) return null;
+
+  const coachPayload = {
+    total_ideas: ideas.length,
+    sample_titles: ideas.slice(0, 10).map((i) => ({
+      title: i.title,
+      status: i.status,
+      scored: !!(i.scores && i.scores.alignment != null),
+    })),
+    shaping_count: ideas.filter((i) => statusToStage(i.status) === "shaping").length,
+    new_count: ideas.filter((i) => statusToStage(i.status) === "new").length,
+    promoted_count: ideas.filter((i) => i.status === "promoted").length,
+  };
 
   return (
-    <DashboardLayout>
-      <Head>
-        <title>Ideas · Rise &amp; Shine</title>
-      </Head>
-      <div className="ps-page">
+    <PSShell scope="ideas" title="Ideas" coachPayload={coachPayload}>
         <div className="ps-view">
           <div className="ps-eyebrow">Capture · Ideas &amp; sparks</div>
           <h1 className="ps-title">Ideas.</h1>
@@ -530,7 +531,6 @@ export default function IdeasPage() {
             </div>
           )}
         </div>
-      </div>
 
       <style jsx global>{`
         .ideas-capture {
@@ -944,6 +944,6 @@ export default function IdeasPage() {
           .ideas-board { grid-template-columns: 1fr; }
         }
       `}</style>
-    </DashboardLayout>
+    </PSShell>
   );
 }

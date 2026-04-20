@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Head from "next/head";
 import Link from "next/link";
-import DashboardLayout from "../components/DashboardLayout";
-import CoachNote from "../components/CoachNote";
+import PSShell from "../components/PSShell";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabaseClient";
 import {
@@ -245,21 +243,30 @@ export default function TodayPage() {
     year: "numeric",
   });
 
-  if (!user) {
-    return (
-      <DashboardLayout>
-        <p style={{ fontSize: 14, color: "#6b7280" }}>Loading…</p>
-      </DashboardLayout>
-    );
-  }
+  if (!user) return null;
+
+  const coachPayload = {
+    date: dateStr,
+    chosen_titles: queueTasks
+      .filter((q) => q.task)
+      .map((q) => q.task.title),
+    focus_minutes: focusMin,
+    candidates: perProject.slice(0, 12).map((p) => ({
+      project: p.catName,
+      title: p.task.title,
+      priority: p.task.priority,
+      minutes: Math.round((p.task.effort_hours || 0) * 60),
+      done: !!completed[p.task.id],
+    })),
+    need_balance: needTotals.map((n) => ({
+      need: n.id,
+      count: n.count,
+    })),
+  };
 
   return (
-    <DashboardLayout>
-      <Head>
-        <title>Today · Rise &amp; Shine</title>
-      </Head>
-      <div className="ps-page">
-        <div className="ps-view">
+    <PSShell scope="today" title="Today" coachPayload={coachPayload}>
+      <div className="ps-view">
           <div className="ps-eyebrow">{niceDate}</div>
           <h1 className="ps-title">Today</h1>
           <p className="ps-sub">
@@ -371,28 +378,6 @@ export default function TodayPage() {
             })}
           </div>
 
-          <CoachNote
-            scope="today"
-            payload={{
-              date: dateStr,
-              chosen_titles: queueTasks
-                .filter((q) => q.task)
-                .map((q) => q.task.title),
-              focus_minutes: focusMin,
-              candidates: perProject.slice(0, 12).map((p) => ({
-                project: p.catName,
-                title: p.task.title,
-                priority: p.task.priority,
-                minutes: Math.round((p.task.effort_hours || 0) * 60),
-                done: !!completed[p.task.id],
-              })),
-              need_balance: needTotals.map((n) => ({
-                need: n.id,
-                count: n.count,
-              })),
-            }}
-          />
-
           {needTotals.some((n) => n.count > 0) && (
             <div className="today-ribbon">
               <div className="today-ribbon__head">
@@ -423,7 +408,6 @@ export default function TodayPage() {
             </div>
           )}
         </div>
-      </div>
 
       <style jsx global>{`
         .today-error {
@@ -624,6 +608,6 @@ export default function TodayPage() {
           .today-ribbon__grid { grid-template-columns: repeat(3, 1fr); }
         }
       `}</style>
-    </DashboardLayout>
+    </PSShell>
   );
 }

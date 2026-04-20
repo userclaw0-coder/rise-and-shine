@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
-import Head from "next/head";
 import Link from "next/link";
-import DashboardLayout from "../../components/DashboardLayout";
+import PSShell from "../../components/PSShell";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabaseClient";
 import {
@@ -261,21 +260,33 @@ export default function ProjectPage() {
     return `${days}d ago`;
   }, [tasks]);
 
-  if (!user) {
-    return (
-      <DashboardLayout>
-        <p style={{ fontSize: 14, color: "#6b7280" }}>Loading…</p>
-      </DashboardLayout>
-    );
-  }
+  if (!user) return null;
+
+  const coachPayload = {
+    project: category?.name || null,
+    linked_outcomes: outcomes.map((o) => ({
+      title: o.title,
+      progress: o.progress,
+    })),
+    open_task_titles: tasks
+      .filter((t) => t.status !== "done")
+      .slice(0, 12)
+      .map((t) => ({
+        title: t.title,
+        priority: t.priority,
+        minutes: Math.round((t.effort_hours || 0) * 60),
+      })),
+    done_this_week: doneThisWeek,
+  };
 
   return (
-    <DashboardLayout>
-      <Head>
-        <title>{category ? `${category.name} · Rise & Shine` : "Project"}</title>
-      </Head>
-      <div className="ps-page">
-        <div className="ps-view">
+    <PSShell
+      scope="project"
+      title={category?.name || "Project"}
+      scopeHint={category?.name || "Project view"}
+      coachPayload={coachPayload}
+    >
+      <div className="ps-view">
           <div className="ps-eyebrow pj-breadcrumb">
             <Link href="/projects">Projects</Link>
             <span className="pj-sep">/</span>
@@ -580,7 +591,6 @@ export default function ProjectPage() {
             ))}
           </div>
         </div>
-      </div>
 
       <style jsx global>{`
         .pj-breadcrumb {
@@ -983,6 +993,6 @@ export default function ProjectPage() {
           .pj-outcomes { grid-template-columns: 1fr; }
         }
       `}</style>
-    </DashboardLayout>
+    </PSShell>
   );
 }

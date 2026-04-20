@@ -1,6 +1,4 @@
-import Head from "next/head";
-import DashboardLayout from "../components/DashboardLayout";
-import { useAuth } from "../hooks/useAuth";
+import PSShell from "../components/PSShell";
 
 function MapCard({ eyebrow, title, body, variant, span = 3 }) {
   return (
@@ -36,15 +34,9 @@ function DnaTile({ label, value, example }) {
 }
 
 export default function SystemPage() {
-  useAuth();
-
   return (
-    <DashboardLayout>
-      <Head>
-        <title>System Map · Rise &amp; Shine</title>
-      </Head>
-      <div className="ps-page">
-        <div className="ps-view">
+    <PSShell scope="map" title="System Map">
+      <div className="ps-view">
           <div className="ps-eyebrow">Part 01 · How the system works</div>
           <h1 className="ps-title">
             A curator&apos;s operating system.
@@ -205,7 +197,6 @@ export default function SystemPage() {
             />
           </div>
         </div>
-      </div>
 
       <style jsx global>{`
         .psmap-title__em {
@@ -339,6 +330,6 @@ export default function SystemPage() {
           .psmap-card { grid-column: span 12 !important; }
         }
       `}</style>
-    </DashboardLayout>
+    </PSShell>
   );
 }

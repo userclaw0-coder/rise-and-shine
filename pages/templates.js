@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Head from "next/head";
 import {
   DndContext,
   closestCenter,
@@ -14,8 +13,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import DashboardLayout from "../components/DashboardLayout";
-import CoachNote from "../components/CoachNote";
+import PSShell from "../components/PSShell";
 import { useAuth } from "../hooks/useAuth";
 import {
   getTemplates,
@@ -279,21 +277,28 @@ export default function TemplatesPage() {
   const ringC = 2 * Math.PI * ringR;
   const ringOff = ringC * (1 - pct);
 
-  if (!user) {
-    return (
-      <DashboardLayout>
-        <p style={{ fontSize: 14, color: "#6b7280" }}>Loading…</p>
-      </DashboardLayout>
-    );
-  }
+  if (!user) return null;
+
+  const coachPayload = {
+    date: dateStr,
+    total_hits: total,
+    done_today: doneCount,
+    not_done_today: items
+      .filter((i) => !done[i.task.id])
+      .slice(0, 12)
+      .map((i) => ({
+        title: i.task?.title,
+        priority: i.task?.priority,
+      })),
+    done_today_titles: items
+      .filter((i) => done[i.task.id])
+      .slice(0, 12)
+      .map((i) => i.task?.title),
+  };
 
   return (
-    <DashboardLayout>
-      <Head>
-        <title>Daily Hits · Rise &amp; Shine</title>
-      </Head>
-      <div className="ps-page">
-        <div className="ps-view">
+    <PSShell scope="hits" title="Daily Hits" coachPayload={coachPayload}>
+      <div className="ps-view">
           <div className="ps-eyebrow">Daily · Daily Hits</div>
           <div className="dh-title-row">
             <div>
@@ -383,26 +388,6 @@ export default function TemplatesPage() {
             </DndContext>
           </div>
 
-          <CoachNote
-            scope="daily-hits"
-            payload={{
-              date: dateStr,
-              total_hits: total,
-              done_today: doneCount,
-              not_done_today: items
-                .filter((i) => !done[i.task.id])
-                .slice(0, 12)
-                .map((i) => ({
-                  title: i.task?.title,
-                  priority: i.task?.priority,
-                })),
-              done_today_titles: items
-                .filter((i) => done[i.task.id])
-                .slice(0, 12)
-                .map((i) => i.task?.title),
-            }}
-          />
-
           <div className="dh-add">
             <input
               className="dh-add-input"
@@ -444,7 +429,6 @@ export default function TemplatesPage() {
             </button>
           </div>
         </div>
-      </div>
 
       <style jsx global>{`
         .dh-title-row {
@@ -643,6 +627,6 @@ export default function TemplatesPage() {
           .dh-add { grid-template-columns: 1fr; }
         }
       `}</style>
-    </DashboardLayout>
+    </PSShell>
   );
 }

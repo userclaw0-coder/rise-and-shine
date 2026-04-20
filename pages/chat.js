@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import Head from "next/head";
 import Link from "next/link";
-import DashboardLayout from "../components/DashboardLayout";
+import PSShell from "../components/PSShell";
 import ChatPanel from "../components/ChatPanel";
 import { useAuth } from "../hooks/useAuth";
 import { getNotes } from "../lib/db";
@@ -94,11 +93,7 @@ export default function ChatPage() {
   if (isCheckingAuth || !user) return null;
 
   return (
-    <DashboardLayout>
-      <Head>
-        <title>Jarvis · Rise &amp; Shine</title>
-      </Head>
-      <div className="ps-page">
+    <PSShell scope="jarvis" title="Jarvis" coachDisabled>
         <div className="jv-shell">
           <aside className="jv-rail jv-rail-left">
             <div className="jv-brand">
@@ -233,7 +228,6 @@ export default function ChatPage() {
             )}
           </aside>
         </div>
-      </div>
 
       <style jsx global>{`
         .jv-shell {
@@ -463,6 +457,6 @@ export default function ChatPage() {
           .jv-rail-left { position: static; }
         }
       `}</style>
-    </DashboardLayout>
+    </PSShell>
   );
 }

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Head from "next/head";
-import DashboardLayout from "../components/DashboardLayout";
+import PSShell from "../components/PSShell";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabaseClient";
 import {
@@ -281,20 +280,30 @@ export default function WeeklyReviewPage() {
     return `${fmt(s)} – ${fmt(e)}`;
   }, [weekStart]);
 
-  if (!user) {
-    return (
-      <DashboardLayout>
-        <p style={{ fontSize: 14, color: "#6b7280" }}>Loading…</p>
-      </DashboardLayout>
-    );
-  }
+  if (!user) return null;
+
+  const coachPayload = {
+    week_start: weekStart,
+    mode,
+    filled_sections: {
+      wins: wins.length > 0,
+      friction: friction.length > 0,
+      reality: reality.length > 0,
+      leverage: leverage.length > 0,
+      theme: theme.length > 0,
+      notes: notes.length > 0,
+    },
+    needs,
+    movement: projectMovement,
+  };
 
   return (
-    <DashboardLayout>
-      <Head>
-        <title>Weekly review · Rise &amp; Shine</title>
-      </Head>
-      <div className="ps-page">
+    <PSShell
+      scope="review"
+      title={`Weekly review · ${weekLabel}`}
+      scopeHint={`Your draft · week of ${weekLabel}`}
+      coachPayload={coachPayload}
+    >
         <div className="wr-shell">
           <div className="wr-main">
             <div className="ps-eyebrow">Weekly review · week of {weekLabel}</div>
@@ -526,7 +535,6 @@ export default function WeeklyReviewPage() {
             </div>
           </aside>
         </div>
-      </div>
 
       <style jsx global>{`
         .wr-shell {
@@ -782,6 +790,6 @@ export default function WeeklyReviewPage() {
           .wr-needs-grid { grid-template-columns: repeat(2, 1fr); }
         }
       `}</style>
-    </DashboardLayout>
+    </PSShell>
   );
 }

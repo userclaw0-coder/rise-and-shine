@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Head from "next/head";
-import DashboardLayout from "../components/DashboardLayout";
+import PSShell from "../components/PSShell";
 import { useAuth } from "../hooks/useAuth";
 import { getUserProfile, upsertUserProfile } from "../lib/db";
 import { supabase } from "../lib/supabaseClient";
@@ -280,20 +279,27 @@ export default function VisionPage() {
 
   const ring = progressRing(visionPct);
 
-  if (!user) {
-    return (
-      <DashboardLayout>
-        <p style={{ fontSize: 14, color: "#6b7280" }}>Loading…</p>
-      </DashboardLayout>
-    );
-  }
+  if (!user) return null;
+
+  const coachPayload = {
+    mode,
+    identity: identityList,
+    outcomes: outcomeList.map((o) => o.title),
+    thrive_goals: thriveList,
+    leverage: leverageList,
+    quarter: quarterList,
+    immediate_step: immediateStep,
+    vision_pct: visionPct,
+  };
 
   return (
-    <DashboardLayout>
-      <Head>
-        <title>Vision · Rise &amp; Shine</title>
-      </Head>
-      <div className={"ps-page" + (mode === "immerse" ? " vis-immerse-shell" : "")}>
+    <PSShell
+      scope="vision"
+      title="Vision & Goals"
+      coachPayload={coachPayload}
+      coachDisabled={mode === "immerse"}
+    >
+      <div className={mode === "immerse" ? "vis-immerse-shell" : ""}>
         <div
           className="ps-view vis-view"
           style={{
@@ -695,9 +701,8 @@ export default function VisionPage() {
 
       <style jsx global>{`
         .vis-immerse-shell {
-          background: #0b0908 !important;
-          padding: 0 !important;
-          margin: -16px !important;
+          background: #0b0908;
+          min-height: 100vh;
         }
         .vis-view { min-height: 80vh; }
         .vis-head {
@@ -1153,6 +1158,6 @@ export default function VisionPage() {
           .vis-immerse-text { font-size: 26px; }
         }
       `}</style>
-    </DashboardLayout>
+    </PSShell>
   );
 }

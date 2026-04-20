@@ -37,6 +37,8 @@ export default async function handler(req, res) {
 
   const scope = String(req.body?.scope || "");
   const payload = req.body?.payload || {};
+  const question = String(req.body?.question || "").trim().slice(0, 1000);
+  const history = Array.isArray(req.body?.history) ? req.body.history.slice(-8) : [];
 
   if (!SCOPE_PROMPTS[scope]) {
     return res.status(400).json({ error: "unknown scope" });
@@ -59,24 +61,42 @@ export default async function handler(req, res) {
       thrive_goals: (profile.thrive_goals || []).slice(0, 4),
     };
 
-    const system = `You are the Rise & Shine page-scoped coach. ${SCOPE_PROMPTS[scope]}
+    const system = question
+      ? `You are the Rise & Shine coach. The user is on the ${scope} page and asked a direct question. Answer in 2-4 sentences, concrete and tied to the page state they're looking at. Reference actual titles/numbers when useful. No headings, no markdown.`
+      : `You are the Rise & Shine page-scoped coach. ${SCOPE_PROMPTS[scope]}
 
 The user is looking at the page RIGHT NOW — they don't want a lecture, they want one honest observation tied to what's visible. Be concrete, not generic. Reference actual titles/numbers from the payload when useful.`;
 
-    const userPrompt = `Page scope: ${scope}
+    const userPromptBase = `Page scope: ${scope}
 
 User context (JSON):
 ${JSON.stringify(userContext, null, 2)}
 
 Page state (JSON):
-${JSON.stringify(payload, null, 2)}
+${JSON.stringify(payload, null, 2)}`;
 
-Write the coach note as described. Plain prose, 2-3 sentences. No headings, no markdown.`;
+    const messages = [];
+    // Replay short recent history (user/assistant pairs) for continuity
+    for (const h of history) {
+      if (h?.role === "user" && typeof h.content === "string") {
+        messages.push({ role: "user", content: h.content });
+      } else if (h?.role === "assistant" && typeof h.content === "string") {
+        messages.push({ role: "assistant", content: h.content });
+      }
+    }
+    if (question) {
+      messages.push({
+        role: "user",
+        content: `${userPromptBase}\n\nMy question: ${question}`,
+      });
+    } else {
+      messages.push({
+        role: "user",
+        content: `${userPromptBase}\n\nWrite the coach note as described. Plain prose, 2-3 sentences. No headings, no markdown.`,
+      });
+    }
 
-    const result = await chatCompletion({
-      system,
-      messages: [{ role: "user", content: userPrompt }],
-    });
+    const result = await chatCompletion({ system, messages });
 
     const note = (result?.content || "").trim();
     if (!note) {

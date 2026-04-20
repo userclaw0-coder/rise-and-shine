@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import Head from "next/head";
-import DashboardLayout from "../components/DashboardLayout";
+import PSShell from "../components/PSShell";
 import { useAuth } from "../hooks/useAuth";
 import {
   getNotes,
@@ -380,21 +379,22 @@ export default function NotesPage() {
     setSaving(false);
   }
 
-  if (!user) {
-    return (
-      <DashboardLayout>
-        <p style={{ fontSize: 14, color: "#6b7280" }}>Loading…</p>
-      </DashboardLayout>
-    );
-  }
+  if (!user) return null;
+
+  const coachPayload = {
+    total_notes: stats.total,
+    pinned: stats.pinned,
+    feeding_jarvis: stats.feedingJarvis,
+    current_streak: stats.currentStreak,
+    recent_note_titles: visibleNotes
+      .slice(0, 8)
+      .map((n) => n.title || (n.body || "").slice(0, 60)),
+    tags_in_use: allTags.slice(0, 8).map((t) => t.label),
+  };
 
   return (
-    <DashboardLayout>
-      <Head>
-        <title>Notes · Rise &amp; Shine</title>
-      </Head>
-      <div className="ps-page">
-        <div className="ps-view notes-view">
+    <PSShell scope="notes" title="Notes" coachPayload={coachPayload}>
+      <div className="ps-view notes-view">
           <div className="ps-eyebrow">Also in app · Notes</div>
           <div className="notes-title-row">
             <div>
@@ -859,7 +859,6 @@ export default function NotesPage() {
             )}
           </div>
         </div>
-      </div>
 
       <style jsx global>{`
         .notes-view { padding-bottom: 80px; }
@@ -1406,6 +1405,6 @@ export default function NotesPage() {
           .notes-title-row { grid-template-columns: 1fr; }
         }
       `}</style>
-    </DashboardLayout>
+    </PSShell>
   );
 }

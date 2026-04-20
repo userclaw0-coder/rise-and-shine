@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Head from "next/head";
-import DashboardLayout from "../components/DashboardLayout";
-import CoachNote from "../components/CoachNote";
+import PSShell from "../components/PSShell";
 import { useAuth } from "../hooks/useAuth";
 import {
   getBodyWeightLogs,
@@ -243,21 +241,36 @@ export default function HealthPage() {
     }
   }
 
-  if (!user) {
-    return (
-      <DashboardLayout>
-        <p style={{ fontSize: 14, color: "#6b7280" }}>Loading…</p>
-      </DashboardLayout>
-    );
-  }
+  if (!user) return null;
+
+  const coachPayload = {
+    week_plan: weekPlan.map((w) => ({
+      day: w.day,
+      date: w.date,
+      kind: w.kind,
+      label: w.label,
+      done: w.done,
+      today: w.today,
+    })),
+    recent_sessions: sessions.slice(0, 6).map((s) => ({
+      date: s.session_date,
+      sets: allSets
+        .filter((st) => st.session?.session_date === s.session_date)
+        .map((st) => `${st.exercise} ${st.weight}×${st.reps}`),
+    })),
+    lift_progress: liftProgress.map((l) => ({
+      lift: l.label,
+      current_weight: l.currentWeight,
+      current_reps: l.currentReps,
+      sessions: l.sessionCount,
+    })),
+    latest_bodyweight: latestWeight?.w || null,
+    last_7_avg: last7 || null,
+  };
 
   return (
-    <DashboardLayout>
-      <Head>
-        <title>Body &amp; Training · Rise &amp; Shine</title>
-      </Head>
-      <div className="ps-page">
-        <div className="ps-view">
+    <PSShell scope="fitness" title="Body & Training" coachPayload={coachPayload}>
+      <div className="ps-view">
           <div className="ps-eyebrow">Protocol · Occam + sprints + rower</div>
           <h1 className="ps-title">Body &amp; Training</h1>
           <p className="ps-sub">
@@ -288,34 +301,6 @@ export default function HealthPage() {
               </div>
             ))}
           </div>
-
-          <CoachNote
-            scope="health"
-            payload={{
-              week_plan: weekPlan.map((w) => ({
-                day: w.day,
-                date: w.date,
-                kind: w.kind,
-                label: w.label,
-                done: w.done,
-                today: w.today,
-              })),
-              recent_sessions: sessions.slice(0, 6).map((s) => ({
-                date: s.session_date,
-                sets: allSets
-                  .filter((st) => st.session?.session_date === s.session_date)
-                  .map((st) => `${st.exercise} ${st.weight}×${st.reps}`),
-              })),
-              lift_progress: liftProgress.map((l) => ({
-                lift: l.label,
-                current_weight: l.currentWeight,
-                current_reps: l.currentReps,
-                sessions: l.sessionCount,
-              })),
-              latest_bodyweight: latestWeight?.w || null,
-              last_7_avg: last7 || null,
-            }}
-          />
 
           {nextSession && (
             <div className="fit-next">
@@ -484,7 +469,6 @@ export default function HealthPage() {
             )}
           </div>
         </div>
-      </div>
 
       <style jsx global>{`
         .fit-week {
@@ -769,6 +753,6 @@ export default function HealthPage() {
           .fit-quick { grid-template-columns: 1fr 1fr; }
         }
       `}</style>
-    </DashboardLayout>
+    </PSShell>
   );
 }

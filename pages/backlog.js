@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Head from "next/head";
-import DashboardLayout from "../components/DashboardLayout";
-import CoachNote from "../components/CoachNote";
+import PSShell from "../components/PSShell";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabaseClient";
 import { updateTaskStatusWithEvent } from "../lib/db";
@@ -247,20 +245,33 @@ export default function BacklogPage() {
     );
   }
 
-  if (!user) {
-    return (
-      <DashboardLayout>
-        <p style={{ fontSize: 14, color: "#6b7280" }}>Loading…</p>
-      </DashboardLayout>
-    );
-  }
+  if (!user) return null;
+
+  const coachPayload = {
+    total_tasks: tasks.length,
+    visible_tasks: visible.length,
+    counts_by_priority: counts.pri,
+    projects_visible: categories
+      .filter((c) => counts.proj[c.id])
+      .map((c) => ({
+        name: c.name,
+        count: counts.proj[c.id],
+      })),
+    matrix_bucket_counts: {
+      q1_do_now: matrixBuckets.q1.length,
+      q2_schedule: matrixBuckets.q2.length,
+      q3_quick_wins: matrixBuckets.q3.length,
+      q4_drop_or_defer: matrixBuckets.q4.length,
+    },
+    sample_titles: visible.slice(0, 14).map((t) => ({
+      title: t.title,
+      priority: t.priority,
+      due: t.due_date,
+    })),
+  };
 
   return (
-    <DashboardLayout>
-      <Head>
-        <title>Action items · Rise &amp; Shine</title>
-      </Head>
-      <div className="ps-page">
+    <PSShell scope="actions" title="Action items" coachPayload={coachPayload}>
         <div className="act-shell">
           <aside className="act-rail">
             <div className="ps-eyebrow">Action items</div>
@@ -387,31 +398,6 @@ export default function BacklogPage() {
 
           <main className="act-main">
             {error && <div className="today-error">{error}</div>}
-            <CoachNote
-              scope="backlog"
-              payload={{
-                total_tasks: tasks.length,
-                visible_tasks: visible.length,
-                counts_by_priority: counts.pri,
-                projects_visible: categories
-                  .filter((c) => counts.proj[c.id])
-                  .map((c) => ({
-                    name: c.name,
-                    count: counts.proj[c.id],
-                  })),
-                matrix_bucket_counts: {
-                  q1_do_now: matrixBuckets.q1.length,
-                  q2_schedule: matrixBuckets.q2.length,
-                  q3_quick_wins: matrixBuckets.q3.length,
-                  q4_drop_or_defer: matrixBuckets.q4.length,
-                },
-                sample_titles: visible.slice(0, 14).map((t) => ({
-                  title: t.title,
-                  priority: t.priority,
-                  due: t.due_date,
-                })),
-              }}
-            />
             {loading ? (
               <div className="act-empty">Loading…</div>
             ) : view === "matrix" ? (
@@ -517,7 +503,6 @@ export default function BacklogPage() {
             </aside>
           )}
         </div>
-      </div>
 
       <style jsx global>{`
         .act-shell {
@@ -885,6 +870,6 @@ export default function BacklogPage() {
           .act-matrix { grid-template-columns: 1fr; min-height: unset; }
         }
       `}</style>
-    </DashboardLayout>
+    </PSShell>
   );
 }

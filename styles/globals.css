@@ -1,6 +1,7 @@
 /* ===== Planning System design tokens (warm paper / ink / clay accent) =====
-   Activated per-page via wrapping the page content in <div class="ps-page">.
-   Existing rs-* pages are unaffected. */
+   Activated per-page by PSShell (.ps-app wrapper) or via the legacy
+   .ps-page wrapper. Existing rs-* pages are unaffected. */
+.ps-app,
 .ps-page {
   --ps-bg: #faf7f2;
   --ps-paper: #f3eee5;
@@ -32,17 +33,20 @@
   --ps-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --ps-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif;
 
+  color: var(--ps-ink);
+  font-family: var(--ps-sans);
+}
+.ps-page {
   background:
     radial-gradient(1400px 800px at 15% -10%, #f5e7cf 0%, transparent 55%),
     radial-gradient(1000px 600px at 90% 110%, #efdcc8 0%, transparent 55%),
     #ece6da;
-  color: var(--ps-ink);
-  font-family: var(--ps-sans);
   min-height: 100%;
   margin: -16px;
   padding: 16px;
 }
 @supports (color: oklch(50% 0.1 50)) {
+  .ps-app,
   .ps-page {
     --ps-accent: oklch(62% 0.14 55);
     --ps-accent-soft: oklch(92% 0.035 55);
