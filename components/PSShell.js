@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { useAuth } from "../hooks/useAuth";
@@ -44,12 +44,17 @@ export default function PSShell({
     try {
       const saved = localStorage.getItem("rs-ps-coach");
       if (saved === "closed") return false;
-      return true;
+      if (saved === "open") return true;
     } catch {
-      return true;
+      // noop
     }
+    return window.innerWidth >= 900;
   });
   const [navOpen, setNavOpen] = useState(false);
+  const [isPublic, setIsPublic] = useState(false);
+  const [visibilityLoaded, setVisibilityLoaded] = useState(false);
+  const [visibilityBusy, setVisibilityBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const toggleCoach = useCallback(() => {
     setCoachOpen((v) => {
@@ -67,6 +72,71 @@ export default function PSShell({
     await supabase.auth.signOut();
     window.location.href = "/login";
   }, []);
+
+  const loadVisibility = useCallback(async () => {
+    if (!user || visibilityLoaded) return;
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) return;
+      const res = await fetch("/api/profile/visibility", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setIsPublic(!!data.is_public);
+      setVisibilityLoaded(true);
+    } catch {
+      // silent
+    }
+  }, [user, visibilityLoaded]);
+
+  const toggleVisibility = useCallback(async () => {
+    if (!user || visibilityBusy) return;
+    setVisibilityBusy(true);
+    const next = !isPublic;
+    setIsPublic(next);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      const res = await fetch("/api/profile/visibility", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ is_public: next }),
+      });
+      if (!res.ok) {
+        setIsPublic(!next);
+      } else {
+        const data = await res.json();
+        setIsPublic(!!data.is_public);
+      }
+    } catch {
+      setIsPublic(!next);
+    } finally {
+      setVisibilityBusy(false);
+    }
+  }, [user, isPublic, visibilityBusy]);
+
+  useEffect(() => {
+    if (user && !visibilityLoaded) {
+      void loadVisibility();
+    }
+  }, [user, visibilityLoaded, loadVisibility]);
+
+  const copyShareLink = useCallback(async () => {
+    if (!user?.id || typeof window === "undefined") return;
+    const url = `${window.location.origin}/share/${user.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      window.prompt("Copy share link:", url);
+    }
+  }, [user]);
 
   const activeId = (() => {
     const all = [...PS_NAV, ...PS_NAV_ALSO];
@@ -205,6 +275,38 @@ export default function PSShell({
                 <div className="ps-rail-user-name">{emailPrefix || "You"}</div>
                 <div className="ps-rail-user-sub">The curator</div>
               </div>
+            </div>
+            <div className="ps-rail-visibility">
+              <button
+                type="button"
+                className={
+                  "ps-rail-vis-toggle" +
+                  (isPublic ? " ps-rail-vis-toggle--on" : "")
+                }
+                onClick={toggleVisibility}
+                disabled={visibilityBusy || !visibilityLoaded}
+                role="switch"
+                aria-checked={isPublic}
+                aria-label={
+                  isPublic ? "Set profile to private" : "Set profile to public"
+                }
+              >
+                <span className="ps-rail-vis-label">
+                  {isPublic ? "Public" : "Private"}
+                </span>
+                <span className="ps-rail-vis-track" aria-hidden>
+                  <span className="ps-rail-vis-thumb" />
+                </span>
+              </button>
+              {isPublic && (
+                <button
+                  type="button"
+                  className="ps-rail-vis-copy"
+                  onClick={copyShareLink}
+                >
+                  {copied ? "✓ Copied" : "Copy share link"}
+                </button>
+              )}
             </div>
             <button
               type="button"
@@ -393,6 +495,75 @@ export default function PSShell({
           font-family: var(--ps-mono);
           font-size: 10px;
           color: var(--ps-ink-50);
+        }
+        .ps-rail-visibility {
+          margin-top: 10px;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        .ps-rail-vis-toggle {
+          appearance: none;
+          border: 1px solid var(--ps-ink-10);
+          background: transparent;
+          border-radius: 8px;
+          padding: 6px 8px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          color: var(--ps-ink-70);
+          cursor: pointer;
+        }
+        .ps-rail-vis-toggle:hover:not(:disabled) {
+          background: var(--ps-ink-05);
+        }
+        .ps-rail-vis-toggle:disabled {
+          opacity: 0.5;
+          cursor: default;
+        }
+        .ps-rail-vis-track {
+          width: 26px;
+          height: 14px;
+          border-radius: 999px;
+          background: var(--ps-ink-10);
+          position: relative;
+          flex-shrink: 0;
+          transition: background 150ms;
+        }
+        .ps-rail-vis-thumb {
+          width: 10px;
+          height: 10px;
+          border-radius: 50%;
+          background: var(--ps-ink);
+          position: absolute;
+          top: 2px;
+          left: 2px;
+          transition: transform 150ms, background 150ms;
+        }
+        .ps-rail-vis-toggle--on .ps-rail-vis-track {
+          background: var(--ps-accent);
+        }
+        .ps-rail-vis-toggle--on .ps-rail-vis-thumb {
+          transform: translateX(12px);
+          background: #fff;
+        }
+        .ps-rail-vis-copy {
+          appearance: none;
+          border: none;
+          background: transparent;
+          padding: 3px 6px;
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          color: var(--ps-ink-50);
+          text-align: left;
+          cursor: pointer;
+        }
+        .ps-rail-vis-copy:hover {
+          color: var(--ps-accent);
         }
         .ps-rail-signout {
           margin-top: 12px;
