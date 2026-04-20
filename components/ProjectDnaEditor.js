@@ -18,8 +18,6 @@ export default function ProjectDnaEditor({
   initialOutcomeIds,
   initialLifeDomains,
   initialPrimaryLifeDomain,
-  workspace,
-  resources,
   onSaved,
 }) {
   const [desiredOutcomes, setDesiredOutcomes] = useState([]);
@@ -128,16 +126,13 @@ export default function ProjectDnaEditor({
       const capped = lifeDomains.slice(0, MAX_NEEDS);
       const primary = capped[0] || null;
 
-      // 1. Persist project-level DNA inside shared_project_workspaces.workspace
-      const nextWorkspace = {
-        ...(workspace || {}),
-        resources: resources || workspace?.resources || [],
+      // 1. Persist project-level DNA as top-level patch keys. The
+      //    save API only recognizes flat keys and would silently drop
+      //    a nested 'workspace' blob.
+      await saveCollaborativeProjectWorkspace(categoryId, {
         outcome_ids: outcomeIds,
         life_domains: capped,
         primary_life_domain: primary,
-      };
-      await saveCollaborativeProjectWorkspace(categoryId, {
-        workspace: nextWorkspace,
       });
 
       // 2. Propagate to every non-archived task under this category.

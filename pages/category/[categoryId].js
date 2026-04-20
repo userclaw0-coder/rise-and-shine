@@ -90,7 +90,6 @@ export default function ProjectPage() {
   const [knowledgeBase, setKnowledgeBase] = useState("");
   const [resources, setResources] = useState([]);
   const [mantra, setMantra] = useState("");
-  const [projectWorkspace, setProjectWorkspace] = useState(null);
   const [projectOutcomeIds, setProjectOutcomeIds] = useState([]);
   const [projectPrimaryDomain, setProjectPrimaryDomain] = useState(null);
   const [projectLifeDomains, setProjectLifeDomains] = useState([]);
@@ -164,7 +163,6 @@ export default function ProjectPage() {
         const ws = await loadCollaborativeProject(categoryId);
         setKnowledgeBase(ws?.knowledge_base || "");
         const wsObj = ws?.workspace || {};
-        setProjectWorkspace(wsObj);
         setResources(wsObj.resources || []);
         setMantra(wsObj.mantra || "");
         setProjectOutcomeIds(wsObj.outcome_ids || []);
@@ -192,7 +190,7 @@ export default function ProjectPage() {
     setMantraError("");
     try {
       await saveCollaborativeProjectWorkspace(categoryId, {
-        workspace: { resources, mantra: nextMantra },
+        mantra: nextMantra,
       });
       setMantra(nextMantra);
       setEditingMantra(false);
@@ -245,7 +243,7 @@ export default function ProjectPage() {
     try {
       await saveCollaborativeProjectWorkspace(categoryId, {
         knowledge_base: knowledgeBase,
-        workspace: { resources, mantra },
+        resources,
       });
     } catch (err) {
       setKbError(err.message || "Save failed.");
@@ -572,8 +570,6 @@ export default function ProjectPage() {
             initialOutcomeIds={projectOutcomeIds}
             initialLifeDomains={projectLifeDomains}
             initialPrimaryLifeDomain={projectPrimaryDomain}
-            workspace={projectWorkspace}
-            resources={resources}
             onSaved={() => load()}
           />
 
