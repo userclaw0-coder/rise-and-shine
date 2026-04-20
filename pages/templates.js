@@ -15,6 +15,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import DashboardLayout from "../components/DashboardLayout";
+import CoachNote from "../components/CoachNote";
 import { useAuth } from "../hooks/useAuth";
 import {
   getTemplates,
@@ -381,6 +382,26 @@ export default function TemplatesPage() {
               ))}
             </DndContext>
           </div>
+
+          <CoachNote
+            scope="daily-hits"
+            payload={{
+              date: dateStr,
+              total_hits: total,
+              done_today: doneCount,
+              not_done_today: items
+                .filter((i) => !done[i.task.id])
+                .slice(0, 12)
+                .map((i) => ({
+                  title: i.task?.title,
+                  priority: i.task?.priority,
+                })),
+              done_today_titles: items
+                .filter((i) => done[i.task.id])
+                .slice(0, 12)
+                .map((i) => i.task?.title),
+            }}
+          />
 
           <div className="dh-add">
             <input

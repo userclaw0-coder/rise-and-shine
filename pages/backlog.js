@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Head from "next/head";
 import DashboardLayout from "../components/DashboardLayout";
+import CoachNote from "../components/CoachNote";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabaseClient";
 import { updateTaskStatusWithEvent } from "../lib/db";
@@ -386,6 +387,31 @@ export default function BacklogPage() {
 
           <main className="act-main">
             {error && <div className="today-error">{error}</div>}
+            <CoachNote
+              scope="backlog"
+              payload={{
+                total_tasks: tasks.length,
+                visible_tasks: visible.length,
+                counts_by_priority: counts.pri,
+                projects_visible: categories
+                  .filter((c) => counts.proj[c.id])
+                  .map((c) => ({
+                    name: c.name,
+                    count: counts.proj[c.id],
+                  })),
+                matrix_bucket_counts: {
+                  q1_do_now: matrixBuckets.q1.length,
+                  q2_schedule: matrixBuckets.q2.length,
+                  q3_quick_wins: matrixBuckets.q3.length,
+                  q4_drop_or_defer: matrixBuckets.q4.length,
+                },
+                sample_titles: visible.slice(0, 14).map((t) => ({
+                  title: t.title,
+                  priority: t.priority,
+                  due: t.due_date,
+                })),
+              }}
+            />
             {loading ? (
               <div className="act-empty">Loading…</div>
             ) : view === "matrix" ? (

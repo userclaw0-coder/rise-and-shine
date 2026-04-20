@@ -9,6 +9,16 @@ import {
   archiveIdea,
   promoteIdeaToTask,
 } from "../lib/db";
+import { supabase } from "../lib/supabaseClient";
+
+const SCORE_DIMS = [
+  { id: "alignment", label: "Alignment", color: "var(--ps-sage)" },
+  { id: "leverage", label: "Leverage", color: "var(--ps-accent)" },
+  { id: "feasibility", label: "Feasibility", color: "var(--ps-indigo)" },
+  { id: "novelty", label: "Novelty", color: "var(--ps-plum)" },
+  { id: "timing", label: "Timing", color: "var(--ps-gold)" },
+  { id: "heat", label: "Heat", color: "var(--ps-clay)" },
+];
 
 const STAGES = [
   { id: "new", label: "Raw sparks", sub: "Just captured", color: "var(--ps-ink-50)" },
@@ -39,6 +49,8 @@ export default function IdeasPage() {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState("");
   const [search, setSearch] = useState("");
+  const [scoring, setScoring] = useState(null);
+  const [scoreError, setScoreError] = useState("");
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -130,6 +142,36 @@ export default function IdeasPage() {
       );
     }
     setBusy("");
+  }
+
+  async function scoreIdea(idea) {
+    if (!user || !idea || scoring) return;
+    setScoring(idea.id);
+    setScoreError("");
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      const res = await fetch("/api/coach/score-idea", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ idea_id: idea.id }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || "Failed");
+      }
+      const data = await res.json();
+      setIdeas((l) =>
+        l.map((x) => (x.id === idea.id ? { ...x, scores: data.scores } : x))
+      );
+    } catch (err) {
+      setScoreError(err.message || "Failed to score.");
+    } finally {
+      setScoring(null);
+    }
   }
 
   async function saveEdit() {
@@ -355,7 +397,92 @@ export default function IdeasPage() {
                 onChange={(e) => setEditDetails(e.target.value)}
                 placeholder="Shape it — why it matters, who it's for, what makes it different, any risks you see."
               />
+              {selected.scores && Object.keys(selected.scores).length > 0 && (
+                <div className="ideas-scores">
+                  <div className="ideas-scores-head">
+                    <span className="ideas-scores-cap">Coach scoring</span>
+                    {selected.scores.scored_at && (
+                      <span className="ideas-scores-when">
+                        {new Date(selected.scores.scored_at).toLocaleDateString(
+                          undefined,
+                          { month: "short", day: "numeric" }
+                        )}
+                      </span>
+                    )}
+                  </div>
+                  <div className="ideas-scores-bars">
+                    {SCORE_DIMS.map((d) => {
+                      const v = selected.scores?.[d.id];
+                      if (v == null) return null;
+                      return (
+                        <div key={d.id} className="ideas-score-row">
+                          <span
+                            className="ideas-score-label"
+                            style={{ color: d.color }}
+                          >
+                            {d.label}
+                          </span>
+                          <span className="ideas-score-bar">
+                            <span
+                              className="ideas-score-fill"
+                              style={{
+                                width: v + "%",
+                                background: d.color,
+                              }}
+                            />
+                          </span>
+                          <span className="ideas-score-num">{v}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {selected.scores.critique && (
+                    <div className="ideas-critique">
+                      {selected.scores.critique.strength && (
+                        <div className="ideas-critique-row">
+                          <span className="ideas-critique-cap">Strength</span>
+                          <span>{selected.scores.critique.strength}</span>
+                        </div>
+                      )}
+                      {selected.scores.critique.risk && (
+                        <div className="ideas-critique-row">
+                          <span className="ideas-critique-cap">Risk</span>
+                          <span>{selected.scores.critique.risk}</span>
+                        </div>
+                      )}
+                      {selected.scores.critique.question && (
+                        <div className="ideas-critique-row">
+                          <span className="ideas-critique-cap">Question</span>
+                          <span>{selected.scores.critique.question}</span>
+                        </div>
+                      )}
+                      {selected.scores.critique.next_step && (
+                        <div className="ideas-critique-row">
+                          <span className="ideas-critique-cap">Next step</span>
+                          <span>{selected.scores.critique.next_step}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+              {scoreError && (
+                <div className="today-error" style={{ margin: 0 }}>
+                  {scoreError}
+                </div>
+              )}
               <div className="ideas-detail-actions">
+                <button
+                  className="ps-btn"
+                  onClick={() => scoreIdea(selected)}
+                  disabled={scoring === selected.id}
+                >
+                  {scoring === selected.id
+                    ? "Scoring…"
+                    : selected.scores && Object.keys(selected.scores).length > 0
+                    ? "Re-score with coach"
+                    : "Score with coach"}
+                </button>
                 <button
                   className="ps-btn ps-btn--primary"
                   onClick={saveEdit}
@@ -718,6 +845,88 @@ export default function IdeasPage() {
           line-height: 1.55;
           min-height: 140px;
           resize: vertical;
+        }
+        .ideas-scores {
+          background: var(--ps-paper);
+          border: 1px solid var(--ps-ink-08);
+          border-radius: 10px;
+          padding: 12px 14px;
+        }
+        .ideas-scores-head {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 10px;
+        }
+        .ideas-scores-cap {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+        }
+        .ideas-scores-when {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          color: var(--ps-ink-50);
+        }
+        .ideas-scores-bars {
+          display: flex;
+          flex-direction: column;
+          gap: 5px;
+        }
+        .ideas-score-row {
+          display: grid;
+          grid-template-columns: 90px 1fr 28px;
+          gap: 10px;
+          align-items: center;
+          font-family: var(--ps-mono);
+          font-size: 11px;
+        }
+        .ideas-score-label {
+          font-weight: 600;
+          letter-spacing: 0.04em;
+        }
+        .ideas-score-bar {
+          height: 5px;
+          background: var(--ps-ink-08);
+          border-radius: 3px;
+          position: relative;
+          overflow: hidden;
+        }
+        .ideas-score-fill {
+          position: absolute;
+          left: 0;
+          top: 0;
+          bottom: 0;
+          border-radius: 3px;
+        }
+        .ideas-score-num {
+          text-align: right;
+          color: var(--ps-ink-70);
+        }
+        .ideas-critique {
+          margin-top: 12px;
+          padding-top: 10px;
+          border-top: 1px dashed var(--ps-ink-10);
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        .ideas-critique-row {
+          display: grid;
+          grid-template-columns: 90px 1fr;
+          gap: 10px;
+          font-size: 12px;
+          color: var(--ps-ink-80);
+          line-height: 1.5;
+        }
+        .ideas-critique-cap {
+          font-family: var(--ps-mono);
+          font-size: 9px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
         }
         .ideas-detail-actions {
           display: flex;

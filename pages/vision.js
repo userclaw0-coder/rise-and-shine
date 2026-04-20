@@ -5,6 +5,13 @@ import { useAuth } from "../hooks/useAuth";
 import { getUserProfile, upsertUserProfile } from "../lib/db";
 import { supabase } from "../lib/supabaseClient";
 
+const UPGRADE_FRAMEWORKS = [
+  { id: "smart", label: "SMART" },
+  { id: "woop", label: "WOOP" },
+  { id: "identity", label: "Identity" },
+  { id: "pre-mortem", label: "Pre-mortem" },
+];
+
 const MODES = [
   { id: "immerse", label: "Immerse", sub: "Feel it", icon: "◐" },
   { id: "compose", label: "Compose", sub: "Build the board", icon: "▦" },
@@ -47,6 +54,10 @@ export default function VisionPage() {
   const [uploading, setUploading] = useState("");
   const [imIdx, setImIdx] = useState(0);
   const [imPlaying, setImPlaying] = useState(false);
+  const [upgradeInput, setUpgradeInput] = useState("");
+  const [upgrades, setUpgrades] = useState(null);
+  const [upgradeLoading, setUpgradeLoading] = useState(false);
+  const [upgradeError, setUpgradeError] = useState("");
   const saveTimer = useRef(null);
 
   useEffect(() => {
@@ -208,6 +219,41 @@ export default function VisionPage() {
     );
     return () => clearTimeout(t);
   }, [imPlaying, imIdx, scenes.length, mode]);
+
+  async function runUpgrade() {
+    if (!user || !upgradeInput.trim() || upgradeLoading) return;
+    setUpgradeLoading(true);
+    setUpgradeError("");
+    setUpgrades(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      const res = await fetch("/api/coach/upgrade-goal", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ goal: upgradeInput.trim() }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || "Failed");
+      }
+      const data = await res.json();
+      setUpgrades(data.upgrades || []);
+    } catch (err) {
+      setUpgradeError(err.message || "Failed to upgrade goal.");
+    } finally {
+      setUpgradeLoading(false);
+    }
+  }
+
+  function appendUpgradeToOutcomes(rewrite) {
+    const joiner = (existing) =>
+      existing?.trim() ? existing + "\n" + rewrite : rewrite;
+    setOutcomes(joiner);
+  }
 
   async function handleUpload(key, file) {
     if (!file || !user) return;
@@ -389,6 +435,74 @@ export default function VisionPage() {
 
           {mode === "clarify" && (
             <div className="vis-clarify">
+              <div className="vis-upgrade">
+                <div className="vis-upgrade-head">
+                  <div>
+                    <div className="vis-upgrade-cap">Goal upgrade workshop</div>
+                    <div className="vis-upgrade-sub">
+                      Drop a fuzzy goal. The coach rewrites it through SMART,
+                      WOOP (Oettingen), Identity (Clear), and Pre-mortem
+                      (Klein/Kahneman). Append the version you like into your
+                      outcomes.
+                    </div>
+                  </div>
+                </div>
+                <textarea
+                  className="vis-textarea"
+                  placeholder="e.g. 'get in shape', 'build a successful business', 'spend more time with family'"
+                  value={upgradeInput}
+                  onChange={(e) => setUpgradeInput(e.target.value)}
+                />
+                <div className="vis-upgrade-actions">
+                  <button
+                    className="ps-btn ps-btn--primary"
+                    disabled={!upgradeInput.trim() || upgradeLoading}
+                    onClick={runUpgrade}
+                  >
+                    {upgradeLoading ? "Running frameworks…" : "Upgrade this goal"}
+                  </button>
+                  {upgrades && (
+                    <button
+                      className="ps-btn"
+                      onClick={() => {
+                        setUpgrades(null);
+                        setUpgradeInput("");
+                        setUpgradeError("");
+                      }}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                {upgradeError && (
+                  <div className="today-error">{upgradeError}</div>
+                )}
+                {upgrades && upgrades.length > 0 && (
+                  <div className="vis-upgrade-grid">
+                    {upgrades.map((u, i) => {
+                      const meta = UPGRADE_FRAMEWORKS.find((f) => f.id === u.framework) || {
+                        label: u.framework,
+                      };
+                      return (
+                        <div key={i} className="vis-upgrade-card">
+                          <div className="vis-upgrade-tag">{meta.label}</div>
+                          <div className="vis-upgrade-rewrite">{u.rewrite}</div>
+                          {u.notes && (
+                            <div className="vis-upgrade-notes">{u.notes}</div>
+                          )}
+                          <button
+                            className="ps-btn"
+                            onClick={() => appendUpgradeToOutcomes(u.rewrite)}
+                          >
+                            Append to outcomes ↓
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
               <div className="vis-field">
                 <label className="vis-field-label">Identity attributes</label>
                 <div className="vis-field-sub">
@@ -795,6 +909,79 @@ export default function VisionPage() {
           flex-direction: column;
           gap: 16px;
           max-width: 780px;
+        }
+        .vis-upgrade {
+          background: var(--ps-accent-soft);
+          border: 1px solid rgba(185, 115, 22, 0.25);
+          border-radius: 14px;
+          padding: 16px 18px;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        .vis-upgrade-head {
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+          align-items: flex-start;
+        }
+        .vis-upgrade-cap {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--ps-accent);
+        }
+        .vis-upgrade-sub {
+          font-size: 12.5px;
+          color: var(--ps-ink-70);
+          margin-top: 4px;
+          line-height: 1.5;
+          max-width: 600px;
+        }
+        .vis-upgrade-actions {
+          display: flex;
+          gap: 8px;
+        }
+        .vis-upgrade-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+        }
+        .vis-upgrade-card {
+          background: #fff;
+          border: 1px solid var(--ps-ink-10);
+          border-radius: 10px;
+          padding: 12px 14px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .vis-upgrade-tag {
+          align-self: flex-start;
+          font-family: var(--ps-mono);
+          font-size: 9px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--ps-accent);
+          background: var(--ps-accent-soft);
+          padding: 2px 8px;
+          border-radius: 4px;
+        }
+        .vis-upgrade-rewrite {
+          font-family: var(--ps-serif);
+          font-size: 15px;
+          letter-spacing: -0.01em;
+          line-height: 1.4;
+          color: var(--ps-ink);
+        }
+        .vis-upgrade-notes {
+          font-size: 11.5px;
+          color: var(--ps-ink-60);
+          line-height: 1.5;
+        }
+        @media (max-width: 700px) {
+          .vis-upgrade-grid { grid-template-columns: 1fr; }
         }
         .vis-field {
           background: #fff;

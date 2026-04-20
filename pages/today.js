@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
 import DashboardLayout from "../components/DashboardLayout";
+import CoachNote from "../components/CoachNote";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabaseClient";
 import {
@@ -369,6 +370,28 @@ export default function TodayPage() {
               );
             })}
           </div>
+
+          <CoachNote
+            scope="today"
+            payload={{
+              date: dateStr,
+              chosen_titles: queueTasks
+                .filter((q) => q.task)
+                .map((q) => q.task.title),
+              focus_minutes: focusMin,
+              candidates: perProject.slice(0, 12).map((p) => ({
+                project: p.catName,
+                title: p.task.title,
+                priority: p.task.priority,
+                minutes: Math.round((p.task.effort_hours || 0) * 60),
+                done: !!completed[p.task.id],
+              })),
+              need_balance: needTotals.map((n) => ({
+                need: n.id,
+                count: n.count,
+              })),
+            }}
+          />
 
           {needTotals.some((n) => n.count > 0) && (
             <div className="today-ribbon">
