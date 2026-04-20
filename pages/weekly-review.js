@@ -35,6 +35,45 @@ function parseNotes(raw) {
   }
 }
 
+// Coach-apply flow may store next_week_focus as { theme, why } or a
+// plain string. Collapse to a single string for editing/rendering.
+function themeString(parsed) {
+  if (!parsed) return "";
+  const candidates = [parsed.weekly_theme, parsed.next_week_theme, parsed.next_week_focus];
+  for (const c of candidates) {
+    if (!c) continue;
+    if (typeof c === "string") return c;
+    if (typeof c === "object") {
+      if (typeof c.theme === "string") return c.theme;
+      if (typeof c.title === "string") return c.title;
+    }
+  }
+  return "";
+}
+
+function leverageString(parsed) {
+  if (!parsed) return "";
+  if (typeof parsed.top_leverage === "string") return parsed.top_leverage;
+  if (parsed.top_leverage && typeof parsed.top_leverage === "object") {
+    if (typeof parsed.top_leverage.text === "string") return parsed.top_leverage.text;
+    if (typeof parsed.top_leverage.action === "string") return parsed.top_leverage.action;
+  }
+  if (typeof parsed.lowest_need_focus?.action === "string") return parsed.lowest_need_focus.action;
+  return "";
+}
+
+function safeString(v) {
+  if (v == null) return "";
+  if (typeof v === "string") return v;
+  if (typeof v === "object") {
+    if (typeof v.theme === "string") return v.theme;
+    if (typeof v.title === "string") return v.title;
+    if (typeof v.text === "string") return v.text;
+    return "";
+  }
+  return String(v);
+}
+
 function Field({ label, sub, value, onChange, onDraft, drafting, placeholder, color, oneLine, large }) {
   return (
     <div className="wr-field" style={{ borderLeftColor: color }}>
@@ -123,13 +162,13 @@ export default function WeeklyReviewPage() {
       if (cancelled) return;
       if (curRes.data) {
         const n = parseNotes(curRes.data.notes);
-        setWins(n.wins || "");
-        setFriction(n.friction || "");
-        setReality(n.reality_check || "");
-        setLeverage(n.top_leverage || n.lowest_need_focus?.action || "");
-        setTheme(n.weekly_theme || n.next_week_theme || "");
-        setNotes(n.week_summary || "");
-        setLowestAction(n.lowest_need_focus?.action || "");
+        setWins(safeString(n.wins));
+        setFriction(safeString(n.friction));
+        setReality(safeString(n.reality_check));
+        setLeverage(leverageString(n));
+        setTheme(themeString(n));
+        setNotes(safeString(n.week_summary));
+        setLowestAction(safeString(n.lowest_need_focus?.action));
         setNeeds({
           ...Object.fromEntries(NEEDS.map((x) => [x.id, 5])),
           ...(curRes.data.scores || {}),
@@ -525,7 +564,7 @@ export default function WeeklyReviewPage() {
                           )}
                         </span>
                         <span className="wr-past-tag">
-                          {n.weekly_theme || n.next_week_theme || "—"}
+                          {themeString(n) || "—"}
                         </span>
                       </button>
                     );
