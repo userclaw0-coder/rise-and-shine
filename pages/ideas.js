@@ -1,558 +1,740 @@
-import { useEffect, useState, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Head from "next/head";
 import DashboardLayout from "../components/DashboardLayout";
 import { useAuth } from "../hooks/useAuth";
 import {
   getIdeas,
   createIdea,
-  promoteIdeaToTask,
   updateIdea,
   archiveIdea,
-  getUserProfile,
-  upsertUserProfile,
+  promoteIdeaToTask,
 } from "../lib/db";
-import {
-  DndContext,
-  closestCenter,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  verticalListSortingStrategy,
-  useSortable,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 
-function SortableIdeaItem({
-  idea,
-  editingId,
-  editTitle,
-  setEditTitle,
-  editDetails,
-  setEditDetails,
-  startEdit,
-  cancelEdit,
-  saveEdit,
-  handlePromote,
-  handleArchive,
-  promotingId,
-  archivingId,
-  showArchived,
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: idea.id });
+const STAGES = [
+  { id: "new", label: "Raw sparks", sub: "Just captured", color: "var(--ps-ink-50)" },
+  { id: "shaping", label: "Shaping", sub: "Iterating + validating", color: "var(--ps-indigo)" },
+  { id: "promoted", label: "Promoted", sub: "Turned into a task", color: "var(--ps-sage)" },
+  { id: "archived", label: "Archived", sub: "Parked for later", color: "var(--ps-ink-30)" },
+];
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    padding: "12px 0",
-    borderBottom: "1px solid #f3f4f6",
-    opacity: isDragging ? 0.6 : 1,
-  };
-
-  return (
-    <li ref={setNodeRef} style={style}>
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-        {!showArchived && (
-          <div
-            {...attributes}
-            {...listeners}
-            style={{
-              cursor: "grab",
-              color: "#9ca3af",
-              fontSize: 14,
-              paddingTop: 2,
-              flexShrink: 0,
-            }}
-            title="Drag to reorder"
-          >
-            ☰
-          </div>
-        )}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {editingId === idea.id ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <input
-                type="text"
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                placeholder="Title"
-                style={{
-                  padding: "6px 8px",
-                  fontSize: 13,
-                  borderRadius: 6,
-                  border: "1px solid #e5e7eb",
-                }}
-              />
-              <textarea
-                value={editDetails}
-                onChange={(e) => setEditDetails(e.target.value)}
-                placeholder="Details (optional)"
-                rows={3}
-                style={{
-                  padding: "6px 8px",
-                  fontSize: 13,
-                  borderRadius: 6,
-                  border: "1px solid #e5e7eb",
-                  resize: "vertical",
-                }}
-              />
-              <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  type="button"
-                  onClick={saveEdit}
-                  style={{
-                    padding: "4px 10px",
-                    borderRadius: 999,
-                    border: "1px solid #111827",
-                    background: "#111827",
-                    color: "#fff",
-                    fontSize: 12,
-                    cursor: "pointer",
-                  }}
-                >
-                  Save
-                </button>
-                <button
-                  type="button"
-                  onClick={cancelEdit}
-                  style={{
-                    padding: "4px 10px",
-                    borderRadius: 999,
-                    border: "1px solid #e5e7eb",
-                    background: "#fff",
-                    fontSize: 12,
-                    cursor: "pointer",
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          ) : (
-            <>
-              <div style={{ fontSize: 14, fontWeight: 500 }}>{idea.title}</div>
-              {idea.details && (
-                <div
-                  style={{
-                    fontSize: 13,
-                    color: "#6b7280",
-                    marginTop: 4,
-                    whiteSpace: "pre-wrap",
-                  }}
-                >
-                  {idea.details}
-                </div>
-              )}
-              <div
-                style={{
-                  marginTop: 6,
-                  fontSize: 12,
-                  color: "#9ca3af",
-                }}
-              >
-                {idea.status || "open"}
-              </div>
-              <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {idea.status !== "promoted" && (
-                  <button
-                    onClick={() => handlePromote(idea.id)}
-                    disabled={promotingId === idea.id}
-                    style={{
-                      padding: "4px 10px",
-                      borderRadius: 999,
-                      border: "1px solid #059669",
-                      background: "#ecfdf5",
-                      color: "#059669",
-                      fontSize: 12,
-                      cursor: promotingId === idea.id ? "wait" : "pointer",
-                    }}
-                  >
-                    {promotingId === idea.id ? "Promoting…" : "Promote to Task"}
-                  </button>
-                )}
-                {!showArchived && idea.status !== "archived" && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => startEdit(idea)}
-                      style={{
-                        padding: "4px 10px",
-                        borderRadius: 999,
-                        border: "1px solid #6b7280",
-                        background: "#fff",
-                        color: "#4b5563",
-                        fontSize: 12,
-                        cursor: "pointer",
-                      }}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleArchive(idea.id)}
-                      disabled={archivingId === idea.id}
-                      style={{
-                        padding: "4px 10px",
-                        borderRadius: 999,
-                        border: "1px solid #9ca3af",
-                        background: "#f9fafb",
-                        color: "#6b7280",
-                        fontSize: 12,
-                        cursor: archivingId === idea.id ? "wait" : "pointer",
-                      }}
-                    >
-                      {archivingId === idea.id ? "Archiving…" : "Archive"}
-                    </button>
-                  </>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-    </li>
-  );
+function statusToStage(status) {
+  if (status === "archived") return "archived";
+  if (status === "promoted") return "promoted";
+  if (status === "shaping") return "shaping";
+  return "new";
 }
 
 export default function IdeasPage() {
   const { user } = useAuth();
+  const [ideas, setIdeas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [ideas, setIdeas] = useState([]);
-  const [ideaOrder, setIdeaOrder] = useState([]);
-  const [showArchived, setShowArchived] = useState(false);
-  const [newTitle, setNewTitle] = useState("");
-  const [newDetails, setNewDetails] = useState("");
-  const [promotingId, setPromotingId] = useState(null);
-  const [archivingId, setArchivingId] = useState(null);
-  const [editingId, setEditingId] = useState(null);
+  const [view, setView] = useState("board");
+  const [selectedId, setSelectedId] = useState(null);
+  const [captureTitle, setCaptureTitle] = useState("");
+  const [captureDetails, setCaptureDetails] = useState("");
+  const [capturing, setCapturing] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editDetails, setEditDetails] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState("");
+  const [search, setSearch] = useState("");
 
-  function loadIdeas() {
+  const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     setError("");
-    Promise.all([
-      getIdeas(user.id, { archivedOnly: showArchived }),
-      showArchived ? Promise.resolve({ data: null }) : getUserProfile(user.id),
-    ])
-      .then(([ideasRes, profileRes]) => {
-        if (ideasRes.error) {
-          setError(ideasRes.error.message);
-          return;
-        }
-        setIdeas(ideasRes.data || []);
-        if (!showArchived && profileRes && !profileRes.error && profileRes.data?.profile) {
-          setIdeaOrder(Array.isArray(profileRes.data.profile.idea_order) ? profileRes.data.profile.idea_order : []);
-        } else if (showArchived) {
-          setIdeaOrder([]);
-        }
-      })
-      .finally(() => setLoading(false));
-  }
+    const res = await getIdeas(user.id, { includeArchived: true });
+    if (res.error) setError(res.error.message);
+    else setIdeas(res.data || []);
+    setLoading(false);
+  }, [user]);
 
   useEffect(() => {
-    if (!user) return;
-    loadIdeas();
-  }, [user, showArchived]);
+    load();
+  }, [load]);
 
-  const orderedIdeas = useMemo(() => {
-    if (showArchived) return ideas;
-    const order = ideaOrder;
-    const inOrder = order.map((id) => ideas.find((i) => i.id === id)).filter(Boolean);
-    const notInOrder = ideas.filter((i) => !order.includes(i.id));
-    return [...inOrder, ...notInOrder];
-  }, [ideas, ideaOrder, showArchived]);
+  const selected = ideas.find((i) => i.id === selectedId) || null;
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
-  );
-
-  async function handleDragEnd(event) {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const oldIndex = orderedIdeas.findIndex((i) => i.id === active.id);
-    const newIndex = orderedIdeas.findIndex((i) => i.id === over.id);
-    if (oldIndex === -1 || newIndex === -1) return;
-    const reordered = arrayMove(orderedIdeas, oldIndex, newIndex);
-    const newOrder = reordered.map((i) => i.id);
-    setIdeaOrder(newOrder);
-    const profileRes = await getUserProfile(user.id);
-    const existing = profileRes?.data?.profile || {};
-    const res = await upsertUserProfile(user.id, { ...existing, idea_order: newOrder });
-    if (res.error) setError(res.error.message || "Failed to save order.");
-  }
-
-  async function handleCreate() {
-    if (!user || !newTitle.trim()) return;
-    setError("");
-    const res = await createIdea(user.id, {
-      title: newTitle.trim(),
-      details: newDetails.trim() || null,
-    });
-    if (res.error) setError(res.error.message);
-    else {
-      setIdeas((prev) => [res.data, ...prev]);
-      setIdeaOrder((prev) => [res.data.id, ...prev]);
-      setNewTitle("");
-      setNewDetails("");
-      const profileRes = await getUserProfile(user.id);
-      const existing = profileRes?.data?.profile || {};
-      upsertUserProfile(user.id, { ...existing, idea_order: [res.data.id, ...(ideaOrder || [])] }).then(() => {});
+  useEffect(() => {
+    if (selectedId && selected) {
+      setEditTitle(selected.title || "");
+      setEditDetails(selected.details || "");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
+
+  const grouped = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const filtered = q
+      ? ideas.filter(
+          (i) =>
+            (i.title || "").toLowerCase().includes(q) ||
+            (i.details || "").toLowerCase().includes(q)
+        )
+      : ideas;
+    const out = Object.fromEntries(STAGES.map((s) => [s.id, []]));
+    for (const i of filtered) {
+      const stage = statusToStage(i.status);
+      if (out[stage]) out[stage].push(i);
+    }
+    return out;
+  }, [ideas, search]);
+
+  async function handleCapture() {
+    if (!user || !captureTitle.trim() || capturing) return;
+    setCapturing(true);
+    const res = await createIdea(user.id, {
+      title: captureTitle.trim(),
+      details: captureDetails.trim() || null,
+      status: "new",
+    });
+    if (!res.error && res.data) {
+      setIdeas((l) => [res.data, ...l]);
+      setSelectedId(res.data.id);
+    }
+    setCaptureTitle("");
+    setCaptureDetails("");
+    setCapturing(false);
   }
 
-  async function handlePromote(ideaId) {
-    if (!user) return;
-    setPromotingId(ideaId);
-    setError("");
-    const res = await promoteIdeaToTask(user.id, ideaId);
-    if (res.error) setError(res.error.message);
-    else {
-      setIdeas((prev) =>
-        prev.map((i) => (i.id === ideaId ? { ...i, status: "promoted" } : i))
+  async function setStatus(idea, nextStatus) {
+    setBusy(idea.id);
+    const res = await updateIdea(user.id, idea.id, { status: nextStatus });
+    if (!res.error && res.data) {
+      setIdeas((l) =>
+        l.map((x) => (x.id === idea.id ? { ...x, status: nextStatus } : x))
       );
     }
-    setPromotingId(null);
+    setBusy("");
   }
 
-  function startEdit(idea) {
-    setEditingId(idea.id);
-    setEditTitle(idea.title || "");
-    setEditDetails(idea.details || "");
+  async function handleArchive(idea) {
+    if (!window.confirm("Archive this idea?")) return;
+    setBusy(idea.id);
+    const res = await archiveIdea(user.id, idea.id);
+    if (!res.error)
+      setIdeas((l) =>
+        l.map((x) => (x.id === idea.id ? { ...x, status: "archived" } : x))
+      );
+    setBusy("");
   }
 
-  function cancelEdit() {
-    setEditingId(null);
-    setEditTitle("");
-    setEditDetails("");
+  async function handlePromote(idea) {
+    setBusy(idea.id);
+    const res = await promoteIdeaToTask(user.id, idea.id);
+    if (!res.error) {
+      await updateIdea(user.id, idea.id, { status: "promoted" });
+      setIdeas((l) =>
+        l.map((x) => (x.id === idea.id ? { ...x, status: "promoted" } : x))
+      );
+    }
+    setBusy("");
   }
 
   async function saveEdit() {
-    if (!user || editingId == null) return;
-    setError("");
-    const res = await updateIdea(user.id, editingId, {
-      title: editTitle.trim() || "",
-      details: editDetails.trim() || null,
+    if (!user || !selected || editing) return;
+    setEditing(true);
+    const res = await updateIdea(user.id, selected.id, {
+      title: editTitle.trim() || selected.title,
+      details: editDetails,
     });
-    if (res.error) setError(res.error.message);
-    else {
-      setIdeas((prev) => prev.map((i) => (i.id === editingId ? { ...i, ...res.data } : i)));
-      cancelEdit();
+    if (!res.error && res.data) {
+      setIdeas((l) =>
+        l.map((x) =>
+          x.id === selected.id
+            ? { ...x, title: editTitle.trim() || x.title, details: editDetails }
+            : x
+        )
+      );
     }
+    setEditing(false);
   }
 
-  async function handleArchive(ideaId) {
-    if (!user) return;
-    setArchivingId(ideaId);
-    setError("");
-    const res = await archiveIdea(user.id, ideaId);
-    if (res.error) setError(res.error.message);
-    else setIdeas((prev) => prev.filter((i) => i.id !== ideaId));
-    setArchivingId(null);
-  }
-
-  if (loading) {
+  if (!user) {
     return (
       <DashboardLayout>
-        <p style={{ fontSize: 14, color: "#6b7280" }}>Loading...</p>
+        <p style={{ fontSize: 14, color: "#6b7280" }}>Loading…</p>
       </DashboardLayout>
     );
   }
 
   return (
     <DashboardLayout>
-      <div>
-        <h1
-          style={{
-            fontSize: 22,
-            fontWeight: 600,
-            margin: 0,
-            letterSpacing: "-0.02em",
-          }}
-        >
-          Ideas
-        </h1>
-        <p
-          style={{
-            margin: "4px 0 0",
-            fontSize: 13,
-            color: "#6b7280",
-          }}
-        >
-          Capture ideas and promote them to tasks. Edit or archive any idea.
-        </p>
+      <Head>
+        <title>Ideas · Rise &amp; Shine</title>
+      </Head>
+      <div className="ps-page">
+        <div className="ps-view">
+          <div className="ps-eyebrow">Capture · Ideas &amp; sparks</div>
+          <h1 className="ps-title">Ideas.</h1>
+          <p className="ps-sub">
+            Capture sparks first. Shape the ones that keep pulling. Graduate a
+            spark into a real project when it&apos;s earned its place.
+          </p>
 
-        <div
-          style={{
-            marginTop: 12,
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 8,
-            alignItems: "center",
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => setShowArchived(!showArchived)}
-            style={{
-              padding: "6px 12px",
-              borderRadius: 999,
-              border: "1px solid #6b7280",
-              background: showArchived ? "#374151" : "#fff",
-              color: showArchived ? "#fff" : "#374151",
-              fontSize: 13,
-              cursor: "pointer",
-            }}
-          >
-            {showArchived ? "Back to active ideas" : "View archived ideas"}
-          </button>
-        </div>
+          {error && <div className="today-error">{error}</div>}
 
-        {error && (
-          <p style={{ color: "#b91c1c", fontSize: 13, marginTop: 8 }}>{error}</p>
-        )}
-
-        {!showArchived && (
-          <section
-            style={{
-              marginTop: 20,
-              padding: 16,
-              background: "#fff",
-              borderRadius: 16,
-              border: "1px solid #e5e7eb",
-            }}
-          >
-            <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
-              New idea
-            </h2>
+          <div className="ideas-capture">
             <input
-              type="text"
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              placeholder="Title"
-              style={{
-                width: "100%",
-                padding: "8px 10px",
-                fontSize: 14,
-                borderRadius: 8,
-                border: "1px solid #e5e7eb",
-                marginBottom: 8,
-                boxSizing: "border-box",
+              className="ideas-capture-title"
+              placeholder="A spark — what did you just think of?"
+              value={captureTitle}
+              onChange={(e) => setCaptureTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleCapture();
               }}
             />
             <textarea
-              value={newDetails}
-              onChange={(e) => setNewDetails(e.target.value)}
-              placeholder="Details (optional)"
-              rows={3}
-              style={{
-                width: "100%",
-                padding: "8px 10px",
-                fontSize: 14,
-                borderRadius: 8,
-                border: "1px solid #e5e7eb",
-                resize: "vertical",
-                boxSizing: "border-box",
-              }}
+              className="ideas-capture-body"
+              placeholder="Optional — why, how, who for (free-form)"
+              value={captureDetails}
+              onChange={(e) => setCaptureDetails(e.target.value)}
             />
-            <button
-              onClick={handleCreate}
-              disabled={!newTitle.trim()}
-              style={{
-                marginTop: 6,
-                padding: "8px 14px",
-                borderRadius: 999,
-                border: "1px solid #111827",
-                background: "#111827",
-                color: "#fff",
-                fontSize: 13,
-                cursor: newTitle.trim() ? "pointer" : "not-allowed",
-              }}
-            >
-              Add idea
-            </button>
-          </section>
-        )}
-
-        <section
-          style={{
-            marginTop: 24,
-            padding: 16,
-            background: "#fff",
-            borderRadius: 16,
-            border: "1px solid #e5e7eb",
-          }}
-        >
-          <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
-            {showArchived ? "Archived ideas" : "Ideas"}
-          </h2>
-          {orderedIdeas.length === 0 ? (
-            <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
-              {showArchived ? "No archived ideas." : "No ideas yet."}
-            </p>
-          ) : showArchived ? (
-            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-              {orderedIdeas.map((idea) => (
-                <SortableIdeaItem
-                  key={idea.id}
-                  idea={idea}
-                  editingId={editingId}
-                  editTitle={editTitle}
-                  setEditTitle={setEditTitle}
-                  editDetails={editDetails}
-                  setEditDetails={setEditDetails}
-                  startEdit={startEdit}
-                  cancelEdit={cancelEdit}
-                  saveEdit={saveEdit}
-                  handlePromote={handlePromote}
-                  handleArchive={handleArchive}
-                  promotingId={promotingId}
-                  archivingId={archivingId}
-                  showArchived={showArchived}
-                />
-              ))}
-            </ul>
-          ) : (
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext
-                items={orderedIdeas.map((i) => i.id)}
-                strategy={verticalListSortingStrategy}
+            <div className="ideas-capture-actions">
+              <button
+                className="ps-btn ps-btn--primary"
+                onClick={handleCapture}
+                disabled={!captureTitle.trim() || capturing}
               >
-                <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                  {orderedIdeas.map((idea) => (
-                    <SortableIdeaItem
-                      key={idea.id}
-                      idea={idea}
-                      editingId={editingId}
-                      editTitle={editTitle}
-                      setEditTitle={setEditTitle}
-                      editDetails={editDetails}
-                      setEditDetails={setEditDetails}
-                      startEdit={startEdit}
-                      cancelEdit={cancelEdit}
-                      saveEdit={saveEdit}
-                      handlePromote={handlePromote}
-                      handleArchive={handleArchive}
-                      promotingId={promotingId}
-                      archivingId={archivingId}
-                      showArchived={showArchived}
+                {capturing ? "Saving…" : "Capture →"}
+              </button>
+            </div>
+          </div>
+
+          <div className="ideas-controls">
+            <div className="ideas-view-toggle">
+              {[
+                ["board", "Board"],
+                ["list", "Ranked"],
+              ].map(([id, l]) => (
+                <button
+                  key={id}
+                  className={"ideas-vtog" + (view === id ? " active" : "")}
+                  onClick={() => setView(id)}
+                >
+                  {l}
+                </button>
+              ))}
+            </div>
+            <input
+              className="ideas-search"
+              placeholder="Search ideas"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            <div className="ideas-count">
+              {ideas.length} idea{ideas.length === 1 ? "" : "s"} captured
+            </div>
+          </div>
+
+          {loading && <div className="fit-empty">Loading…</div>}
+
+          {!loading && view === "board" && (
+            <div className="ideas-board">
+              {STAGES.map((s) => (
+                <div key={s.id} className="ideas-col">
+                  <div className="ideas-col-head">
+                    <span
+                      className="ideas-col-dot"
+                      style={{ background: s.color }}
                     />
-                  ))}
-                </ul>
-              </SortableContext>
-            </DndContext>
+                    <div>
+                      <div className="ideas-col-label">{s.label}</div>
+                      <div className="ideas-col-sub">{s.sub}</div>
+                    </div>
+                    <div className="ideas-col-count">
+                      {grouped[s.id]?.length || 0}
+                    </div>
+                  </div>
+                  <div className="ideas-col-items">
+                    {(grouped[s.id] || []).map((i) => (
+                      <button
+                        key={i.id}
+                        className={
+                          "ideas-card" +
+                          (selectedId === i.id ? " selected" : "")
+                        }
+                        onClick={() => setSelectedId(i.id)}
+                      >
+                        <div className="ideas-card-title">{i.title}</div>
+                        {i.details && (
+                          <div className="ideas-card-body">
+                            {(i.details || "").slice(0, 120)}
+                            {(i.details || "").length > 120 ? "…" : ""}
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                    {(grouped[s.id] || []).length === 0 && (
+                      <div className="ideas-col-empty">—</div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
-        </section>
+
+          {!loading && view === "list" && (
+            <div className="ideas-list">
+              {ideas
+                .filter((i) =>
+                  !search.trim()
+                    ? true
+                    : (i.title || "")
+                        .toLowerCase()
+                        .includes(search.trim().toLowerCase())
+                )
+                .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+                .map((i) => (
+                  <button
+                    key={i.id}
+                    className={
+                      "ideas-list-row" +
+                      (selectedId === i.id ? " selected" : "")
+                    }
+                    onClick={() => setSelectedId(i.id)}
+                  >
+                    <span
+                      className="ideas-list-pill"
+                      style={{
+                        background:
+                          STAGES.find((s) => s.id === statusToStage(i.status))?.color ||
+                          "var(--ps-ink-30)",
+                      }}
+                    >
+                      {STAGES.find((s) => s.id === statusToStage(i.status))?.label ||
+                        "new"}
+                    </span>
+                    <div className="ideas-list-title">{i.title}</div>
+                    {i.details && (
+                      <div className="ideas-list-sub">
+                        {(i.details || "").slice(0, 80)}
+                      </div>
+                    )}
+                    <div className="ideas-list-date">
+                      {new Date(i.created_at).toLocaleDateString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </div>
+                  </button>
+                ))}
+            </div>
+          )}
+
+          {selected && (
+            <div className="ideas-detail">
+              <div className="ideas-detail-head">
+                <div className="ideas-detail-stage">
+                  <span
+                    className="ideas-detail-dot"
+                    style={{
+                      background:
+                        STAGES.find((s) => s.id === statusToStage(selected.status))?.color,
+                    }}
+                  />
+                  {STAGES.find((s) => s.id === statusToStage(selected.status))?.label}
+                </div>
+                <button
+                  className="ideas-detail-close"
+                  onClick={() => setSelectedId(null)}
+                >
+                  ×
+                </button>
+              </div>
+              <input
+                className="ideas-detail-title-input"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                placeholder="Idea title"
+              />
+              <textarea
+                className="ideas-detail-body-input"
+                value={editDetails}
+                onChange={(e) => setEditDetails(e.target.value)}
+                placeholder="Shape it — why it matters, who it's for, what makes it different, any risks you see."
+              />
+              <div className="ideas-detail-actions">
+                <button
+                  className="ps-btn ps-btn--primary"
+                  onClick={saveEdit}
+                  disabled={editing}
+                >
+                  {editing ? "Saving…" : "Save"}
+                </button>
+                {selected.status === "new" && (
+                  <button
+                    className="ps-btn"
+                    onClick={() => setStatus(selected, "shaping")}
+                    disabled={busy === selected.id}
+                  >
+                    Move to Shaping
+                  </button>
+                )}
+                {selected.status === "shaping" && (
+                  <button
+                    className="ps-btn"
+                    onClick={() => setStatus(selected, "new")}
+                    disabled={busy === selected.id}
+                  >
+                    ← Back to Raw
+                  </button>
+                )}
+                {selected.status !== "promoted" && selected.status !== "archived" && (
+                  <button
+                    className="ps-btn ps-btn--primary"
+                    onClick={() => handlePromote(selected)}
+                    disabled={busy === selected.id}
+                  >
+                    Promote to Project →
+                  </button>
+                )}
+                {selected.status !== "archived" && (
+                  <button
+                    className="ps-btn"
+                    onClick={() => handleArchive(selected)}
+                    disabled={busy === selected.id}
+                  >
+                    Archive
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
+
+      <style jsx global>{`
+        .ideas-capture {
+          margin-top: 14px;
+          padding: 14px 16px;
+          background: #fff;
+          border: 1px solid var(--ps-ink-10);
+          border-radius: 12px;
+          box-shadow: 0 1px 3px rgba(30, 27, 22, 0.04);
+        }
+        .ideas-capture-title {
+          width: 100%;
+          appearance: none;
+          border: none;
+          outline: none;
+          font-family: var(--ps-serif);
+          font-size: 20px;
+          letter-spacing: -0.01em;
+          background: transparent;
+          color: var(--ps-ink);
+          padding: 4px 0;
+          margin-bottom: 2px;
+        }
+        .ideas-capture-title::placeholder {
+          color: var(--ps-ink-30);
+          font-style: italic;
+        }
+        .ideas-capture-body {
+          width: 100%;
+          appearance: none;
+          border: none;
+          outline: none;
+          background: transparent;
+          font-family: inherit;
+          font-size: 13px;
+          color: var(--ps-ink-80);
+          line-height: 1.55;
+          min-height: 60px;
+          resize: vertical;
+        }
+        .ideas-capture-body::placeholder {
+          color: var(--ps-ink-40);
+        }
+        .ideas-capture-actions {
+          display: flex;
+          justify-content: flex-end;
+          padding-top: 8px;
+          border-top: 1px dashed var(--ps-ink-08);
+          margin-top: 6px;
+        }
+        .ideas-controls {
+          margin-top: 18px;
+          display: flex;
+          gap: 12px;
+          align-items: center;
+          flex-wrap: wrap;
+        }
+        .ideas-view-toggle {
+          display: flex;
+          background: var(--ps-paper);
+          border: 1px solid var(--ps-ink-08);
+          border-radius: 8px;
+          padding: 3px;
+          gap: 2px;
+        }
+        .ideas-vtog {
+          appearance: none;
+          border: none;
+          background: transparent;
+          padding: 6px 14px;
+          border-radius: 5px;
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: var(--ps-ink-60);
+          cursor: pointer;
+        }
+        .ideas-vtog.active {
+          background: var(--ps-ink);
+          color: var(--ps-bg);
+        }
+        .ideas-search {
+          appearance: none;
+          border: 1px solid var(--ps-ink-10);
+          background: #fff;
+          padding: 7px 10px;
+          border-radius: 8px;
+          font-family: inherit;
+          font-size: 13px;
+          flex: 1;
+          max-width: 320px;
+        }
+        .ideas-count {
+          margin-left: auto;
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+        }
+        .ideas-board {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 12px;
+          margin-top: 16px;
+        }
+        .ideas-col {
+          background: var(--ps-paper);
+          border: 1px solid var(--ps-ink-08);
+          border-radius: 12px;
+          padding: 12px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .ideas-col-head {
+          display: grid;
+          grid-template-columns: 10px 1fr auto;
+          gap: 8px;
+          align-items: center;
+          padding-bottom: 8px;
+          border-bottom: 1px solid var(--ps-ink-08);
+        }
+        .ideas-col-dot {
+          width: 10px;
+          height: 10px;
+          border-radius: 50%;
+        }
+        .ideas-col-label {
+          font-family: var(--ps-serif);
+          font-size: 14px;
+          letter-spacing: -0.01em;
+        }
+        .ideas-col-sub {
+          font-family: var(--ps-mono);
+          font-size: 9px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+        }
+        .ideas-col-count {
+          font-family: var(--ps-mono);
+          font-size: 11px;
+          color: var(--ps-ink-50);
+        }
+        .ideas-col-items {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          min-height: 80px;
+        }
+        .ideas-col-empty {
+          font-family: var(--ps-serif);
+          font-size: 20px;
+          color: var(--ps-ink-30);
+          text-align: center;
+          padding: 16px 0;
+        }
+        .ideas-card {
+          appearance: none;
+          text-align: left;
+          background: #fff;
+          border: 1px solid var(--ps-ink-08);
+          border-radius: 8px;
+          padding: 10px 12px;
+          cursor: pointer;
+          transition: border-color 120ms, box-shadow 120ms;
+          font-family: inherit;
+        }
+        .ideas-card:hover {
+          border-color: var(--ps-ink-30);
+        }
+        .ideas-card.selected {
+          border-color: var(--ps-accent);
+          box-shadow: 0 0 0 2px var(--ps-accent-soft);
+        }
+        .ideas-card-title {
+          font-family: var(--ps-serif);
+          font-size: 14px;
+          letter-spacing: -0.01em;
+          line-height: 1.3;
+        }
+        .ideas-card-body {
+          font-size: 11.5px;
+          color: var(--ps-ink-60);
+          line-height: 1.45;
+          margin-top: 4px;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        .ideas-list {
+          margin-top: 16px;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        .ideas-list-row {
+          appearance: none;
+          width: 100%;
+          background: #fff;
+          border: 1px solid var(--ps-ink-08);
+          border-radius: 8px;
+          padding: 10px 14px;
+          display: grid;
+          grid-template-columns: 90px 1fr 200px 50px;
+          gap: 14px;
+          align-items: center;
+          cursor: pointer;
+          text-align: left;
+          font-family: inherit;
+        }
+        .ideas-list-row:hover {
+          border-color: var(--ps-ink-30);
+        }
+        .ideas-list-row.selected {
+          border-color: var(--ps-accent);
+        }
+        .ideas-list-pill {
+          font-family: var(--ps-mono);
+          font-size: 9px;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          color: #fff;
+          padding: 3px 6px;
+          border-radius: 4px;
+          text-align: center;
+        }
+        .ideas-list-title {
+          font-size: 13.5px;
+          color: var(--ps-ink);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .ideas-list-sub {
+          font-size: 11.5px;
+          color: var(--ps-ink-60);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .ideas-list-date {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          color: var(--ps-ink-50);
+          text-align: right;
+        }
+        .ideas-detail {
+          margin-top: 24px;
+          padding: 18px 20px;
+          background: #fff;
+          border: 1px solid var(--ps-accent);
+          border-radius: 12px;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          box-shadow: 0 0 0 3px var(--ps-accent-soft);
+        }
+        .ideas-detail-head {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        .ideas-detail-stage {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          color: var(--ps-ink-60);
+        }
+        .ideas-detail-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+        }
+        .ideas-detail-close {
+          appearance: none;
+          background: transparent;
+          border: none;
+          font-size: 18px;
+          color: var(--ps-ink-40);
+          cursor: pointer;
+        }
+        .ideas-detail-title-input {
+          appearance: none;
+          border: none;
+          outline: none;
+          background: transparent;
+          font-family: var(--ps-serif);
+          font-size: 22px;
+          letter-spacing: -0.015em;
+          line-height: 1.25;
+          color: var(--ps-ink);
+          padding: 0;
+        }
+        .ideas-detail-body-input {
+          appearance: none;
+          border: 1px dashed var(--ps-ink-10);
+          background: var(--ps-paper);
+          outline: none;
+          padding: 10px 12px;
+          border-radius: 8px;
+          font-family: inherit;
+          font-size: 13px;
+          color: var(--ps-ink-80);
+          line-height: 1.55;
+          min-height: 140px;
+          resize: vertical;
+        }
+        .ideas-detail-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+        }
+        @media (max-width: 1000px) {
+          .ideas-board { grid-template-columns: 1fr 1fr; }
+          .ideas-list-row {
+            grid-template-columns: 90px 1fr auto;
+          }
+          .ideas-list-sub { display: none; }
+        }
+        @media (max-width: 600px) {
+          .ideas-board { grid-template-columns: 1fr; }
+        }
+      `}</style>
     </DashboardLayout>
   );
 }
