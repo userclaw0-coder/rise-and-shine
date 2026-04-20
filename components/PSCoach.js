@@ -35,21 +35,71 @@ function ScopeMeta({ scope }) {
   return SCOPE_LABELS[scope] || SCOPE_LABELS.today;
 }
 
+const MAX_STORED_MESSAGES = 30;
+
+function storageKey(scope) {
+  return `rs-coach-convo-${scope || "default"}`;
+}
+
+function loadConvo(scope) {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(storageKey(scope));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((m) => m && (m.role === "user" || m.role === "assistant"))
+      .slice(-MAX_STORED_MESSAGES);
+  } catch {
+    return [];
+  }
+}
+
+function saveConvo(scope, messages) {
+  if (typeof window === "undefined") return;
+  try {
+    const trimmed = messages.slice(-MAX_STORED_MESSAGES);
+    localStorage.setItem(storageKey(scope), JSON.stringify(trimmed));
+  } catch {
+    // localStorage full or unavailable — silent
+  }
+}
+
+function isPayloadMeaningful(payload) {
+  if (!payload || typeof payload !== "object") return false;
+  for (const [k, v] of Object.entries(payload)) {
+    if (k === "date") continue;
+    if (Array.isArray(v) && v.length > 0) return true;
+    if (typeof v === "number" && v !== 0) return true;
+    if (typeof v === "string" && v.trim()) return true;
+    if (
+      v &&
+      typeof v === "object" &&
+      !Array.isArray(v) &&
+      Object.keys(v).length > 0
+    )
+      return true;
+  }
+  return false;
+}
+
 export default function PSCoach({
   scope,
   scopeHint,
   payload,
+  payloadReady = true,
   suggestions,
   collapsed,
   onToggle,
 }) {
   const meta = ScopeMeta({ scope });
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState(() => loadConvo(scope));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [bootstrapped, setBootstrapped] = useState(false);
+  const [bootstrapped, setBootstrapped] = useState(() => loadConvo(scope).length > 0);
   const bodyRef = useRef(null);
 
   const effectiveSuggestions =
@@ -95,7 +145,9 @@ export default function PSCoach({
     try {
       const text = await postCoach({});
       if (text) {
-        setMessages([{ role: "assistant", content: text, at: Date.now() }]);
+        const next = [{ role: "assistant", content: text, at: Date.now() }];
+        setMessages(next);
+        saveConvo(scope, next);
       }
       setBootstrapped(true);
     } catch (err) {
@@ -105,19 +157,35 @@ export default function PSCoach({
     }
   }, [scope, collapsed, postCoach]);
 
-  // Only auto-load once per mount/scope change
+  // When scope changes (page navigation), load that scope's saved
+  // conversation. Don't reset to empty — that wipes memory on every
+  // page change.
   useEffect(() => {
-    setMessages([]);
-    setBootstrapped(false);
+    const saved = loadConvo(scope);
+    setMessages(saved);
+    setBootstrapped(saved.length > 0);
     setError("");
   }, [scope]);
 
+  // Auto-fetch initial coach note only after the page has data to
+  // describe. payloadReady gates by the page's loading state, and
+  // isPayloadMeaningful catches the case where the payload landed but
+  // is empty (e.g. truly no tasks today).
+  const payloadHasContent = isPayloadMeaningful(payload);
   useEffect(() => {
-    if (!collapsed && !bootstrapped && !loading && scope) {
-      fetchInitial();
+    if (collapsed || !scope || bootstrapped || loading) return;
+    if (!payloadReady) return;
+    if (!payloadHasContent) {
+      // Wait one tick for the page's data to arrive — if it stays empty
+      // after a short delay, fire anyway so the user gets *some* greeting.
+      const t = setTimeout(() => {
+        if (!bootstrapped && !loading) fetchInitial();
+      }, 1500);
+      return () => clearTimeout(t);
     }
+    fetchInitial();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collapsed, bootstrapped, scope]);
+  }, [collapsed, scope, bootstrapped, payloadReady, payloadHasContent]);
 
   useEffect(() => {
     if (bodyRef.current) {
@@ -131,17 +199,34 @@ export default function PSCoach({
     setInput("");
     setSending(true);
     setError("");
-    setMessages((m) => [...m, { role: "user", content: q, at: Date.now() }]);
+    const withUser = [
+      ...messages,
+      { role: "user", content: q, at: Date.now() },
+    ];
+    setMessages(withUser);
+    saveConvo(scope, withUser);
     try {
       const text = await postCoach({ question: q });
       if (text) {
-        setMessages((m) => [...m, { role: "assistant", content: text, at: Date.now() }]);
+        const withAssistant = [
+          ...withUser,
+          { role: "assistant", content: text, at: Date.now() },
+        ];
+        setMessages(withAssistant);
+        saveConvo(scope, withAssistant);
       }
     } catch (err) {
       setError(err.message || "Coach unavailable.");
     } finally {
       setSending(false);
     }
+  }
+
+  function clearConversation() {
+    setMessages([]);
+    setBootstrapped(false);
+    setError("");
+    saveConvo(scope, []);
   }
 
   function handleKeyDown(e) {
@@ -178,6 +263,16 @@ export default function PSCoach({
             </div>
             <div className="ps-coach-title">{scopeHint || meta.title}</div>
           </div>
+        )}
+        {!collapsed && messages.length > 0 && (
+          <button
+            type="button"
+            className="ps-coach-clear"
+            onClick={clearConversation}
+            title="Clear this scope's conversation and re-read the page"
+          >
+            ↻
+          </button>
         )}
       </div>
       {collapsed && (
@@ -309,6 +404,23 @@ export default function PSCoach({
         .ps-coach-toggle:hover {
           background: var(--ps-ink-05);
           color: var(--ps-ink);
+        }
+        .ps-coach-clear {
+          appearance: none;
+          border: 1px solid var(--ps-ink-10);
+          background: transparent;
+          width: 28px;
+          height: 28px;
+          border-radius: 6px;
+          color: var(--ps-ink-60);
+          cursor: pointer;
+          font-size: 14px;
+          line-height: 1;
+          flex-shrink: 0;
+        }
+        .ps-coach-clear:hover {
+          border-color: var(--ps-accent);
+          color: var(--ps-accent);
         }
         .ps-coach-title-wrap {
           flex: 1;

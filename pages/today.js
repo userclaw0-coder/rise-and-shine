@@ -265,7 +265,7 @@ export default function TodayPage() {
   };
 
   return (
-    <PSShell scope="today" title="Today" coachPayload={coachPayload}>
+    <PSShell scope="today" title="Today" coachPayload={coachPayload} coachPayloadReady={!loading}>
       <div className="ps-view">
           <div className="ps-eyebrow">{niceDate}</div>
           <h1 className="ps-title">Today</h1>

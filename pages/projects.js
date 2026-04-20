@@ -113,7 +113,7 @@ export default function ProjectsPage() {
   };
 
   return (
-    <PSShell scope="projects" title="Projects" coachPayload={coachPayload}>
+    <PSShell scope="projects" title="Projects" coachPayload={coachPayload} coachPayloadReady={!loading}>
       <div className="ps-view">
         <div className="ps-eyebrow">05 · Projects</div>
         <h1 className="ps-title">Your portfolio.</h1>

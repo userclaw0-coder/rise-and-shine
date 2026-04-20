@@ -333,7 +333,7 @@ export default function BacklogPage() {
   };
 
   return (
-    <PSShell scope="actions" title="Action items" coachPayload={coachPayload}>
+    <PSShell scope="actions" title="Action items" coachPayload={coachPayload} coachPayloadReady={!loading}>
         <div className="act-shell">
           <aside className="act-rail">
             <div className="ps-eyebrow">Action items</div>

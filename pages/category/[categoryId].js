@@ -321,6 +321,7 @@ export default function ProjectPage() {
       title={category?.name || "Project"}
       scopeHint={category?.name || "Project view"}
       coachPayload={coachPayload}
+      coachPayloadReady={!loading && !!category}
     >
       <div className="ps-view">
           <div className="ps-eyebrow pj-breadcrumb">

@@ -322,7 +322,7 @@ export default function HealthPage() {
   };
 
   return (
-    <PSShell scope="fitness" title="Body & Training" coachPayload={coachPayload}>
+    <PSShell scope="fitness" title="Body & Training" coachPayload={coachPayload} coachPayloadReady={!loading}>
       <div className="ps-view">
           <div className="ps-eyebrow">Protocol · Occam + sprints + rower</div>
           <h1 className="ps-title">Body &amp; Training</h1>

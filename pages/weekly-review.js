@@ -433,6 +433,7 @@ export default function WeeklyReviewPage() {
       title={`Weekly review · ${weekLabel}`}
       scopeHint={`Your draft · week of ${weekLabel}`}
       coachPayload={coachPayload}
+      coachPayloadReady={!loading}
     >
         <div className="wr-shell">
           <div className="wr-main">

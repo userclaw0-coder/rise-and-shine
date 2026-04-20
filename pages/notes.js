@@ -393,7 +393,7 @@ export default function NotesPage() {
   };
 
   return (
-    <PSShell scope="notes" title="Notes" coachPayload={coachPayload}>
+    <PSShell scope="notes" title="Notes" coachPayload={coachPayload} coachPayloadReady={!loading}>
       <div className="ps-view notes-view">
           <div className="ps-eyebrow">Also in app · Notes</div>
           <div className="notes-title-row">

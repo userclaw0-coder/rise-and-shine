@@ -356,7 +356,7 @@ export default function TemplatesPage() {
   };
 
   return (
-    <PSShell scope="hits" title="Daily Hits" coachPayload={coachPayload}>
+    <PSShell scope="hits" title="Daily Hits" coachPayload={coachPayload} coachPayloadReady={!loading}>
       <div className="ps-view">
           <div className="ps-eyebrow">Daily · Daily Hits</div>
           <div className="dh-title-row">

@@ -332,6 +332,7 @@ export default function VisionPage() {
       scope="vision"
       title="Vision & Goals"
       coachPayload={coachPayload}
+      coachPayloadReady={!!profile}
       coachDisabled={mode === "immerse"}
       shellHidden={mode === "immerse"}
     >

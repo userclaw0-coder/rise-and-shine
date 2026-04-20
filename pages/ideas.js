@@ -222,7 +222,7 @@ export default function IdeasPage() {
   };
 
   return (
-    <PSShell scope="ideas" title="Ideas" coachPayload={coachPayload}>
+    <PSShell scope="ideas" title="Ideas" coachPayload={coachPayload} coachPayloadReady={!loading}>
         <div className="ps-view">
           <div className="ps-eyebrow">Capture · Ideas &amp; sparks</div>
           <h1 className="ps-title">Ideas.</h1>

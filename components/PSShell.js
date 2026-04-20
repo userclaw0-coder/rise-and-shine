@@ -30,6 +30,7 @@ export default function PSShell({
   scope,
   scopeHint,
   coachPayload,
+  coachPayloadReady = true,
   coachSuggestions,
   coachDisabled = false,
   shellHidden = false,
@@ -327,6 +328,7 @@ export default function PSShell({
             scope={scope}
             scopeHint={scopeHint}
             payload={coachPayload}
+            payloadReady={coachPayloadReady}
             suggestions={coachSuggestions}
             collapsed={!coachOpen}
             onToggle={toggleCoach}
