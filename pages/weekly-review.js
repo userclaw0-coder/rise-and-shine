@@ -131,6 +131,10 @@ export default function WeeklyReviewPage() {
   const [error, setError] = useState("");
   const [pastReviews, setPastReviews] = useState([]);
   const [projectMovement, setProjectMovement] = useState([]);
+  const [coachRun, setCoachRun] = useState(null);
+  const [coachLoading, setCoachLoading] = useState(false);
+  const [coachApplying, setCoachApplying] = useState(false);
+  const [acceptedIds, setAcceptedIds] = useState({});
   const saveTimer = useRef(null);
 
   useEffect(() => {
@@ -257,6 +261,93 @@ export default function WeeklyReviewPage() {
   }, [loadMovement]);
 
   const movementMax = Math.max(1, ...projectMovement.map((p) => p.moved));
+
+  async function runCoachProposals() {
+    if (!user || coachLoading) return;
+    setCoachLoading(true);
+    setError("");
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      const res = await fetch("/api/weekly-review/coach", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ week_start: weekStart }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || "Failed");
+      }
+      const data = await res.json();
+      setCoachRun(data);
+      setAcceptedIds({});
+    } catch (err) {
+      setError(err.message || "Coach unavailable.");
+    } finally {
+      setCoachLoading(false);
+    }
+  }
+
+  const proposalGroups = useMemo(() => {
+    const ai = coachRun?.coach || {};
+    return [
+      { key: "project_fixes", label: "Project fixes", items: ai.project_fixes || [] },
+      { key: "alignment_fixes", label: "Alignment fixes", items: ai.alignment_fixes || [] },
+      { key: "subtask_suggestions", label: "Subtask suggestions", items: ai.subtask_suggestions || [] },
+      { key: "priority_adjustments", label: "Priority adjustments", items: ai.priority_adjustments || [] },
+    ].filter((g) => g.items.length > 0);
+  }, [coachRun]);
+
+  const allProposalIds = useMemo(
+    () =>
+      proposalGroups.flatMap((g) =>
+        g.items.map((i) => i.id).filter(Boolean)
+      ),
+    [proposalGroups]
+  );
+
+  const toggleAccept = (id) =>
+    setAcceptedIds((m) => ({ ...m, [id]: !m[id] }));
+  const acceptAllProposals = () =>
+    setAcceptedIds(Object.fromEntries(allProposalIds.map((id) => [id, true])));
+  const clearProposalSelection = () => setAcceptedIds({});
+
+  async function applyProposals() {
+    if (!user || coachApplying) return;
+    const accepted = Object.keys(acceptedIds).filter((k) => acceptedIds[k]);
+    if (accepted.length === 0) return;
+    setCoachApplying(true);
+    setError("");
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      const res = await fetch("/api/weekly-review/apply", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          week_start: weekStart,
+          accepted_action_ids: accepted,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || "Apply failed");
+      }
+      setCoachRun(null);
+      setAcceptedIds({});
+      loadMovement();
+    } catch (err) {
+      setError(err.message || "Apply failed.");
+    } finally {
+      setCoachApplying(false);
+    }
+  }
 
   async function draftWith(sectionKey) {
     if (!user || drafting) return;
@@ -504,6 +595,123 @@ export default function WeeklyReviewPage() {
           </div>
 
           <aside className="wr-side">
+            <div className="wr-card">
+              <div className="wr-card-cap">Coach · proposals</div>
+              {!coachRun && (
+                <>
+                  <div className="wr-card-note" style={{ marginBottom: 8 }}>
+                    Ask the coach to scan your week and draft structural fixes
+                    — project tweaks, alignment gaps, subtask breakdowns,
+                    priority adjustments. You pick what to accept.
+                  </div>
+                  <button
+                    type="button"
+                    className="ps-btn ps-btn--primary"
+                    onClick={runCoachProposals}
+                    disabled={coachLoading}
+                  >
+                    {coachLoading ? "Thinking…" : "Ask coach to scan"}
+                  </button>
+                </>
+              )}
+              {coachRun && proposalGroups.length === 0 && (
+                <div className="wr-card-note">
+                  Coach didn&apos;t find structural changes this week. Your
+                  handwritten review is the main artifact.
+                  <div style={{ marginTop: 8 }}>
+                    <button
+                      type="button"
+                      className="ps-btn"
+                      onClick={() => setCoachRun(null)}
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              )}
+              {coachRun && proposalGroups.length > 0 && (
+                <>
+                  <div className="wr-card-note" style={{ marginBottom: 10 }}>
+                    Select the ones you want to apply. Each group shows what
+                    the coach proposes.
+                  </div>
+                  <div className="wr-proposal-actions">
+                    <button
+                      type="button"
+                      className="ps-btn"
+                      onClick={acceptAllProposals}
+                    >
+                      Select all
+                    </button>
+                    <button
+                      type="button"
+                      className="ps-btn"
+                      onClick={clearProposalSelection}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  {proposalGroups.map((g) => (
+                    <div key={g.key} className="wr-proposal-group">
+                      <div className="wr-proposal-group-label">
+                        {g.label} · {g.items.length}
+                      </div>
+                      {g.items.map((item) => {
+                        const id = item.id;
+                        if (!id) return null;
+                        return (
+                          <label
+                            key={id}
+                            className={
+                              "wr-proposal-row" +
+                              (acceptedIds[id] ? " accepted" : "")
+                            }
+                          >
+                            <input
+                              type="checkbox"
+                              checked={!!acceptedIds[id]}
+                              onChange={() => toggleAccept(id)}
+                            />
+                            <div>
+                              <div className="wr-proposal-title">
+                                {item.title || id}
+                              </div>
+                              {item.summary && (
+                                <div className="wr-proposal-summary">
+                                  {item.summary}
+                                </div>
+                              )}
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  ))}
+                  <div className="wr-proposal-apply">
+                    <button
+                      type="button"
+                      className="ps-btn"
+                      onClick={() => setCoachRun(null)}
+                      disabled={coachApplying}
+                    >
+                      Dismiss all
+                    </button>
+                    <button
+                      type="button"
+                      className="ps-btn ps-btn--primary"
+                      onClick={applyProposals}
+                      disabled={
+                        coachApplying ||
+                        Object.values(acceptedIds).filter(Boolean).length === 0
+                      }
+                    >
+                      {coachApplying ? "Applying…" : "Apply accepted"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
             <div className="wr-card">
               <div className="wr-card-cap">What the system noticed</div>
               <div className="wr-card-note">
@@ -759,6 +967,63 @@ export default function WeeklyReviewPage() {
           margin-bottom: 8px;
         }
         .wr-card-note { font-size: 12px; color: var(--ps-ink-60); line-height: 1.5; }
+        .wr-proposal-actions {
+          display: flex;
+          gap: 6px;
+          margin-bottom: 10px;
+        }
+        .wr-proposal-group {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          margin-bottom: 12px;
+        }
+        .wr-proposal-group-label {
+          font-family: var(--ps-mono);
+          font-size: 9px;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+          margin: 8px 0 2px;
+        }
+        .wr-proposal-row {
+          display: grid;
+          grid-template-columns: 16px 1fr;
+          gap: 8px;
+          padding: 8px 10px;
+          border: 1px solid var(--ps-ink-08);
+          border-radius: 8px;
+          background: #fff;
+          cursor: pointer;
+          align-items: flex-start;
+        }
+        .wr-proposal-row.accepted {
+          border-color: var(--ps-accent);
+          background: var(--ps-accent-soft);
+        }
+        .wr-proposal-row input {
+          margin-top: 2px;
+          accent-color: var(--ps-accent);
+        }
+        .wr-proposal-title {
+          font-size: 12.5px;
+          color: var(--ps-ink);
+          line-height: 1.35;
+        }
+        .wr-proposal-summary {
+          font-size: 11.5px;
+          color: var(--ps-ink-60);
+          line-height: 1.5;
+          margin-top: 3px;
+        }
+        .wr-proposal-apply {
+          display: flex;
+          gap: 6px;
+          justify-content: flex-end;
+          margin-top: 10px;
+          padding-top: 10px;
+          border-top: 1px solid var(--ps-ink-08);
+        }
         .wr-empty {
           font-size: 12px;
           color: var(--ps-ink-50);
