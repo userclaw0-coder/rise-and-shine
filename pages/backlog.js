@@ -54,6 +54,10 @@ export default function BacklogPage() {
   const [projectFilter, setProjectFilter] = useState([]);
   const [hideDone, setHideDone] = useState(true);
   const [selectedId, setSelectedId] = useState(null);
+  const [priBusy, setPriBusy] = useState(false);
+  const [priProposals, setPriProposals] = useState(null);
+  const [priError, setPriError] = useState("");
+  const [applying, setApplying] = useState(false);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -128,6 +132,64 @@ export default function BacklogPage() {
   }, [tasks, priorityFilter, projectFilter, hideDone]);
 
   const selected = tasks.find((t) => t.id === selectedId) || null;
+
+  async function proposePriorities() {
+    if (!user || priBusy) return;
+    setPriBusy(true);
+    setPriError("");
+    setPriProposals(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      const res = await fetch(
+        "/api/tasks/enrich-prioritization?dry_run=true&limit=20",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        }
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || "Failed");
+      }
+      const data = await res.json();
+      setPriProposals(data.report?.updated || []);
+    } catch (err) {
+      setPriError(err.message || "Coach unavailable.");
+    } finally {
+      setPriBusy(false);
+    }
+  }
+
+  async function applyProposals() {
+    if (!user || applying || !priProposals || priProposals.length === 0) return;
+    setApplying(true);
+    setPriError("");
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      const res = await fetch("/api/tasks/enrich-prioritization?limit=20", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || "Failed");
+      }
+      setPriProposals(null);
+      load();
+    } catch (err) {
+      setPriError(err.message || "Apply failed.");
+    } finally {
+      setApplying(false);
+    }
+  }
 
   async function toggleStatus(t) {
     const nextStatus = t.status === "done" ? "todo" : "done";
@@ -394,10 +456,105 @@ export default function BacklogPage() {
                 {visible.length} of {tasks.length} tasks
               </div>
             </div>
+
+            <div className="act-rail-section">
+              <div className="act-rail-label">Coach</div>
+              <button
+                type="button"
+                className="ps-btn"
+                onClick={proposePriorities}
+                disabled={priBusy}
+              >
+                {priBusy ? "Reading…" : "Propose priorities"}
+              </button>
+              <div className="act-rail-hint" style={{ fontSize: 10, lineHeight: 1.4 }}>
+                AI reads tasks missing priority/effort/outcome tags and drafts a patch you can accept.
+              </div>
+            </div>
           </aside>
 
           <main className="act-main">
             {error && <div className="today-error">{error}</div>}
+            {priError && <div className="today-error">{priError}</div>}
+            {priProposals && priProposals.length === 0 && (
+              <div className="act-pri-panel act-pri-panel--empty">
+                No tasks needed enrichment — your priorities look current.
+                <button
+                  type="button"
+                  className="ps-btn"
+                  onClick={() => setPriProposals(null)}
+                >
+                  Close
+                </button>
+              </div>
+            )}
+            {priProposals && priProposals.length > 0 && (
+              <div className="act-pri-panel">
+                <div className="act-pri-head">
+                  <div>
+                    <div className="act-pri-cap">Coach · priority proposals</div>
+                    <div className="act-pri-title">
+                      {priProposals.length} task
+                      {priProposals.length === 1 ? "" : "s"} to adjust
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button
+                      type="button"
+                      className="ps-btn"
+                      onClick={() => setPriProposals(null)}
+                      disabled={applying}
+                    >
+                      Dismiss
+                    </button>
+                    <button
+                      type="button"
+                      className="ps-btn ps-btn--primary"
+                      onClick={applyProposals}
+                      disabled={applying}
+                    >
+                      {applying ? "Applying…" : "Accept all"}
+                    </button>
+                  </div>
+                </div>
+                <div className="act-pri-list">
+                  {priProposals.slice(0, 20).map((p) => (
+                    <div key={p.task_id} className="act-pri-row">
+                      <div className="act-pri-row-title">{p.title}</div>
+                      {p.patch && Object.keys(p.patch).length > 0 && (
+                        <div className="act-pri-row-patch">
+                          {p.patch.priority && (
+                            <span className="ps-tag">
+                              priority → {p.patch.priority}
+                            </span>
+                          )}
+                          {p.patch.effort_hours != null && (
+                            <span className="ps-tag">
+                              effort → {Math.round(p.patch.effort_hours * 60)}m
+                            </span>
+                          )}
+                          {p.patch.outcome_ids && p.patch.outcome_ids.length > 0 && (
+                            <span className="ps-tag">
+                              outcomes → {p.patch.outcome_ids.length}
+                            </span>
+                          )}
+                          {p.patch.primary_life_domain && (
+                            <span className="ps-tag">
+                              domain → {p.patch.primary_life_domain}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {p.enrichment?.rationale && (
+                        <div className="act-pri-row-reason">
+                          {p.enrichment.rationale}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {loading ? (
               <div className="act-empty">Loading…</div>
             ) : view === "matrix" ? (
@@ -645,6 +802,71 @@ export default function BacklogPage() {
           border-top: 1px solid var(--ps-ink-08);
         }
         .act-main { min-width: 0; }
+        .act-pri-panel {
+          background: var(--ps-accent-soft);
+          border: 1px solid rgba(185, 115, 22, 0.25);
+          border-radius: 12px;
+          padding: 14px 16px;
+          margin-bottom: 14px;
+        }
+        .act-pri-panel--empty {
+          background: var(--ps-paper);
+          border-style: dashed;
+          color: var(--ps-ink-70);
+          font-size: 13px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 14px;
+        }
+        .act-pri-head {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 12px;
+          margin-bottom: 10px;
+        }
+        .act-pri-cap {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--ps-accent);
+        }
+        .act-pri-title {
+          font-family: var(--ps-serif);
+          font-size: 18px;
+          letter-spacing: -0.01em;
+          margin-top: 2px;
+        }
+        .act-pri-list {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        .act-pri-row {
+          background: #fff;
+          border: 1px solid var(--ps-ink-08);
+          border-radius: 8px;
+          padding: 10px 12px;
+        }
+        .act-pri-row-title {
+          font-size: 13.5px;
+          color: var(--ps-ink);
+          line-height: 1.4;
+        }
+        .act-pri-row-patch {
+          display: flex;
+          gap: 5px;
+          flex-wrap: wrap;
+          margin-top: 6px;
+        }
+        .act-pri-row-reason {
+          margin-top: 6px;
+          font-size: 12px;
+          color: var(--ps-ink-60);
+          line-height: 1.5;
+        }
         .act-empty {
           padding: 40px;
           text-align: center;
