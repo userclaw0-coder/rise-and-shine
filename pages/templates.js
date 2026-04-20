@@ -1,554 +1,627 @@
-import { useEffect, useMemo, useState } from "react";
-import {
-  getTemplates,
-  setDefaultTemplate,
-  getTemplateItems,
-  updateTemplateOrder,
-  getDailyRepeatTasksNotInTemplate,
-  getOrCreateDailyRepeatCategory,
-  addTemplateItem,
-  removeTemplateItem,
-  createTask,
-  updateTask,
-  setTaskTags,
-} from "../lib/db";
-import DashboardLayout from "../components/DashboardLayout";
-import Modal from "../components/Modal";
-import { useAuth } from "../hooks/useAuth";
-
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Head from "next/head";
 import {
   DndContext,
   closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
 } from "@dnd-kit/core";
-
 import {
   arrayMove,
   SortableContext,
   verticalListSortingStrategy,
   useSortable,
 } from "@dnd-kit/sortable";
-
 import { CSS } from "@dnd-kit/utilities";
+import DashboardLayout from "../components/DashboardLayout";
+import { useAuth } from "../hooks/useAuth";
+import {
+  getTemplates,
+  setDefaultTemplate,
+  getTemplateItems,
+  updateTemplateOrder,
+  addTemplateItem,
+  removeTemplateItem,
+  getOrCreateDailyRepeatCategory,
+  createTask,
+  setTaskCompletionForDate,
+} from "../lib/db";
+import { supabase } from "../lib/supabaseClient";
 
-function SortableRow({ item, onEdit, onRemove }) {
-  const { attributes, listeners, setNodeRef, transform, transition } =
+const BUCKETS = [
+  { id: "morning", label: "Morning", icon: "☀", sub: "Rise & set the tone", color: "var(--ps-gold)" },
+  { id: "midday", label: "Midday", icon: "◐", sub: "Middle of the day", color: "var(--ps-accent)" },
+  { id: "evening", label: "Evening", icon: "☾", sub: "Wind down", color: "var(--ps-indigo)" },
+  { id: "anytime", label: "Anytime", icon: "◯", sub: "Any slot today", color: "var(--ps-ink-50)" },
+];
+
+const PRIO_META = {
+  Critical: { label: "Critical", color: "var(--ps-clay)" },
+  High: { label: "High", color: "var(--ps-accent)" },
+  Medium: { label: "Medium", color: "var(--ps-indigo)" },
+  Low: { label: "Low", color: "var(--ps-ink-40)" },
+};
+
+function bucketFor(title) {
+  const lower = (title || "").toLowerCase();
+  if (/morning|wake|am\b|6am|7am|8am|rise/.test(lower)) return "morning";
+  if (/midday|noon|lunch|afternoon/.test(lower)) return "midday";
+  if (/evening|night|pm\b|bed|wind|sleep/.test(lower)) return "evening";
+  return "anytime";
+}
+
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function SortableRow({ item, done, onToggle, onRemove }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: item.id });
-
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    padding: "10px",
-    border: "1px solid #ddd",
-    borderRadius: "12px",
-    marginBottom: "8px",
-    background: "white",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: "10px",
+    opacity: isDragging ? 0.6 : 1,
   };
-
+  const t = item.task || {};
+  const pri = PRIO_META[t.priority] || PRIO_META.Medium;
   return (
-    <div ref={setNodeRef} style={style}>
-      <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8 }}>
-        <div {...attributes} {...listeners} style={{ cursor: "grab", color: "#999" }}>☰</div>
-        <div>
-          <b>{item.task?.title}</b>{" "}
-          <span style={{ color: "#666" }}>({item.task?.priority})</span>
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={"dh-row" + (done ? " done" : "")}
+    >
+      <span
+        className="dh-drag"
+        {...attributes}
+        {...listeners}
+        title="Drag to reorder"
+      >
+        ⋮⋮
+      </span>
+      <button
+        type="button"
+        className="dh-check"
+        aria-pressed={done}
+        onClick={onToggle}
+      >
+        <span
+          className="dh-check-dot"
+          style={{
+            background: done ? pri.color : "transparent",
+            borderColor: pri.color,
+          }}
+        >
+          {done && "✓"}
+        </span>
+      </button>
+      <div className="dh-row-body">
+        <div className="dh-row-name">{t.title || "(untitled)"}</div>
+        <div className="dh-row-meta">
+          <span className="dh-pill" style={{ color: pri.color, borderColor: pri.color + "40" }}>
+            {pri.label}
+          </span>
+          {t.effort_hours > 0 && (
+            <span className="dh-pill">{Math.round(t.effort_hours * 60)}m</span>
+          )}
         </div>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        {onEdit && (
-          <button
-            type="button"
-            onClick={() => onEdit(item)}
-            style={{
-              padding: "4px 8px",
-              fontSize: 12,
-              borderRadius: 6,
-              border: "1px solid #e5e7eb",
-              background: "#ffffff",
-              color: "#111827",
-              cursor: "pointer",
-            }}
-          >
-            Edit
-          </button>
-        )}
-        {onRemove && (
-          <button
-            type="button"
-            onClick={() => onRemove(item.id)}
-            style={{
-              padding: "4px 8px",
-              fontSize: 12,
-              borderRadius: 6,
-              border: "1px solid #fecaca",
-              background: "#fef2f2",
-              color: "#b91c1c",
-              cursor: "pointer",
-            }}
-          >
-            Remove
-          </button>
-        )}
-      </div>
+      <button
+        type="button"
+        className="dh-remove"
+        onClick={onRemove}
+        aria-label="Remove"
+      >
+        ×
+      </button>
     </div>
   );
 }
 
 export default function TemplatesPage() {
   const { user } = useAuth();
-  const [templates, setTemplates] = useState([]);
-  const [activeTemplateId, setActiveTemplateId] = useState(null);
+  const [template, setTemplate] = useState(null);
   const [items, setItems] = useState([]);
-  const [addableTasks, setAddableTasks] = useState([]);
-  const [newEntryTitle, setNewEntryTitle] = useState("");
-  const [msg, setMsg] = useState("");
-  const [editOpen, setEditOpen] = useState(false);
-  const [editingTaskId, setEditingTaskId] = useState(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [editPriority, setEditPriority] = useState("Medium");
-  const [editStatus, setEditStatus] = useState("todo");
-  const [editDueDate, setEditDueDate] = useState("");
-  const [editEffortHours, setEditEffortHours] = useState("");
-  const [editTagsText, setEditTagsText] = useState("");
-  const [savingEdit, setSavingEdit] = useState(false);
+  const [done, setDone] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [addTitle, setAddTitle] = useState("");
+  const [addBucket, setAddBucket] = useState("anytime");
+  const [addPriority, setAddPriority] = useState("Medium");
+  const [adding, setAdding] = useState(false);
 
-  function extractTagNames(task) {
-    if (!task || !task.tags) return [];
-    const result = [];
-    for (const t of task.tags) {
-      if (!t) continue;
-      if (typeof t === "string") result.push(t);
-      else if (t.tag && t.tag.name) result.push(t.tag.name);
-      else if (t.name) result.push(t.name);
-    }
-    return result;
-  }
+  const dateStr = todayStr();
 
-  function parseTagText(text) {
-    return (text || "")
-      .split(",")
-      .map((t) => t.trim())
-      .filter((t) => t.length > 0);
-  }
-
-  async function load() {
-    setMsg("Loading...");
-    const tRes = await getTemplates();
-    if (tRes.error) return setMsg(tRes.error.message);
-
-    setTemplates(tRes.data || []);
-    const def = (tRes.data || []).find((x) => x.is_default) || tRes.data?.[0];
-    if (!def) return setMsg("No templates found.");
-
-    setActiveTemplateId(def.id);
-
-    const iRes = await getTemplateItems(def.id);
-    if (iRes.error) return setMsg(iRes.error.message);
-    setItems(iRes.data || []);
-
-    if (user) {
-      const aRes = await getDailyRepeatTasksNotInTemplate(user.id, def.id);
-      setAddableTasks(aRes.data || []);
-    }
-    setMsg("");
-  }
-
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!user) return;
-    const id = setTimeout(() => load(), 0);
-    return () => clearTimeout(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- load depends on user, run once when user is set
-  }, [user]);
+    setLoading(true);
+    setError("");
+    try {
+      const { data: templates, error: tErr } = await getTemplates();
+      if (tErr) throw new Error(tErr.message);
+      let picked =
+        (templates || []).find((tpl) => tpl.user_id === user.id && tpl.is_default) ||
+        (templates || []).find((tpl) => tpl.user_id === user.id) ||
+        null;
+      setTemplate(picked);
+      if (!picked) {
+        setItems([]);
+        setDone({});
+        setLoading(false);
+        return;
+      }
+      const { data: rows, error: iErr } = await getTemplateItems(picked.id);
+      if (iErr) throw new Error(iErr.message);
+      const list = (rows || [])
+        .filter((r) => r.task)
+        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+      setItems(list);
+      const taskIds = list.map((i) => i.task.id);
+      if (taskIds.length > 0) {
+        const { data: events } = await supabase
+          .from("task_events")
+          .select("task_id, event_type, created_at")
+          .eq("user_id", user.id)
+          .in("event_type", ["completed", "uncompleted"])
+          .in("task_id", taskIds)
+          .gte("created_at", `${dateStr}T00:00:00Z`)
+          .lt("created_at", `${dateStr}T23:59:59Z`);
+        const latest = {};
+        for (const ev of events || []) {
+          const prev = latest[ev.task_id];
+          if (!prev || new Date(ev.created_at) > new Date(prev.created_at)) {
+            latest[ev.task_id] = ev;
+          }
+        }
+        const map = {};
+        for (const id of taskIds)
+          map[id] = latest[id]?.event_type === "completed";
+        setDone(map);
+      } else {
+        setDone({});
+      }
+    } catch (err) {
+      setError(err.message || "Failed to load.");
+    } finally {
+      setLoading(false);
+    }
+  }, [user, dateStr]);
 
   useEffect(() => {
-    if (!user || !activeTemplateId) return;
-    getDailyRepeatTasksNotInTemplate(user.id, activeTemplateId).then((res) => {
-      setAddableTasks(res.data || []);
-    });
-  }, [user, activeTemplateId, items]);
+    load();
+  }, [load]);
 
-  async function handleAddTask() {
-    const title = (newEntryTitle || "").trim();
-    if (!title || !activeTemplateId || !user) return;
-    setMsg("Adding…");
-    const catRes = await getOrCreateDailyRepeatCategory(user.id);
-    if (catRes.error) {
-      setMsg(catRes.error.message || "Could not get Daily Repeat category.");
-      return;
-    }
-    const taskRes = await createTask(user.id, {
-      title,
-      category_id: catRes.data,
-      status: "todo",
-      priority: "Medium",
-    });
-    if (taskRes.error) {
-      setMsg(taskRes.error.message || "Could not create task.");
-      return;
-    }
-    const res = await addTemplateItem(user.id, activeTemplateId, taskRes.data.id);
-    if (res.error) setMsg(res.error.message);
-    else {
-      setNewEntryTitle("");
-      const iRes = await getTemplateItems(activeTemplateId);
-      if (!iRes.error) setItems(iRes.data || []);
-      if (user) {
-        const aRes = await getDailyRepeatTasksNotInTemplate(user.id, activeTemplateId);
-        setAddableTasks(aRes.data || []);
-      }
-      setMsg("");
-    }
-  }
-
-  async function handleRemoveItem(itemId) {
-    setMsg("Removing…");
-    const res = await removeTemplateItem(itemId);
-    if (res.error) setMsg(res.error.message);
-    else {
-      setItems((prev) => prev.filter((i) => i.id !== itemId));
-      if (user && activeTemplateId) {
-        const aRes = await getDailyRepeatTasksNotInTemplate(user.id, activeTemplateId);
-        setAddableTasks(aRes.data || []);
-      }
-      setMsg("");
-    }
-  }
-
-  function openEditItem(item) {
-    const task = item?.task || {};
-    setEditingTaskId(task?.id || null);
-    setEditTitle(task?.title || "");
-    setEditPriority(task?.priority || "Medium");
-    setEditStatus(task?.status || "todo");
-    setEditDueDate(task?.due_date ? String(task.due_date).slice(0, 10) : "");
-    setEditEffortHours(task?.effort_hours != null ? String(task.effort_hours) : "");
-    setEditTagsText(extractTagNames(task).join(", "));
-    setEditOpen(true);
-  }
-
-  async function handleSaveEdit() {
-    if (!user || !editingTaskId || !String(editTitle || "").trim()) return;
-    setSavingEdit(true);
-    setMsg("Saving…");
-    try {
-      const upd = await updateTask(user.id, editingTaskId, {
-        title: String(editTitle || "").trim(),
-        priority: editPriority || "Medium",
-        due_date: editDueDate || null,
-        effort_hours: editEffortHours === "" ? null : Number(editEffortHours),
-      });
-      if (upd.error) {
-        setMsg(upd.error.message || "Could not update item.");
-        return;
-      }
-      const st = await updateTask(user.id, editingTaskId, {
-        status: editStatus || "todo",
-      });
-      if (st.error) {
-        setMsg(st.error.message || "Could not update status.");
-        return;
-      }
-      const tagsRes = await setTaskTags(user.id, editingTaskId, parseTagText(editTagsText));
-      if (tagsRes.error) {
-        setMsg(tagsRes.error.message || "Could not update tags.");
-        return;
-      }
-      if (activeTemplateId) {
-        const iRes = await getTemplateItems(activeTemplateId);
-        if (!iRes.error) setItems(iRes.data || []);
-      }
-      setEditOpen(false);
-      setEditingTaskId(null);
-      setMsg("");
-    } finally {
-      setSavingEdit(false);
-    }
-  }
-
-  async function switchTemplate(id) {
-    setActiveTemplateId(id);
-    const iRes = await getTemplateItems(id);
-    if (iRes.error) return setMsg(iRes.error.message);
-    setItems(iRes.data || []);
-    if (user) {
-      const aRes = await getDailyRepeatTasksNotInTemplate(user.id, id);
-      setAddableTasks(aRes.data || []);
-      setNewEntryTitle("");
-    }
-  }
-
-  async function makeDefault(id) {
-    setMsg("Setting default...");
-    const res = await setDefaultTemplate(id);
-    if (res.error) {
-      setMsg(res.error.message);
-      return;
-    }
-    const tRes = await getTemplates();
-    if (!tRes.error) setTemplates(tRes.data || []);
-    setMsg("");
-  }
-
-  const ids = useMemo(() => items.map((x) => x.id), [items]);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   async function onDragEnd(event) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-
     const oldIndex = items.findIndex((i) => i.id === active.id);
     const newIndex = items.findIndex((i) => i.id === over.id);
-    const newItems = arrayMove(items, oldIndex, newIndex);
-
-    // update local immediately
-    setItems(newItems);
-
-    // persist new sort_order
-    const payload = newItems.map((it, idx) => ({
-      id: it.id,
+    const next = arrayMove(items, oldIndex, newIndex).map((it, idx) => ({
+      ...it,
       sort_order: idx,
     }));
-    const res = await updateTemplateOrder(payload);
-    if (res.error) setMsg(res.error.message);
+    setItems(next);
+    await updateTemplateOrder(next.map((it) => ({ id: it.id, sort_order: it.sort_order })));
+  }
+
+  async function toggleDone(taskId) {
+    const next = !done[taskId];
+    setDone((d) => ({ ...d, [taskId]: next }));
+    await setTaskCompletionForDate(user.id, taskId, dateStr, next);
+  }
+
+  async function handleRemove(itemId) {
+    if (!window.confirm("Remove from Daily Hits?")) return;
+    setItems((list) => list.filter((i) => i.id !== itemId));
+    await removeTemplateItem(itemId);
+  }
+
+  async function handleAdd() {
+    if (!user || !addTitle.trim() || adding) return;
+    setAdding(true);
+    try {
+      const titleWithBucket =
+        addBucket === "anytime"
+          ? addTitle.trim()
+          : `[${addBucket}] ${addTitle.trim()}`;
+      const catRes = await getOrCreateDailyRepeatCategory(user.id);
+      if (catRes.error) throw new Error(catRes.error.message);
+      const taskRes = await createTask(user.id, {
+        title: titleWithBucket,
+        priority: addPriority,
+        category_id: catRes.data.id,
+      });
+      if (taskRes.error) throw new Error(taskRes.error.message);
+      if (!template) {
+        const { data: tpl } = await supabase
+          .from("daily_templates")
+          .insert({ user_id: user.id, name: "Daily Hits", is_default: true })
+          .select()
+          .single();
+        if (tpl) {
+          await setDefaultTemplate(user.id, tpl.id);
+          setTemplate(tpl);
+        }
+      }
+      const tplId = template?.id;
+      if (tplId) {
+        await addTemplateItem(user.id, tplId, taskRes.data.id);
+      }
+      setAddTitle("");
+      load();
+    } catch (err) {
+      setError(err.message || "Failed to add.");
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  const groups = useMemo(() => {
+    const map = {};
+    for (const it of items) {
+      const bucket = bucketFor(it.task?.title);
+      if (!map[bucket]) map[bucket] = [];
+      map[bucket].push(it);
+    }
+    return BUCKETS.map((b) => ({ ...b, items: map[b.id] || [] })).filter(
+      (b) => b.items.length > 0
+    );
+  }, [items]);
+
+  const doneCount = items.filter((i) => done[i.task.id]).length;
+  const total = items.length;
+  const pct = total > 0 ? doneCount / total : 0;
+  const ringR = 40;
+  const ringC = 2 * Math.PI * ringR;
+  const ringOff = ringC * (1 - pct);
+
+  if (!user) {
+    return (
+      <DashboardLayout>
+        <p style={{ fontSize: 14, color: "#6b7280" }}>Loading…</p>
+      </DashboardLayout>
+    );
   }
 
   return (
     <DashboardLayout>
-      <div>
-        <h1
-          style={{
-            fontSize: 22,
-            fontWeight: 600,
-            margin: 0,
-            letterSpacing: "-0.02em",
-          }}
-        >
-          Daily Hits
-        </h1>
-        {msg && (
-          <p style={{ color: "#6b7280", fontSize: 13, marginTop: 6 }}>{msg}</p>
-        )}
-
-        <div
-          style={{
-            display: "flex",
-            gap: 10,
-            flexWrap: "wrap",
-            marginTop: 16,
-            marginBottom: 8,
-          }}
-        >
-          {templates.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => switchTemplate(t.id)}
-              style={{
-                padding: "8px 12px",
-                borderRadius: 999,
-                border: "1px solid #e5e7eb",
-                background: t.id === activeTemplateId ? "#111827" : "white",
-                color: t.id === activeTemplateId ? "white" : "#111827",
-                cursor: "pointer",
-                fontSize: 13,
-              }}
-            >
-              {t.name} {t.is_default ? "⭐" : ""}
-            </button>
-          ))}
-        </div>
-
-        {activeTemplateId && (
-          <div style={{ marginTop: 4, marginBottom: 16 }}>
-            <button
-              onClick={() => makeDefault(activeTemplateId)}
-              style={{
-                padding: "8px 12px",
-                borderRadius: 999,
-                border: "1px solid #111827",
-                background: "white",
-                cursor: "pointer",
-                fontSize: 13,
-              }}
-            >
-              Set active as default
-            </button>
+      <Head>
+        <title>Daily Hits · Rise &amp; Shine</title>
+      </Head>
+      <div className="ps-page">
+        <div className="ps-view">
+          <div className="ps-eyebrow">Daily · Daily Hits</div>
+          <div className="dh-title-row">
+            <div>
+              <h1 className="ps-title">The day, one rep at a time.</h1>
+              <p className="ps-sub">
+                {total === 0
+                  ? "Add your first daily hit below — priming, movement, supplements, the non-negotiables."
+                  : `${doneCount} of ${total} done today. Drag to reorder. Group by time of day by prefixing the title (e.g. "[morning] priming").`}
+              </p>
+            </div>
+            <div className="dh-day-ring">
+              <svg width={110} height={110} style={{ transform: "rotate(-90deg)" }}>
+                <circle
+                  cx={55}
+                  cy={55}
+                  r={ringR}
+                  fill="none"
+                  stroke="var(--ps-ink-08)"
+                  strokeWidth={8}
+                />
+                <circle
+                  cx={55}
+                  cy={55}
+                  r={ringR}
+                  fill="none"
+                  stroke="var(--ps-accent)"
+                  strokeWidth={8}
+                  strokeDasharray={ringC}
+                  strokeDashoffset={ringOff}
+                  strokeLinecap="round"
+                  style={{ transition: "stroke-dashoffset 400ms" }}
+                />
+              </svg>
+              <div className="dh-day-ring-inner">
+                <div className="dh-day-frac">
+                  {doneCount}
+                  <span>/{total || "—"}</span>
+                </div>
+                <div className="dh-day-label">today</div>
+              </div>
+            </div>
           </div>
-        )}
 
-        <div style={{ marginTop: 16, marginBottom: 8, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <label style={{ fontSize: 13 }}>
-            Add Daily Hit:
+          {error && <div className="today-error">{error}</div>}
+
+          <div className="dh-list">
+            {loading && <div className="dh-empty">Loading…</div>}
+            {!loading && groups.length === 0 && (
+              <div className="dh-empty">
+                No Daily Hits yet. Add one below.
+              </div>
+            )}
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+              {groups.map((b) => (
+                <div key={b.id} className="dh-bucket">
+                  <div className="dh-bucket-head">
+                    <div className="dh-bucket-icon" style={{ color: b.color }}>
+                      {b.icon}
+                    </div>
+                    <div>
+                      <div className="dh-bucket-label">{b.label}</div>
+                      <div className="dh-bucket-sub">
+                        {b.sub} ·{" "}
+                        {b.items.filter((i) => done[i.task.id]).length}/{b.items.length}
+                      </div>
+                    </div>
+                    <div className="dh-bucket-line" />
+                  </div>
+                  <SortableContext
+                    items={b.items.map((i) => i.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="dh-bucket-items">
+                      {b.items.map((item) => (
+                        <SortableRow
+                          key={item.id}
+                          item={item}
+                          done={!!done[item.task.id]}
+                          onToggle={() => toggleDone(item.task.id)}
+                          onRemove={() => handleRemove(item.id)}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </div>
+              ))}
+            </DndContext>
+          </div>
+
+          <div className="dh-add">
             <input
-              type="text"
-              value={newEntryTitle}
-              onChange={(e) => setNewEntryTitle(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleAddTask()}
-              placeholder="Enter new entry name"
-              style={{
-                marginLeft: 6,
-                padding: "6px 10px",
-                borderRadius: 8,
-                border: "1px solid #e5e7eb",
-                fontSize: 13,
-                minWidth: 180,
+              className="dh-add-input"
+              placeholder="Add a Daily Hit…"
+              value={addTitle}
+              onChange={(e) => setAddTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleAdd();
               }}
             />
-          </label>
-          <button
-            type="button"
-            onClick={handleAddTask}
-            disabled={!newEntryTitle.trim()}
-            style={{
-              padding: "6px 12px",
-              borderRadius: 999,
-              border: "1px solid #111827",
-              background: "#111827",
-              color: "#fff",
-              fontSize: 13,
-              cursor: newEntryTitle.trim() ? "pointer" : "not-allowed",
-            }}
-          >
-            Add
-          </button>
+            <select
+              className="dh-add-sel"
+              value={addBucket}
+              onChange={(e) => setAddBucket(e.target.value)}
+            >
+              {BUCKETS.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.label}
+                </option>
+              ))}
+            </select>
+            <select
+              className="dh-add-sel"
+              value={addPriority}
+              onChange={(e) => setAddPriority(e.target.value)}
+            >
+              {Object.keys(PRIO_META).map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+            <button
+              className="ps-btn ps-btn--primary"
+              disabled={!addTitle.trim() || adding}
+              onClick={handleAdd}
+            >
+              {adding ? "Adding…" : "Add"}
+            </button>
+          </div>
         </div>
-
-        <h2
-          style={{
-            marginTop: 8,
-            marginBottom: 10,
-            fontSize: 15,
-            fontWeight: 500,
-          }}
-        >
-          Items (drag to reorder)
-        </h2>
-
-        <DndContext collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-          <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-            {items.map((item) => (
-              <SortableRow
-                key={item.id}
-                item={item}
-                onEdit={openEditItem}
-                onRemove={handleRemoveItem}
-              />
-            ))}
-          </SortableContext>
-        </DndContext>
       </div>
-      <Modal
-        title="Edit Daily Hit"
-        open={editOpen}
-        onClose={() => !savingEdit && setEditOpen(false)}
-      >
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
-            Title
-            <input
-              type="text"
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-              style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 13 }}
-            />
-          </label>
-          <div className="rs-form-grid-2">
-            <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
-              Priority
-              <select
-                value={editPriority}
-                onChange={(e) => setEditPriority(e.target.value)}
-                style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 13, background: "#fff" }}
-              >
-                <option value="Critical">Critical</option>
-                <option value="High">High</option>
-                <option value="Medium">Medium</option>
-                <option value="Low">Low</option>
-              </select>
-            </label>
-            <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
-              Status
-              <select
-                value={editStatus}
-                onChange={(e) => setEditStatus(e.target.value)}
-                style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 13, background: "#fff" }}
-              >
-                <option value="todo">todo</option>
-                <option value="doing">doing</option>
-                <option value="done">done</option>
-                <option value="archived">archived</option>
-              </select>
-            </label>
-          </div>
-          <div className="rs-form-grid-2">
-            <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
-              Due date
-              <input
-                type="date"
-                value={editDueDate}
-                onChange={(e) => setEditDueDate(e.target.value)}
-                style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 13 }}
-              />
-            </label>
-            <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
-              Effort hours
-              <input
-                type="number"
-                step="0.25"
-                value={editEffortHours}
-                onChange={(e) => setEditEffortHours(e.target.value)}
-                style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 13 }}
-              />
-            </label>
-          </div>
-          <label style={{ fontSize: 12, color: "#4b5563", display: "flex", flexDirection: "column", gap: 4 }}>
-            Tags (comma separated)
-            <input
-              type="text"
-              value={editTagsText}
-              onChange={(e) => setEditTagsText(e.target.value)}
-              placeholder="e.g. quick-win, urgent"
-              style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 13 }}
-            />
-          </label>
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
-            <button
-              type="button"
-              onClick={() => setEditOpen(false)}
-              disabled={savingEdit}
-              style={{
-                padding: "8px 12px",
-                borderRadius: 999,
-                border: "1px solid #e5e7eb",
-                background: "#ffffff",
-                cursor: savingEdit ? "not-allowed" : "pointer",
-                color: "#111827",
-                fontSize: 13,
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleSaveEdit}
-              disabled={savingEdit || !String(editTitle || "").trim()}
-              style={{
-                padding: "8px 12px",
-                borderRadius: 999,
-                border: "1px solid #111827",
-                background: "#111827",
-                cursor: savingEdit || !String(editTitle || "").trim() ? "not-allowed" : "pointer",
-                color: "#ffffff",
-                fontSize: 13,
-                opacity: savingEdit || !String(editTitle || "").trim() ? 0.8 : 1,
-              }}
-            >
-              {savingEdit ? "Saving…" : "Save"}
-            </button>
-          </div>
-        </div>
-      </Modal>
+
+      <style jsx global>{`
+        .dh-title-row {
+          display: grid;
+          grid-template-columns: 1fr auto;
+          gap: 24px;
+          align-items: center;
+        }
+        .dh-day-ring {
+          position: relative;
+          width: 110px;
+          height: 110px;
+        }
+        .dh-day-ring-inner {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+        }
+        .dh-day-frac {
+          font-family: var(--ps-serif);
+          font-size: 26px;
+          letter-spacing: -0.02em;
+          color: var(--ps-ink);
+        }
+        .dh-day-frac span {
+          font-size: 14px;
+          color: var(--ps-ink-50);
+          margin-left: 2px;
+        }
+        .dh-day-label {
+          font-family: var(--ps-mono);
+          font-size: 9px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+        }
+        .dh-list {
+          margin-top: 28px;
+          display: flex;
+          flex-direction: column;
+          gap: 24px;
+        }
+        .dh-empty {
+          padding: 28px;
+          text-align: center;
+          background: var(--ps-paper);
+          border: 1px dashed var(--ps-ink-15);
+          border-radius: 12px;
+          color: var(--ps-ink-60);
+          font-size: 13px;
+        }
+        .dh-bucket {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .dh-bucket-head {
+          display: grid;
+          grid-template-columns: auto auto 1fr;
+          gap: 12px;
+          align-items: center;
+        }
+        .dh-bucket-icon {
+          font-family: var(--ps-serif);
+          font-size: 20px;
+          width: 28px;
+          text-align: center;
+        }
+        .dh-bucket-label {
+          font-family: var(--ps-serif);
+          font-size: 17px;
+          letter-spacing: -0.01em;
+        }
+        .dh-bucket-sub {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+        }
+        .dh-bucket-line {
+          height: 1px;
+          background: var(--ps-ink-08);
+        }
+        .dh-bucket-items { display: flex; flex-direction: column; gap: 4px; }
+        .dh-row {
+          display: grid;
+          grid-template-columns: 18px 22px 1fr 22px;
+          gap: 10px;
+          align-items: center;
+          background: #fff;
+          border: 1px solid var(--ps-ink-08);
+          border-radius: 10px;
+          padding: 10px 14px;
+          transition: border-color 100ms, opacity 200ms;
+        }
+        .dh-row.done { opacity: 0.55; }
+        .dh-row:hover { border-color: var(--ps-ink-30); }
+        .dh-drag {
+          font-size: 12px;
+          color: var(--ps-ink-30);
+          cursor: grab;
+          user-select: none;
+        }
+        .dh-drag:active { cursor: grabbing; }
+        .dh-check {
+          appearance: none;
+          border: none;
+          background: transparent;
+          cursor: pointer;
+          padding: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .dh-check-dot {
+          width: 20px;
+          height: 20px;
+          border-radius: 5px;
+          border: 1.5px solid;
+          color: #fff;
+          font-size: 12px;
+          line-height: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .dh-row-body { min-width: 0; }
+        .dh-row-name {
+          font-size: 13.5px;
+          color: var(--ps-ink);
+          line-height: 1.35;
+        }
+        .dh-row.done .dh-row-name {
+          text-decoration: line-through;
+        }
+        .dh-row-meta {
+          display: flex;
+          gap: 6px;
+          margin-top: 3px;
+          flex-wrap: wrap;
+        }
+        .dh-pill {
+          font-family: var(--ps-mono);
+          font-size: 9.5px;
+          letter-spacing: 0.04em;
+          padding: 1px 6px;
+          border-radius: 3px;
+          border: 1px solid var(--ps-ink-10);
+          color: var(--ps-ink-60);
+        }
+        .dh-remove {
+          appearance: none;
+          background: transparent;
+          border: 1px solid transparent;
+          border-radius: 4px;
+          width: 22px;
+          height: 22px;
+          cursor: pointer;
+          color: var(--ps-ink-40);
+          font-size: 16px;
+          line-height: 1;
+        }
+        .dh-remove:hover {
+          color: var(--ps-clay);
+          border-color: var(--ps-clay);
+        }
+        .dh-add {
+          margin-top: 28px;
+          padding: 14px;
+          background: #fff;
+          border: 1px solid var(--ps-ink-10);
+          border-radius: 12px;
+          display: grid;
+          grid-template-columns: 1fr auto auto auto;
+          gap: 10px;
+          align-items: center;
+        }
+        .dh-add-input, .dh-add-sel {
+          appearance: none;
+          border: 1px solid var(--ps-ink-10);
+          background: var(--ps-paper);
+          padding: 8px 10px;
+          border-radius: 8px;
+          font-family: inherit;
+          font-size: 13px;
+          color: var(--ps-ink);
+        }
+        .dh-add-input { padding: 8px 12px; }
+        @media (max-width: 720px) {
+          .dh-title-row { grid-template-columns: 1fr; }
+          .dh-day-ring { justify-self: start; }
+          .dh-add { grid-template-columns: 1fr; }
+        }
+      `}</style>
     </DashboardLayout>
   );
 }
