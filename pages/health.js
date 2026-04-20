@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import PSShell from "../components/PSShell";
+import OccamMonthCalendar from "../components/OccamMonthCalendar";
 import { useAuth } from "../hooks/useAuth";
+import { getOccamScheduleState } from "../lib/occamSchedule";
+import { getUserProfile } from "../lib/db";
 import {
   getBodyWeightLogs,
   insertBodyWeightLog,
@@ -92,16 +95,21 @@ export default function HealthPage() {
   const [quickWeight, setQuickWeight] = useState("");
   const [quickReps, setQuickReps] = useState("");
   const [logging, setLogging] = useState(false);
+  const [profile, setProfile] = useState(null);
+  const today = new Date();
+  const [calYear, setCalYear] = useState(today.getFullYear());
+  const [calMonth, setCalMonth] = useState(today.getMonth());
 
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     setError("");
     try {
-      const [sessRes, setsRes, wtRes] = await Promise.all([
+      const [sessRes, setsRes, wtRes, profileRes] = await Promise.all([
         getLiftingSessions(user.id, 30),
-        getLiftingSetsWithSession(user.id, 300),
+        getLiftingSetsWithSession(user.id, 600),
         getBodyWeightLogs(user.id, 120),
+        getUserProfile(user.id),
       ]);
       if (sessRes.error) throw new Error(sessRes.error.message);
       if (setsRes.error) throw new Error(setsRes.error.message);
@@ -109,6 +117,7 @@ export default function HealthPage() {
       setSessions(sessRes.data || []);
       setAllSets(setsRes.data || []);
       setWeights(wtRes.data || []);
+      setProfile(profileRes?.data?.profile || null);
     } catch (err) {
       setError(err.message || "Failed to load.");
     } finally {
@@ -200,6 +209,50 @@ export default function HealthPage() {
     () => weekPlan.find((w) => w.today),
     [weekPlan]
   );
+
+  const setsByDate = useMemo(() => {
+    const map = new Map();
+    for (const s of allSets) {
+      const d = s.session?.session_date || s.created_at?.slice(0, 10);
+      if (!d) continue;
+      if (!map.has(d)) map.set(d, []);
+      map.get(d).push(s);
+    }
+    return map;
+  }, [allSets]);
+
+  const occamSchedule = useMemo(() => {
+    try {
+      return getOccamScheduleState({
+        preferences: profile?.preferences || null,
+        setsWithSession: allSets,
+      });
+    } catch {
+      return null;
+    }
+  }, [profile, allSets]);
+
+  const nextEligibleDateStr = useMemo(() => {
+    if (!occamSchedule?.recoveryEndsAt) return null;
+    const d = new Date(occamSchedule.recoveryEndsAt);
+    return d.toISOString().slice(0, 10);
+  }, [occamSchedule]);
+
+  function shiftMonth(delta) {
+    let m = calMonth + delta;
+    let y = calYear;
+    if (m < 0) {
+      m = 11;
+      y -= 1;
+    } else if (m > 11) {
+      m = 0;
+      y += 1;
+    }
+    setCalMonth(m);
+    setCalYear(y);
+  }
+
+  const todayStr = new Date().toISOString().slice(0, 10);
 
   async function handleWeightLog(e) {
     e.preventDefault();
@@ -316,6 +369,34 @@ export default function HealthPage() {
               </div>
             </div>
           )}
+
+          <div className="ps-section-title">Month at a glance</div>
+          <div className="ps-section-sub">
+            Logged exercises per day.{" "}
+            {occamSchedule?.mode === "recovery"
+              ? `In 48h recovery — next heavy ${occamSchedule.dueWorkout} eligible ${
+                  nextEligibleDateStr
+                    ? new Date(nextEligibleDateStr + "T00:00:00").toLocaleDateString(
+                        undefined,
+                        { weekday: "short", month: "short", day: "numeric" }
+                      )
+                    : "soon"
+                }.`
+              : occamSchedule?.dueWorkout
+              ? `Next heavy session: ${occamSchedule.dueWorkout}.`
+              : ""}
+          </div>
+          <div className="fit-cal-wrap">
+            <OccamMonthCalendar
+              year={calYear}
+              monthIndex={calMonth}
+              onPrevMonth={() => shiftMonth(-1)}
+              onNextMonth={() => shiftMonth(1)}
+              todayStr={todayStr}
+              setsByDate={setsByDate}
+              nextEligibleDateStr={nextEligibleDateStr}
+            />
+          </div>
 
           <div className="ps-section-title">Strength · Occam lifts</div>
           <div className="ps-section-sub">
@@ -471,6 +552,23 @@ export default function HealthPage() {
         </div>
 
       <style jsx global>{`
+        .fit-cal-wrap {
+          margin-top: 12px;
+        }
+        .fit-cal-wrap .rs-section-card {
+          background: #fff;
+          border: 1px solid var(--ps-ink-08);
+          border-radius: 14px;
+          padding: 16px 18px;
+        }
+        .fit-cal-wrap .rs-section-card__title {
+          font-family: var(--ps-serif);
+          color: var(--ps-ink);
+        }
+        .fit-cal-wrap .rs-section-card__subtitle {
+          font-size: 12px;
+          color: var(--ps-ink-60);
+        }
         .fit-week {
           display: grid;
           grid-template-columns: repeat(7, 1fr);
