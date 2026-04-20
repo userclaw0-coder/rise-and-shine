@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import PSShell from "../components/PSShell";
 import { useAuth } from "../hooks/useAuth";
+import { useRouter } from "next/router";
 import {
   getIdeas,
   createIdea,
   updateIdea,
   archiveIdea,
   promoteIdeaToTask,
+  promoteIdeaToProject,
 } from "../lib/db";
 import { supabase } from "../lib/supabaseClient";
 
@@ -34,6 +36,7 @@ function statusToStage(status) {
 }
 
 export default function IdeasPage() {
+  const router = useRouter();
   const { user } = useAuth();
   const [ideas, setIdeas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -131,7 +134,19 @@ export default function IdeasPage() {
     setBusy("");
   }
 
-  async function handlePromote(idea) {
+  async function handlePromoteToProject(idea) {
+    setBusy(idea.id);
+    const res = await promoteIdeaToProject(user.id, idea.id);
+    if (!res.error && res.data?.category?.id) {
+      setIdeas((l) =>
+        l.map((x) => (x.id === idea.id ? { ...x, status: "promoted" } : x))
+      );
+      router.push(`/category/${res.data.category.id}`);
+    }
+    setBusy("");
+  }
+
+  async function handlePromoteToTask(idea) {
     setBusy(idea.id);
     const res = await promoteIdeaToTask(user.id, idea.id);
     if (!res.error) {
@@ -510,13 +525,24 @@ export default function IdeasPage() {
                   </button>
                 )}
                 {selected.status !== "promoted" && selected.status !== "archived" && (
-                  <button
-                    className="ps-btn ps-btn--primary"
-                    onClick={() => handlePromote(selected)}
-                    disabled={busy === selected.id}
-                  >
-                    Promote to Project →
-                  </button>
+                  <>
+                    <button
+                      className="ps-btn ps-btn--primary"
+                      onClick={() => handlePromoteToProject(selected)}
+                      disabled={busy === selected.id}
+                      title="Create a new project (category) + kickoff task, then open it"
+                    >
+                      Promote to Project →
+                    </button>
+                    <button
+                      className="ps-btn"
+                      onClick={() => handlePromoteToTask(selected)}
+                      disabled={busy === selected.id}
+                      title="Add as a single task under an existing project"
+                    >
+                      Or: add as task
+                    </button>
+                  </>
                 )}
                 {selected.status !== "archived" && (
                   <button
