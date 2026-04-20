@@ -72,6 +72,12 @@ export default function ProjectPage() {
   const [mantra, setMantra] = useState("");
   const [kbSaving, setKbSaving] = useState(false);
   const [kbError, setKbError] = useState("");
+  const [editingMantra, setEditingMantra] = useState(false);
+  const [mantraDraft, setMantraDraft] = useState("");
+  const [mantraSaving, setMantraSaving] = useState(false);
+  const [mantraSuggestLoading, setMantraSuggestLoading] = useState(false);
+  const [mantraSuggestion, setMantraSuggestion] = useState(null);
+  const [mantraError, setMantraError] = useState("");
 
   const color = PROJECT_COLORS[categoryIndex % PROJECT_COLORS.length];
 
@@ -148,6 +154,58 @@ export default function ProjectPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  async function saveMantra(nextMantra) {
+    if (!user || mantraSaving) return;
+    setMantraSaving(true);
+    setMantraError("");
+    try {
+      await saveCollaborativeProjectWorkspace(categoryId, {
+        workspace: { resources, mantra: nextMantra },
+      });
+      setMantra(nextMantra);
+      setEditingMantra(false);
+      setMantraSuggestion(null);
+    } catch (err) {
+      setMantraError(err.message || "Save failed.");
+    } finally {
+      setMantraSaving(false);
+    }
+  }
+
+  async function suggestMantra() {
+    if (!user || mantraSuggestLoading) return;
+    setMantraSuggestLoading(true);
+    setMantraError("");
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      const res = await fetch("/api/coach/project-mantra", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          category_id: categoryId,
+          current_mantra: mantra || "",
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || "Failed");
+      }
+      const data = await res.json();
+      setMantraSuggestion({
+        text: data.suggestion || "",
+        reason: data.reason || "",
+      });
+    } catch (err) {
+      setMantraError(err.message || "Suggest failed.");
+    } finally {
+      setMantraSuggestLoading(false);
+    }
+  }
 
   async function saveKb() {
     if (!user || kbSaving) return;
@@ -339,6 +397,137 @@ export default function ProjectPage() {
                 <span>Active project</span>
               </div>
               <h1 className="ps-title">{category?.name || "Project"}</h1>
+
+              <div className="pj-mantra">
+                {editingMantra ? (
+                  <>
+                    <div className="pj-mantra-cap">
+                      Source of truth — what this project is for
+                    </div>
+                    <textarea
+                      className="pj-mantra-input"
+                      value={mantraDraft}
+                      onChange={(e) => setMantraDraft(e.target.value)}
+                      placeholder="One sentence. Concrete and specific. Read this at the top of the page to remember why this project exists."
+                      rows={2}
+                      autoFocus
+                    />
+                    <div className="pj-mantra-actions">
+                      <button
+                        type="button"
+                        className="ps-btn ps-btn--primary"
+                        onClick={() => saveMantra(mantraDraft.trim())}
+                        disabled={mantraSaving}
+                      >
+                        {mantraSaving ? "Saving…" : "Save"}
+                      </button>
+                      <button
+                        type="button"
+                        className="ps-btn"
+                        onClick={() => {
+                          setEditingMantra(false);
+                          setMantraDraft(mantra);
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className="ps-btn"
+                        onClick={suggestMantra}
+                        disabled={mantraSuggestLoading}
+                      >
+                        {mantraSuggestLoading
+                          ? "Coach thinking…"
+                          : mantra
+                          ? "Coach: refine"
+                          : "Coach: draft one"}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="pj-mantra-cap">Source of truth</div>
+                    <div className="pj-mantra-text">
+                      {mantra ? (
+                        <em>{mantra}</em>
+                      ) : (
+                        <span className="pj-mantra-empty">
+                          No source of truth yet. Write one sentence that
+                          captures what this project is FOR.
+                        </span>
+                      )}
+                    </div>
+                    <div className="pj-mantra-actions">
+                      <button
+                        type="button"
+                        className="ps-btn"
+                        onClick={() => {
+                          setMantraDraft(mantra);
+                          setEditingMantra(true);
+                        }}
+                      >
+                        {mantra ? "Edit" : "Write one"}
+                      </button>
+                      <button
+                        type="button"
+                        className="ps-btn"
+                        onClick={suggestMantra}
+                        disabled={mantraSuggestLoading}
+                      >
+                        {mantraSuggestLoading
+                          ? "Coach thinking…"
+                          : mantra
+                          ? "Coach: suggest an edit"
+                          : "Coach: draft one"}
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {mantraError && (
+                  <div className="today-error" style={{ marginTop: 8 }}>
+                    {mantraError}
+                  </div>
+                )}
+
+                {mantraSuggestion && (
+                  <div className="pj-mantra-suggestion">
+                    <div className="pj-mantra-suggestion-cap">
+                      Coach proposes
+                    </div>
+                    <div className="pj-mantra-suggestion-text">
+                      {mantraSuggestion.text}
+                    </div>
+                    {mantraSuggestion.reason && (
+                      <div className="pj-mantra-suggestion-reason">
+                        {mantraSuggestion.reason}
+                      </div>
+                    )}
+                    <div className="pj-mantra-actions">
+                      <button
+                        type="button"
+                        className="ps-btn ps-btn--primary"
+                        onClick={() => {
+                          setMantraDraft(mantraSuggestion.text);
+                          setEditingMantra(true);
+                          setMantraSuggestion(null);
+                        }}
+                      >
+                        Use this
+                      </button>
+                      <button
+                        type="button"
+                        className="ps-btn"
+                        onClick={() => setMantraSuggestion(null)}
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="pj-meta">
                 <div>
                   <strong>{outcomes.length}</strong> linked outcome
@@ -726,6 +915,87 @@ export default function ProjectPage() {
           margin-top: 10px;
         }
         .pj-meta strong { color: var(--ps-ink); font-weight: 600; }
+        .pj-mantra {
+          margin-top: 14px;
+          padding: 12px 14px;
+          background: #fff;
+          border: 1px solid var(--ps-ink-10);
+          border-radius: 10px;
+        }
+        .pj-mantra-cap {
+          font-family: var(--ps-mono);
+          font-size: 9px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+          margin-bottom: 6px;
+        }
+        .pj-mantra-text {
+          font-family: var(--ps-serif);
+          font-size: 16px;
+          letter-spacing: -0.005em;
+          line-height: 1.45;
+          color: var(--ps-ink);
+          margin-bottom: 10px;
+        }
+        .pj-mantra-empty {
+          font-family: var(--ps-sans);
+          font-style: normal;
+          font-size: 13px;
+          color: var(--ps-ink-50);
+        }
+        .pj-mantra-input {
+          width: 100%;
+          appearance: none;
+          border: 1px solid var(--ps-ink-10);
+          background: var(--ps-paper);
+          padding: 10px 12px;
+          border-radius: 8px;
+          font-family: var(--ps-serif);
+          font-size: 15px;
+          line-height: 1.45;
+          color: var(--ps-ink);
+          resize: vertical;
+          min-height: 60px;
+          outline: none;
+        }
+        .pj-mantra-input:focus {
+          border-color: var(--ps-accent);
+        }
+        .pj-mantra-actions {
+          display: flex;
+          gap: 6px;
+          margin-top: 8px;
+          flex-wrap: wrap;
+        }
+        .pj-mantra-suggestion {
+          margin-top: 12px;
+          padding: 10px 12px;
+          background: var(--ps-accent-soft);
+          border: 1px solid rgba(185, 115, 22, 0.25);
+          border-radius: 8px;
+        }
+        .pj-mantra-suggestion-cap {
+          font-family: var(--ps-mono);
+          font-size: 9px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--ps-accent);
+          margin-bottom: 4px;
+        }
+        .pj-mantra-suggestion-text {
+          font-family: var(--ps-serif);
+          font-size: 15px;
+          letter-spacing: -0.005em;
+          line-height: 1.4;
+          color: var(--ps-ink);
+        }
+        .pj-mantra-suggestion-reason {
+          font-size: 12px;
+          color: var(--ps-ink-60);
+          margin-top: 4px;
+          line-height: 1.5;
+        }
         .pj-progress {
           background: #fff;
           border: 1px solid var(--ps-ink-08);
