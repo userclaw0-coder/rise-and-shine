@@ -70,6 +70,8 @@ export default function TodayPage() {
   const [perProject, setPerProject] = useState([]);
   const [completed, setCompleted] = useState({});
   const [busyTask, setBusyTask] = useState(null);
+  const [refilling, setRefilling] = useState(false);
+  const [autoRefillTried, setAutoRefillTried] = useState(false);
 
   const dateStr = todayStr();
 
@@ -198,26 +200,96 @@ export default function TodayPage() {
     }
   }
 
+  function labelForType(task) {
+    const kind = classifyType(task);
+    if (kind === "leverage") return "High Leverage";
+    if (kind === "win") return "Quick Win";
+    return "Progress";
+  }
+
+  async function savePlanQueue(nextQueue) {
+    if (!user || !plan) return;
+    setPlan({ ...plan, queue: nextQueue });
+    const res = await updateDailyPlan(plan.id, { queue: nextQueue });
+    if (res.error) {
+      setError(res.error.message || "Failed to save top 3.");
+      return;
+    }
+    load();
+  }
+
   async function pinToTop3(task) {
     if (!user || !plan || !task) return;
     const slots = [...(plan.queue || [])];
-    if (slots.find((s) => s.task_id === task.id)) return;
-    const openSlot = slots.find((s) => !s.task_id) || slots[slots.length - 1];
-    const updated = slots.slice();
-    if (openSlot) {
-      const idx = updated.indexOf(openSlot);
-      updated[idx] = {
-        slot: openSlot.slot ?? idx + 1,
-        type: classifyType(task) === "leverage" ? "High Leverage" : classifyType(task) === "win" ? "Quick Win" : "Progress",
+    if (slots.find((s) => s?.task_id === task.id)) return;
+    if (slots.length >= 3) {
+      // Queue is full — replace the last slot
+      slots[slots.length - 1] = {
+        slot: slots.length,
+        type: labelForType(task),
         task_id: task.id,
       };
     } else {
-      updated.push({ slot: updated.length + 1, type: "Progress", task_id: task.id });
+      slots.push({
+        slot: slots.length + 1,
+        type: labelForType(task),
+        task_id: task.id,
+      });
     }
-    setPlan({ ...plan, queue: updated });
-    await updateDailyPlan(user.id, plan.id, { queue: updated });
-    load();
+    await savePlanQueue(slots);
   }
+
+  async function removeFromTop3(taskId) {
+    if (!user || !plan) return;
+    const slots = (plan.queue || [])
+      .filter((s) => s?.task_id !== taskId)
+      .map((s, i) => ({ ...s, slot: i + 1 }));
+    await savePlanQueue(slots);
+  }
+
+  const refillQueue = useCallback(
+    async ({ force = false } = {}) => {
+      if (!user || refilling) return;
+      setRefilling(true);
+      setError("");
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        const res = await fetch("/api/plan/refill", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ date: dateStr, force }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body?.error || "Refill failed");
+        }
+        await load();
+      } catch (err) {
+        setError(err.message || "Failed to refill queue.");
+      } finally {
+        setRefilling(false);
+      }
+    },
+    [user, dateStr, refilling, load]
+  );
+
+  // Auto-refill the queue on first load if it's empty — the user
+  // shouldn't have to hand-pick 3 tasks every morning. Only runs once
+  // per mount to avoid an infinite loop if no tasks qualify.
+  useEffect(() => {
+    if (loading) return;
+    if (autoRefillTried) return;
+    if (!plan) return;
+    const hasQueue = (plan.queue || []).some((s) => s?.task_id);
+    if (!hasQueue) {
+      setAutoRefillTried(true);
+      refillQueue({ force: false });
+    }
+  }, [loading, plan, autoRefillTried, refillQueue]);
 
   const totalChosen = queueTasks.filter((q) => q.task).length;
   const focusMin = queueTasks.reduce((acc, q) => acc + Math.round((q.task?.effort_hours || 0) * 60), 0);
@@ -277,30 +349,94 @@ export default function TodayPage() {
           {error && <div className="today-error">{error}</div>}
 
           <div className="today-hero">
-            <div>
-              <div className="today-hero__eyebrow">Today&apos;s commitment</div>
-              <h2 className="today-hero__title">
-                {totalChosen === 0
-                  ? "Pick 3 next actions to lock in your morning block."
-                  : `Top ${totalChosen}, in order — ${queueTasks
-                      .filter((q) => q.task)
-                      .map((q) => q.task.title)
-                      .join(" · ")}`}
-              </h2>
-              <p className="today-hero__sub">
-                {focusMin > 0
-                  ? `${focusMin} focused minutes queued.`
-                  : "No queue yet. Pick below, or open a project for a deeper plan."}
-              </p>
-            </div>
-            <div className="today-hero__stats">
-              <div className="today-hero__stat">
-                <div className="today-hero__num">{totalChosen}</div>
-                <div className="today-hero__cap">Chosen</div>
+            <div className="today-hero__head">
+              <div>
+                <div className="today-hero__eyebrow">Today&apos;s commitment</div>
+                <h2 className="today-hero__title">
+                  {totalChosen === 0
+                    ? "Your next 3 actions."
+                    : totalChosen < 3
+                    ? `${totalChosen} of 3 locked in — pick ${3 - totalChosen} more.`
+                    : "Three actions, in order. Start with the top."}
+                </h2>
+                <p className="today-hero__sub">
+                  {totalChosen > 0 && focusMin > 0
+                    ? `${focusMin} focused minutes queued.`
+                    : "Refill pulls the highest-leverage tasks across your projects automatically."}
+                </p>
               </div>
-              <div className="today-hero__stat">
-                <div className="today-hero__num">{focusMin}m</div>
-                <div className="today-hero__cap">Focus</div>
+              <div className="today-hero__stats">
+                <div className="today-hero__stat">
+                  <div className="today-hero__num">{totalChosen}</div>
+                  <div className="today-hero__cap">Chosen</div>
+                </div>
+                <div className="today-hero__stat">
+                  <div className="today-hero__num">{focusMin}m</div>
+                  <div className="today-hero__cap">Focus</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="today-hero__slots">
+              {[0, 1, 2].map((i) => {
+                const entry = queueTasks[i];
+                const task = entry?.task;
+                const type = entry?.type || "Progress";
+                return (
+                  <div
+                    key={i}
+                    className={"today-slot" + (task ? " today-slot--filled" : "")}
+                  >
+                    <div className="today-slot__meta">
+                      <span className="today-slot__idx">0{i + 1}</span>
+                      <span className="today-slot__type">
+                        {task ? type : "Empty"}
+                      </span>
+                    </div>
+                    {task ? (
+                      <>
+                        <div className="today-slot__title">{task.title}</div>
+                        <div className="today-slot__foot">
+                          {task.effort_hours > 0 && (
+                            <span className="today-slot__mins">
+                              ~{Math.round(task.effort_hours * 60)} min
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            className="today-slot__remove"
+                            onClick={() => removeFromTop3(task.id)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="today-slot__empty">
+                        Pick a task below or use Refill
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="today-hero__actions">
+              <button
+                type="button"
+                className="today-refill"
+                onClick={() => refillQueue({ force: true })}
+                disabled={refilling}
+              >
+                {refilling
+                  ? "Refilling…"
+                  : totalChosen === 0
+                  ? "Fill top 3 automatically"
+                  : "Refill"}
+              </button>
+              <div className="today-hero__hint">
+                Refill uses your vision, category weights, and recent
+                progress to pick 3 tasks across projects.
               </div>
             </div>
           </div>
@@ -424,11 +560,125 @@ export default function TodayPage() {
           color: var(--ps-bg);
           border-radius: 16px;
           padding: 24px 26px;
+          margin-top: 20px;
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+        }
+        .today-hero__head {
           display: grid;
           grid-template-columns: 1fr auto;
           gap: 20px;
           align-items: center;
-          margin-top: 20px;
+        }
+        .today-hero__slots {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 10px;
+        }
+        .today-slot {
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 12px;
+          padding: 12px 14px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          min-height: 112px;
+        }
+        .today-slot--filled {
+          background: rgba(255, 255, 255, 0.08);
+          border-color: rgba(185, 115, 22, 0.5);
+        }
+        .today-slot__meta {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .today-slot__idx {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.1em;
+          color: rgba(250, 247, 242, 0.45);
+        }
+        .today-slot__type {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: var(--ps-accent);
+        }
+        .today-slot__title {
+          font-family: var(--ps-serif);
+          font-size: 15px;
+          line-height: 1.3;
+          letter-spacing: -0.005em;
+          flex: 1;
+          color: var(--ps-bg);
+        }
+        .today-slot__foot {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          color: rgba(250, 247, 242, 0.55);
+        }
+        .today-slot__remove {
+          appearance: none;
+          border: 1px solid rgba(255, 255, 255, 0.18);
+          background: transparent;
+          color: rgba(250, 247, 242, 0.7);
+          padding: 3px 8px;
+          border-radius: 4px;
+          font-family: var(--ps-mono);
+          font-size: 9.5px;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          cursor: pointer;
+        }
+        .today-slot__remove:hover {
+          border-color: var(--ps-clay);
+          color: var(--ps-clay);
+        }
+        .today-slot__empty {
+          font-size: 12px;
+          color: rgba(250, 247, 242, 0.4);
+          font-style: italic;
+          flex: 1;
+        }
+        .today-hero__actions {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          flex-wrap: wrap;
+        }
+        .today-refill {
+          appearance: none;
+          border: 1px solid var(--ps-accent);
+          background: var(--ps-accent);
+          color: #fff;
+          padding: 9px 16px;
+          border-radius: 8px;
+          font-family: var(--ps-mono);
+          font-size: 11px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          cursor: pointer;
+        }
+        .today-refill:hover:not(:disabled) {
+          filter: brightness(1.05);
+        }
+        .today-refill:disabled {
+          opacity: 0.6;
+          cursor: default;
+        }
+        .today-hero__hint {
+          font-size: 12px;
+          color: rgba(250, 247, 242, 0.5);
+          line-height: 1.4;
+          flex: 1;
+          min-width: 220px;
         }
         .today-hero__eyebrow {
           font-family: var(--ps-mono);
@@ -601,8 +851,9 @@ export default function TodayPage() {
           border-radius: 2px;
         }
         @media (max-width: 880px) {
-          .today-hero { grid-template-columns: 1fr; }
+          .today-hero__head { grid-template-columns: 1fr; }
           .today-hero__stats { justify-content: flex-start; }
+          .today-hero__slots { grid-template-columns: 1fr; }
           .today-action { grid-template-columns: 24px auto 1fr; }
           .today-actions { grid-column: 1 / -1; flex-direction: row; justify-content: space-between; align-items: center; }
           .today-ribbon__grid { grid-template-columns: repeat(3, 1fr); }
