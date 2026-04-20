@@ -382,12 +382,31 @@ export default function TodayPage() {
                 const entry = queueTasks[i];
                 const task = entry?.task;
                 const type = entry?.type || "Progress";
+                const done = task ? !!completed[task.id] : false;
                 return (
                   <div
                     key={i}
-                    className={"today-slot" + (task ? " today-slot--filled" : "")}
+                    className={
+                      "today-slot" +
+                      (task ? " today-slot--filled" : "") +
+                      (done ? " today-slot--done" : "")
+                    }
                   >
                     <div className="today-slot__meta">
+                      {task && (
+                        <button
+                          type="button"
+                          className={
+                            "today-slot__check" +
+                            (done ? " today-slot__check--on" : "")
+                          }
+                          onClick={() => toggleComplete(task)}
+                          disabled={busyTask === task.id}
+                          aria-label={done ? "Mark incomplete" : "Mark complete"}
+                        >
+                          {done ? "✓" : ""}
+                        </button>
+                      )}
                       <span className="today-slot__idx">0{i + 1}</span>
                       <span className="today-slot__type">
                         {task ? type : "Empty"}
@@ -590,10 +609,44 @@ export default function TodayPage() {
           background: rgba(255, 255, 255, 0.08);
           border-color: rgba(185, 115, 22, 0.5);
         }
+        .today-slot--done {
+          opacity: 0.55;
+          border-color: rgba(107, 143, 113, 0.55);
+        }
+        .today-slot--done .today-slot__title {
+          text-decoration: line-through;
+        }
         .today-slot__meta {
           display: flex;
           align-items: center;
           gap: 8px;
+        }
+        .today-slot__check {
+          appearance: none;
+          width: 20px;
+          height: 20px;
+          border-radius: 5px;
+          border: 1.5px solid rgba(255, 255, 255, 0.35);
+          background: transparent;
+          cursor: pointer;
+          color: #fff;
+          font-size: 12px;
+          line-height: 1;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0;
+        }
+        .today-slot__check:hover:not(:disabled) {
+          border-color: var(--ps-accent);
+        }
+        .today-slot__check--on {
+          background: var(--ps-sage);
+          border-color: var(--ps-sage);
+        }
+        .today-slot__check:disabled {
+          opacity: 0.5;
+          cursor: default;
         }
         .today-slot__idx {
           font-family: var(--ps-mono);
