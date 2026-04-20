@@ -43,25 +43,25 @@ export default function SystemPage() {
       <Head>
         <title>System Map · Rise &amp; Shine</title>
       </Head>
-      <div className="psmap-page">
-        <div className="psmap-view">
-          <div className="psmap-eyebrow">Part 01 · How the system works</div>
-          <h1 className="psmap-title">
+      <div className="ps-page">
+        <div className="ps-view">
+          <div className="ps-eyebrow">Part 01 · How the system works</div>
+          <h1 className="ps-title">
             A curator&apos;s operating system.
             <br />
             <em className="psmap-title__em">
               Vision pulls, tasks deliver, coach keeps the thread taut.
             </em>
           </h1>
-          <p className="psmap-sub">
+          <p className="ps-sub">
             Rise &amp; Shine treats your life as a portfolio of projects pulling against a single
             vision. The AI coach runs three loops at three cadences — daily execution, project-level
             structure, and weekly strategy — all sharing one memory and one voice. You confirm every
             AI decision until the system earns your trust.
           </p>
 
-          <div className="psmap-section-title">Three loops, one coach</div>
-          <div className="psmap-section-sub">
+          <div className="ps-section-title">Three loops, one coach</div>
+          <div className="ps-section-sub">
             Same coach. Different scope badge. Separate chat histories so context survives.
           </div>
           <div className="psmap-loops">
@@ -102,8 +102,8 @@ export default function SystemPage() {
             />
           </div>
 
-          <div className="psmap-section-title">Task DNA</div>
-          <div className="psmap-section-sub">
+          <div className="ps-section-title">Task DNA</div>
+          <div className="ps-section-sub">
             Every task the AI proposes or you capture gets four tags. You confirm until trust is
             built, then the AI auto-tags silently.
           </div>
@@ -130,8 +130,8 @@ export default function SystemPage() {
             />
           </div>
 
-          <div className="psmap-section-title">How a project becomes today&apos;s work</div>
-          <div className="psmap-section-sub">
+          <div className="ps-section-title">How a project becomes today&apos;s work</div>
+          <div className="ps-section-sub">
             The pipeline from vision to the single next thing you do.
           </div>
           <div className="psmap-grid">
@@ -159,8 +159,8 @@ export default function SystemPage() {
             />
           </div>
 
-          <div className="psmap-section-title">Where the coach lives</div>
-          <div className="psmap-section-sub">
+          <div className="ps-section-title">Where the coach lives</div>
+          <div className="ps-section-sub">
             Instead of scattered AI entry points, one drawer follows you across the app. It changes
             what it knows based on which page you&apos;re on.
           </div>
@@ -185,8 +185,8 @@ export default function SystemPage() {
             />
           </div>
 
-          <div className="psmap-section-title">Trust, not autopilot</div>
-          <div className="psmap-section-sub">
+          <div className="ps-section-title">Trust, not autopilot</div>
+          <div className="ps-section-sub">
             You control how much the AI does unconfirmed. Starts at &quot;propose everything, commit
             nothing.&quot; Graduates as it learns your patterns.
           </div>
@@ -208,82 +208,9 @@ export default function SystemPage() {
       </div>
 
       <style jsx global>{`
-        .psmap-page {
-          --psmap-bg: #faf7f2;
-          --psmap-paper: #f3eee5;
-          --psmap-ink: #1a1814;
-          --psmap-ink-70: rgba(26, 24, 20, 0.7);
-          --psmap-ink-60: rgba(26, 24, 20, 0.6);
-          --psmap-ink-50: rgba(26, 24, 20, 0.5);
-          --psmap-ink-40: rgba(26, 24, 20, 0.4);
-          --psmap-ink-10: rgba(26, 24, 20, 0.1);
-          --psmap-ink-08: rgba(26, 24, 20, 0.08);
-          --psmap-ink-05: rgba(26, 24, 20, 0.05);
-          --psmap-accent: #b97316;
-          --psmap-accent-soft: #f5e9d6;
-          --psmap-serif: "Fraunces", Georgia, "Times New Roman", serif;
-          --psmap-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-
-          background:
-            radial-gradient(1400px 800px at 15% -10%, #f5e7cf 0%, transparent 55%),
-            radial-gradient(1000px 600px at 90% 110%, #efdcc8 0%, transparent 55%),
-            #ece6da;
-          color: var(--psmap-ink);
-          min-height: 100%;
-          margin: -16px;
-          padding: 16px;
-        }
-        @supports (color: oklch(50% 0.1 50)) {
-          .psmap-page {
-            --psmap-accent: oklch(62% 0.14 55);
-            --psmap-accent-soft: oklch(92% 0.035 55);
-          }
-        }
-        .psmap-view {
-          max-width: 1100px;
-          margin: 0 auto;
-          padding: 32px 24px 80px;
-          font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui,
-            sans-serif;
-        }
-        .psmap-eyebrow {
-          font-family: var(--psmap-mono);
-          font-size: 10px;
-          letter-spacing: 0.14em;
-          text-transform: uppercase;
-          color: var(--psmap-ink-50);
-          margin-bottom: 10px;
-        }
-        .psmap-title {
-          font-family: var(--psmap-serif);
-          font-size: 40px;
-          font-weight: 400;
-          letter-spacing: -0.02em;
-          line-height: 1.05;
-          margin: 0 0 12px;
-          color: var(--psmap-ink);
-        }
         .psmap-title__em {
           font-style: italic;
-          color: var(--psmap-accent);
-        }
-        .psmap-sub {
-          font-size: 14px;
-          color: var(--psmap-ink-60);
-          line-height: 1.55;
-          max-width: 680px;
-          margin: 0;
-        }
-        .psmap-section-title {
-          font-family: var(--psmap-serif);
-          font-size: 20px;
-          letter-spacing: -0.01em;
-          margin: 36px 0 6px;
-        }
-        .psmap-section-sub {
-          font-size: 12px;
-          color: var(--psmap-ink-60);
-          margin-bottom: 14px;
+          color: var(--ps-accent);
         }
         .psmap-grid {
           display: grid;
@@ -292,49 +219,43 @@ export default function SystemPage() {
           margin-top: 12px;
         }
         .psmap-card {
-          background: rgba(255, 251, 243, 0.78);
-          border: 1px solid var(--psmap-ink-10);
+          background: var(--ps-paper-soft);
+          border: 1px solid var(--ps-ink-10);
           border-radius: 14px;
           padding: 20px;
           position: relative;
         }
         .psmap-card--solid {
-          background: var(--psmap-ink);
-          color: var(--psmap-bg);
-          border-color: var(--psmap-ink);
+          background: var(--ps-ink);
+          color: var(--ps-bg);
+          border-color: var(--ps-ink);
         }
         .psmap-card--accent {
-          background: var(--psmap-accent-soft);
+          background: var(--ps-accent-soft);
           border-color: rgba(185, 115, 22, 0.25);
         }
         .psmap-card__eyebrow {
-          font-family: var(--psmap-mono);
+          font-family: var(--ps-mono);
           font-size: 9px;
           letter-spacing: 0.14em;
           text-transform: uppercase;
-          color: var(--psmap-ink-50);
+          color: var(--ps-ink-50);
           margin-bottom: 6px;
         }
-        .psmap-card--solid .psmap-card__eyebrow {
-          color: rgba(250, 247, 242, 0.55);
-        }
-        .psmap-card--accent .psmap-card__eyebrow {
-          color: var(--psmap-accent);
-        }
+        .psmap-card--solid .psmap-card__eyebrow { color: rgba(250, 247, 242, 0.55); }
+        .psmap-card--accent .psmap-card__eyebrow { color: var(--ps-accent); }
         .psmap-card__title {
-          font-family: var(--psmap-serif);
+          font-family: var(--ps-serif);
           font-size: 20px;
           letter-spacing: -0.01em;
           margin-bottom: 6px;
         }
         .psmap-card__body {
           font-size: 13px;
-          color: var(--psmap-ink-70);
+          color: var(--ps-ink-70);
           line-height: 1.5;
         }
-        .psmap-card--solid .psmap-card__body {
-          color: rgba(250, 247, 242, 0.78);
-        }
+        .psmap-card--solid .psmap-card__body { color: rgba(250, 247, 242, 0.78); }
         .psmap-loops {
           display: flex;
           flex-direction: column;
@@ -347,35 +268,35 @@ export default function SystemPage() {
           gap: 14px;
           align-items: start;
           padding: 14px 16px;
-          background: var(--psmap-paper);
-          border: 1px solid var(--psmap-ink-08);
+          background: var(--ps-paper);
+          border: 1px solid var(--ps-ink-08);
           border-radius: 10px;
         }
         .psmap-loop__name {
-          font-family: var(--psmap-serif);
+          font-family: var(--ps-serif);
           font-size: 16px;
           letter-spacing: -0.01em;
         }
         .psmap-loop__cadence {
-          font-family: var(--psmap-mono);
+          font-family: var(--ps-mono);
           font-size: 10px;
-          color: var(--psmap-ink-50);
+          color: var(--ps-ink-50);
           letter-spacing: 0.1em;
           text-transform: uppercase;
           margin-top: 4px;
         }
         .psmap-loop__desc {
           font-size: 13px;
-          color: var(--psmap-ink-70);
+          color: var(--ps-ink-70);
           line-height: 1.5;
         }
         .psmap-loop__artifact {
-          font-family: var(--psmap-mono);
+          font-family: var(--ps-mono);
           font-size: 10px;
           padding: 4px 10px;
           border-radius: 999px;
-          background: var(--psmap-ink);
-          color: var(--psmap-bg);
+          background: var(--ps-ink);
+          color: var(--ps-bg);
           white-space: nowrap;
           letter-spacing: 0.04em;
         }
@@ -386,33 +307,32 @@ export default function SystemPage() {
           margin-top: 14px;
         }
         .psmap-dna {
-          background: var(--psmap-paper);
-          border: 1px solid var(--psmap-ink-08);
+          background: var(--ps-paper);
+          border: 1px solid var(--ps-ink-08);
           border-radius: 10px;
           padding: 14px;
         }
         .psmap-dna__label {
-          font-family: var(--psmap-mono);
+          font-family: var(--ps-mono);
           font-size: 9px;
           letter-spacing: 0.14em;
           text-transform: uppercase;
-          color: var(--psmap-ink-50);
+          color: var(--ps-ink-50);
           margin-bottom: 6px;
         }
         .psmap-dna__value {
-          font-family: var(--psmap-serif);
+          font-family: var(--ps-serif);
           font-size: 15px;
-          color: var(--psmap-ink);
+          color: var(--ps-ink);
         }
         .psmap-dna__example {
           margin-top: 8px;
           font-size: 11px;
-          color: var(--psmap-ink-60);
-          font-family: var(--psmap-mono);
+          color: var(--ps-ink-60);
+          font-family: var(--ps-mono);
           line-height: 1.5;
         }
         @media (max-width: 880px) {
-          .psmap-title { font-size: 30px; }
           .psmap-loop { grid-template-columns: 1fr; }
           .psmap-loop__artifact { justify-self: start; }
           .psmap-dna-grid { grid-template-columns: 1fr 1fr; }

@@ -1,3 +1,147 @@
+/* ===== Planning System design tokens (warm paper / ink / clay accent) =====
+   Activated per-page via wrapping the page content in <div class="ps-page">.
+   Existing rs-* pages are unaffected. */
+.ps-page {
+  --ps-bg: #faf7f2;
+  --ps-paper: #f3eee5;
+  --ps-paper-soft: rgba(255, 251, 243, 0.78);
+  --ps-ink: #1a1814;
+  --ps-ink-80: rgba(26, 24, 20, 0.80);
+  --ps-ink-70: rgba(26, 24, 20, 0.70);
+  --ps-ink-60: rgba(26, 24, 20, 0.60);
+  --ps-ink-50: rgba(26, 24, 20, 0.50);
+  --ps-ink-40: rgba(26, 24, 20, 0.40);
+  --ps-ink-30: rgba(26, 24, 20, 0.30);
+  --ps-ink-15: rgba(26, 24, 20, 0.15);
+  --ps-ink-10: rgba(26, 24, 20, 0.10);
+  --ps-ink-08: rgba(26, 24, 20, 0.08);
+  --ps-ink-05: rgba(26, 24, 20, 0.05);
+  --ps-accent: #b97316;
+  --ps-accent-soft: #f5e9d6;
+  --ps-sage: #6b8f71;
+  --ps-sage-soft: #e3ece1;
+  --ps-plum: #8a5a7a;
+  --ps-plum-soft: #eee3ea;
+  --ps-indigo: #4a6b8f;
+  --ps-indigo-soft: #e0e7ef;
+  --ps-clay: #b85c3e;
+  --ps-clay-soft: #f3ddd2;
+  --ps-gold: #a68a2e;
+  --ps-gold-soft: #efead0;
+  --ps-serif: "Fraunces", Georgia, "Times New Roman", serif;
+  --ps-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --ps-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif;
+
+  background:
+    radial-gradient(1400px 800px at 15% -10%, #f5e7cf 0%, transparent 55%),
+    radial-gradient(1000px 600px at 90% 110%, #efdcc8 0%, transparent 55%),
+    #ece6da;
+  color: var(--ps-ink);
+  font-family: var(--ps-sans);
+  min-height: 100%;
+  margin: -16px;
+  padding: 16px;
+}
+@supports (color: oklch(50% 0.1 50)) {
+  .ps-page {
+    --ps-accent: oklch(62% 0.14 55);
+    --ps-accent-soft: oklch(92% 0.035 55);
+    --ps-sage: oklch(60% 0.07 150);
+    --ps-sage-soft: oklch(93% 0.02 150);
+    --ps-plum: oklch(55% 0.08 340);
+    --ps-plum-soft: oklch(93% 0.02 340);
+    --ps-indigo: oklch(52% 0.08 250);
+    --ps-indigo-soft: oklch(93% 0.02 250);
+    --ps-clay: oklch(58% 0.13 35);
+    --ps-clay-soft: oklch(92% 0.04 35);
+    --ps-gold: oklch(62% 0.1 90);
+    --ps-gold-soft: oklch(93% 0.035 90);
+  }
+}
+.ps-view {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px 24px 80px;
+}
+.ps-eyebrow {
+  font-family: var(--ps-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ps-ink-50);
+  margin-bottom: 10px;
+}
+.ps-title {
+  font-family: var(--ps-serif);
+  font-size: 40px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  margin: 0 0 12px;
+  color: var(--ps-ink);
+}
+.ps-sub {
+  font-size: 14px;
+  color: var(--ps-ink-60);
+  line-height: 1.55;
+  max-width: 680px;
+  margin: 0;
+}
+.ps-section-title {
+  font-family: var(--ps-serif);
+  font-size: 20px;
+  letter-spacing: -0.01em;
+  margin: 36px 0 6px;
+  color: var(--ps-ink);
+}
+.ps-section-sub {
+  font-size: 12px;
+  color: var(--ps-ink-60);
+  margin-bottom: 14px;
+}
+.ps-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--ps-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  padding: 3px 7px;
+  border-radius: 4px;
+  background: var(--ps-ink-05);
+  color: var(--ps-ink-70);
+  white-space: nowrap;
+}
+.ps-tag--need-contribution { background: var(--ps-sage-soft); color: var(--ps-sage); }
+.ps-tag--need-growth { background: var(--ps-indigo-soft); color: var(--ps-indigo); }
+.ps-tag--need-certainty { background: var(--ps-gold-soft); color: var(--ps-gold); }
+.ps-tag--need-variety { background: var(--ps-plum-soft); color: var(--ps-plum); }
+.ps-tag--need-connection { background: var(--ps-clay-soft); color: var(--ps-clay); }
+.ps-tag--need-significance { background: var(--ps-accent-soft); color: var(--ps-accent); }
+.ps-tag--type-win { background: var(--ps-sage); color: #fff; }
+.ps-tag--type-leverage { background: var(--ps-accent); color: #fff; }
+.ps-btn {
+  appearance: none;
+  border: 1px solid var(--ps-ink-15);
+  background: #fff;
+  padding: 6px 12px;
+  border-radius: 7px;
+  font-family: var(--ps-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  color: var(--ps-ink-70);
+  transition: border-color 120ms, color 120ms;
+}
+.ps-btn:hover { border-color: var(--ps-ink); color: var(--ps-ink); }
+.ps-btn--primary { background: var(--ps-ink); color: var(--ps-bg); border-color: var(--ps-ink); }
+.ps-btn--primary:hover { background: #000; color: var(--ps-bg); }
+@media (max-width: 880px) {
+  .ps-view { padding: 24px 16px 60px; }
+  .ps-title { font-size: 30px; }
+}
+
 /* Rise & Shine — design tokens (Stitch “Digital Sanctuary” merge) */
 :root {
   /* Surfaces — Stitch cream / paper stack (#FDFBF7 family) */
