@@ -96,6 +96,16 @@ export default async function handler(req, res) {
       }
     }
 
+    // Tasks completed today (any kind of completion event) are
+    // ineligible — they shouldn't resurface in today's queue.
+    const todayCompletedIds = new Set();
+    for (const ev of completedEvents || []) {
+      if (!ev.created_at) continue;
+      if (ev.created_at.slice(0, 10) === today) {
+        todayCompletedIds.add(ev.task_id);
+      }
+    }
+
     const withMeta = (tasks || []).map((t) => ({
       ...t,
       category:
@@ -109,6 +119,8 @@ export default async function handler(req, res) {
         : [],
     }));
     const filtered = withMeta
+      .filter((t) => t.status !== "done" && t.status !== "archived")
+      .filter((t) => !todayCompletedIds.has(t.id))
       .filter((t) => t.category !== "Daily Repeat")
       .filter((t) => !t.tags.includes("blocked") && !t.tags.includes("waiting"));
     const reduced = reduceParentsToBestSubtask(filtered, {

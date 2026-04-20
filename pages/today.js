@@ -72,6 +72,9 @@ export default function TodayPage() {
   const [busyTask, setBusyTask] = useState(null);
   const [refilling, setRefilling] = useState(false);
   const [autoRefillTried, setAutoRefillTried] = useState(false);
+  // Cycles Pick's replace-slot when queue is full so consecutive picks
+  // don't all land on slot 3.
+  const [replaceIdx, setReplaceIdx] = useState(0);
 
   const dateStr = todayStr();
 
@@ -262,15 +265,15 @@ export default function TodayPage() {
         },
       ];
     } else {
-      // Queue is genuinely full — replace the last slot
-      next = [
-        ...filled.slice(0, 2),
-        {
-          slot: 3,
-          type: labelForType(task),
-          task_id: task.id,
-        },
-      ];
+      // Queue is full — cycle through slots 1→2→3→1… so consecutive
+      // picks don't all clobber the same slot.
+      const target = replaceIdx % 3;
+      next = filled.map((s, i) =>
+        i === target
+          ? { slot: i + 1, type: labelForType(task), task_id: task.id }
+          : s
+      );
+      setReplaceIdx(target + 1);
     }
     await savePlanQueue(next);
   }
@@ -281,6 +284,12 @@ export default function TodayPage() {
       (s) => s.task_id !== taskId
     );
     await savePlanQueue(filled);
+  }
+
+  async function clearQueue() {
+    if (!user || !plan) return;
+    setReplaceIdx(0);
+    await savePlanQueue([]);
   }
 
   const refillQueue = useCallback(
@@ -491,9 +500,20 @@ export default function TodayPage() {
                   ? "Fill top 3 automatically"
                   : "Refill"}
               </button>
+              {totalChosen > 0 && (
+                <button
+                  type="button"
+                  className="today-clear"
+                  onClick={clearQueue}
+                  disabled={refilling}
+                >
+                  Clear queue
+                </button>
+              )}
               <div className="today-hero__hint">
                 Refill uses your vision, category weights, and recent
-                progress to pick 3 tasks across projects.
+                progress to pick 3 tasks across projects. Clear lets you
+                hand-pick from scratch.
               </div>
             </div>
           </div>
@@ -762,6 +782,27 @@ export default function TodayPage() {
         }
         .today-refill:disabled {
           opacity: 0.6;
+          cursor: default;
+        }
+        .today-clear {
+          appearance: none;
+          border: 1px solid rgba(255, 255, 255, 0.18);
+          background: transparent;
+          color: rgba(250, 247, 242, 0.75);
+          padding: 9px 14px;
+          border-radius: 8px;
+          font-family: var(--ps-mono);
+          font-size: 11px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          cursor: pointer;
+        }
+        .today-clear:hover:not(:disabled) {
+          border-color: var(--ps-clay);
+          color: var(--ps-clay);
+        }
+        .today-clear:disabled {
+          opacity: 0.5;
           cursor: default;
         }
         .today-hero__hint {
