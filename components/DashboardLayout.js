@@ -40,6 +40,7 @@ const NAV_LINKS = [
   { href: "/vision", label: "Vision", icon: "visibility" },
   { href: "/weekly-review", label: "Weekly review", icon: "calendar_month" },
   { href: "/chat", label: "Jarvis", icon: "smart_toy" },
+  { href: "/system", label: "System Map", icon: "hub" },
 ];
 
 const ACCOUNT_LINK = { href: "/account", label: "Account", icon: "person" };
