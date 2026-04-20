@@ -8,6 +8,7 @@ import { supabase } from "../../lib/supabaseClient";
 import {
   getUserProfile,
   updateTaskStatusWithEvent,
+  createTask,
 } from "../../lib/db";
 
 const PROJECT_COLORS = [
@@ -56,6 +57,12 @@ export default function ProjectPage() {
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState(null);
   const [subtasks, setSubtasks] = useState({});
+  const [coachOutcomes, setCoachOutcomes] = useState(null);
+  const [outcomesLoading, setOutcomesLoading] = useState(false);
+  const [outcomesError, setOutcomesError] = useState("");
+  const [breakdowns, setBreakdowns] = useState({});
+  const [breakingDown, setBreakingDown] = useState(null);
+  const [insertingTask, setInsertingTask] = useState(null);
 
   const color = PROJECT_COLORS[categoryIndex % PROJECT_COLORS.length];
 
@@ -122,6 +129,83 @@ export default function ProjectPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  async function fetchOutcomes() {
+    if (!user || outcomesLoading || !categoryId) return;
+    setOutcomesLoading(true);
+    setOutcomesError("");
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      const res = await fetch("/api/coach/project-outcomes", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ category_id: categoryId }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || "Failed");
+      }
+      const data = await res.json();
+      setCoachOutcomes(data.outcomes || []);
+    } catch (err) {
+      setOutcomesError(err.message || "Failed to fetch outcomes.");
+    } finally {
+      setOutcomesLoading(false);
+    }
+  }
+
+  async function fetchBreakdown(task) {
+    if (!user || breakingDown) return;
+    setBreakingDown(task.id);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      const res = await fetch("/api/coach/task-breakdown", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ task_id: task.id }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || "Failed");
+      }
+      const data = await res.json();
+      setBreakdowns((b) => ({ ...b, [task.id]: data.subtasks || [] }));
+    } catch (err) {
+      setBreakdowns((b) => ({ ...b, [task.id]: { error: err.message || "Failed" } }));
+    } finally {
+      setBreakingDown(null);
+    }
+  }
+
+  async function acceptBreakdownStep(parentTask, step) {
+    if (!user || insertingTask) return;
+    setInsertingTask(`${parentTask.id}:${step.title}`);
+    try {
+      await createTask(user.id, {
+        title: step.title,
+        priority: parentTask.priority || "Medium",
+        effort_hours: (step.minutes || 20) / 60,
+        category_id: parentTask.category_id || categoryId,
+        parent_task_id: parentTask.id,
+      });
+      load();
+      // Remove the inserted step from the breakdown panel
+      setBreakdowns((b) => {
+        const list = (b[parentTask.id] || []).filter((s) => s.title !== step.title);
+        return { ...b, [parentTask.id]: list };
+      });
+    } finally {
+      setInsertingTask(null);
+    }
+  }
 
   async function loadSubtasks(taskId) {
     if (subtasks[taskId]) return;
@@ -275,6 +359,67 @@ export default function ProjectPage() {
             </>
           )}
 
+          <div className="pj-coach-card">
+            <div className="pj-coach-head">
+              <div>
+                <div className="pj-coach-cap">Coach · 90-day outcomes proposal</div>
+                <div className="pj-coach-title">
+                  Let the coach propose outcomes for {category?.name || "this project"}
+                </div>
+                <div className="pj-coach-sub">
+                  Anchored to your vision and what&apos;s actually moving in this project.
+                </div>
+              </div>
+              <button
+                type="button"
+                className="ps-btn ps-btn--primary"
+                onClick={fetchOutcomes}
+                disabled={outcomesLoading}
+              >
+                {outcomesLoading ? "Thinking…" : coachOutcomes ? "Re-propose" : "Propose 3 outcomes"}
+              </button>
+            </div>
+            {outcomesError && (
+              <div className="today-error" style={{ marginTop: 10 }}>
+                {outcomesError}
+              </div>
+            )}
+            {coachOutcomes && coachOutcomes.length > 0 && (
+              <div className="pj-coach-outcomes">
+                {coachOutcomes.map((o, i) => (
+                  <div key={i} className="pj-coach-outcome">
+                    <div className="pj-coach-outcome-text">{o.text}</div>
+                    <div className="pj-coach-outcome-reason">{o.reason}</div>
+                    <div className="pj-coach-outcome-foot">
+                      <span
+                        className="ps-tag"
+                        style={{
+                          background:
+                            o.confidence === "high"
+                              ? "var(--ps-sage-soft)"
+                              : o.confidence === "low"
+                              ? "var(--ps-clay-soft)"
+                              : "var(--ps-gold-soft)",
+                          color:
+                            o.confidence === "high"
+                              ? "var(--ps-sage)"
+                              : o.confidence === "low"
+                              ? "var(--ps-clay)"
+                              : "var(--ps-gold)",
+                        }}
+                      >
+                        {o.confidence || "medium"} confidence
+                      </span>
+                      <span className="pj-coach-hint">
+                        Save outcomes on /vision &rarr; Clarify mode
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="pj-ladder">
             <div className="pj-ladder-head">
               <div>
@@ -337,11 +482,56 @@ export default function ProjectPage() {
                             <div className="pj-coach-note">
                               <div className="pj-coach-cap">Coach</div>
                               <p>
-                                This one is ~{mins} minutes. Want to break it into
-                                smaller ≤30 min sub-steps? Add subtasks in the
-                                backlog or run a coach prompt to propose a
-                                breakdown.
+                                This one is ~{mins} minutes. Want me to propose
+                                ≤30 min sub-steps?
                               </p>
+                              {!breakdowns[t.id] && (
+                                <button
+                                  type="button"
+                                  className="ps-btn ps-btn--primary"
+                                  style={{ marginTop: 8 }}
+                                  onClick={() => fetchBreakdown(t)}
+                                  disabled={breakingDown === t.id}
+                                >
+                                  {breakingDown === t.id ? "Thinking…" : "Break it down"}
+                                </button>
+                              )}
+                              {breakdowns[t.id]?.error && (
+                                <div className="today-error" style={{ marginTop: 8 }}>
+                                  {breakdowns[t.id].error}
+                                </div>
+                              )}
+                              {Array.isArray(breakdowns[t.id]) && breakdowns[t.id].length > 0 && (
+                                <div className="pj-breakdown-list">
+                                  {breakdowns[t.id].map((s, i) => (
+                                    <div key={i} className="pj-breakdown-row">
+                                      <span className="pj-breakdown-mins">
+                                        {s.minutes}m
+                                      </span>
+                                      <span className="pj-breakdown-text">
+                                        {s.title}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        className="ps-btn"
+                                        onClick={() => acceptBreakdownStep(t, s)}
+                                        disabled={
+                                          insertingTask === `${t.id}:${s.title}`
+                                        }
+                                      >
+                                        {insertingTask === `${t.id}:${s.title}`
+                                          ? "…"
+                                          : "Accept"}
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {Array.isArray(breakdowns[t.id]) && breakdowns[t.id].length === 0 && (
+                                <div className="pj-breakdown-empty">
+                                  All proposed steps accepted.
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -512,6 +702,111 @@ export default function ProjectPage() {
           color: var(--ps-ink-50);
         }
 
+        .pj-coach-card {
+          margin-top: 24px;
+          background: var(--ps-accent-soft);
+          border: 1px solid rgba(185, 115, 22, 0.25);
+          border-radius: 14px;
+          padding: 18px 20px;
+        }
+        .pj-coach-head {
+          display: flex;
+          justify-content: space-between;
+          gap: 16px;
+          align-items: flex-start;
+          flex-wrap: wrap;
+        }
+        .pj-coach-card .pj-coach-cap {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--ps-accent);
+        }
+        .pj-coach-title {
+          font-family: var(--ps-serif);
+          font-size: 18px;
+          letter-spacing: -0.01em;
+          margin-top: 4px;
+        }
+        .pj-coach-sub {
+          font-size: 12px;
+          color: var(--ps-ink-70);
+          margin-top: 4px;
+        }
+        .pj-coach-outcomes {
+          margin-top: 14px;
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+          gap: 10px;
+        }
+        .pj-coach-outcome {
+          background: #fff;
+          border: 1px solid var(--ps-ink-10);
+          border-radius: 10px;
+          padding: 12px 14px;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        .pj-coach-outcome-text {
+          font-family: var(--ps-serif);
+          font-size: 14px;
+          letter-spacing: -0.01em;
+          line-height: 1.35;
+          color: var(--ps-ink);
+        }
+        .pj-coach-outcome-reason {
+          font-size: 12px;
+          color: var(--ps-ink-70);
+          line-height: 1.5;
+        }
+        .pj-coach-outcome-foot {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 8px;
+          margin-top: 4px;
+        }
+        .pj-coach-hint {
+          font-family: var(--ps-mono);
+          font-size: 9px;
+          letter-spacing: 0.04em;
+          color: var(--ps-ink-50);
+        }
+        .pj-breakdown-list {
+          margin-top: 10px;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        .pj-breakdown-row {
+          display: grid;
+          grid-template-columns: 36px 1fr auto;
+          gap: 8px;
+          align-items: center;
+          background: #fff;
+          border: 1px solid var(--ps-ink-10);
+          border-radius: 6px;
+          padding: 6px 10px;
+        }
+        .pj-breakdown-mins {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          color: var(--ps-accent);
+          font-weight: 600;
+        }
+        .pj-breakdown-text {
+          font-size: 12.5px;
+          color: var(--ps-ink-80);
+          line-height: 1.4;
+        }
+        .pj-breakdown-empty {
+          margin-top: 8px;
+          font-size: 12px;
+          color: var(--ps-ink-50);
+          font-style: italic;
+        }
         .pj-ladder {
           margin-top: 32px;
         }

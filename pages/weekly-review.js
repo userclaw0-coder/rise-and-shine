@@ -90,6 +90,7 @@ export default function WeeklyReviewPage() {
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState("");
   const [drafting, setDrafting] = useState(null);
+  const [error, setError] = useState("");
   const [pastReviews, setPastReviews] = useState([]);
   const [projectMovement, setProjectMovement] = useState([]);
   const saveTimer = useRef(null);
@@ -225,7 +226,15 @@ export default function WeeklyReviewPage() {
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
-      const res = await fetch("/api/weekly-review/coach", {
+      const currentMap = {
+        wins,
+        friction,
+        reality,
+        leverage,
+        theme,
+        notes,
+      };
+      const res = await fetch("/api/weekly-review/section-draft", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -234,21 +243,20 @@ export default function WeeklyReviewPage() {
         body: JSON.stringify({
           week_start: weekStart,
           section: sectionKey,
+          current_text: currentMap[sectionKey] || "",
         }),
       });
-      if (!res.ok) throw new Error("draft failed");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || "Draft failed");
+      }
       const data = await res.json();
-      const text =
-        data?.draft ||
-        data?.content ||
-        data?.sections?.[sectionKey] ||
-        data?.text ||
-        "";
+      const text = (data?.draft || "").trim();
       if (text) {
         appendSection(sectionKey, text);
       }
-    } catch {
-      // silent — no fallback content to keep it honest
+    } catch (err) {
+      setError(err.message || "AI draft failed.");
     } finally {
       setDrafting(null);
     }
@@ -305,6 +313,12 @@ export default function WeeklyReviewPage() {
                   : "Autosave on"}
               </div>
             </div>
+
+            {error && (
+              <div className="today-error" style={{ marginTop: 12 }}>
+                {error}
+              </div>
+            )}
 
             <div className="wr-mode-toggle">
               <button
