@@ -373,9 +373,11 @@ export default function ProjectPage() {
     done_this_week: doneThisWeek,
   };
 
+  const coachScope = categoryId ? `project:${categoryId}` : "project";
+
   return (
     <PSShell
-      scope="project"
+      scope={coachScope}
       title={category?.name || "Project"}
       scopeHint={category?.name || "Project view"}
       coachPayload={coachPayload}

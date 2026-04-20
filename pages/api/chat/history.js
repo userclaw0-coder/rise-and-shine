@@ -23,10 +23,13 @@ export default async function handler(req, res) {
 
   const limit = Math.min(parseInt(req.query.limit) || 100, 200);
 
+  // Jarvis owns NULL-scope rows only. Page-coach rows (scope = 'today',
+  // 'project:<id>', etc.) stay out of the Jarvis transcript.
   const { data, error } = await supabase
     .from("chat_messages")
     .select("id, role, content, tool_calls, tool_call_id, created_at")
     .eq("user_id", userId)
+    .is("scope", null)
     .order("created_at", { ascending: false })
     .limit(limit);
 

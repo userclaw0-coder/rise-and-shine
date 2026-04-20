@@ -53,6 +53,32 @@ const SCOPE_PROMPTS = {
     "You are on the Notes page. One paragraph (2-3 sentences). Notice patterns across notes — a theme the user keeps re-writing, pinned notes worth surfacing, or a topic that would benefit from a pinned entry. End with a concrete nudge. Plain prose, no markdown.",
 };
 
+// Resolve a scope name into its canonical form and its prompt-bucket.
+// Accepts:
+//   - static scopes (today, hits, project, etc.)
+//   - aliases (backlog -> actions)
+//   - parameterized scopes (project:<uuid> -> prompt bucket "project")
+function resolveScope(rawScope) {
+  const raw = String(rawScope || "");
+  if (!raw) return { ok: false, scope: null, bucket: null };
+  if (SCOPE_PROMPTS[raw]) return { ok: true, scope: raw, bucket: raw };
+  if (SCOPE_ALIASES[raw]) {
+    const alias = SCOPE_ALIASES[raw];
+    return { ok: !!SCOPE_PROMPTS[alias], scope: alias, bucket: alias };
+  }
+  const colonIdx = raw.indexOf(":");
+  if (colonIdx > 0) {
+    const bucket = raw.slice(0, colonIdx);
+    const aliased = SCOPE_ALIASES[bucket] || bucket;
+    if (SCOPE_PROMPTS[aliased]) {
+      // Keep the full parameterized scope as the storage key so each
+      // instance (each project, etc.) gets its own conversation row set.
+      return { ok: true, scope: raw, bucket: aliased };
+    }
+  }
+  return { ok: false, scope: null, bucket: null };
+}
+
 async function loadHistory(userId, scope, limit = 30) {
   const { data, error } = await supabase
     .from("chat_messages")
@@ -103,43 +129,45 @@ export default async function handler(req, res) {
 
   // GET: return saved conversation for this scope
   if (req.method === "GET") {
-    const rawScope = String(req.query?.scope || "");
-    const scope = SCOPE_ALIASES[rawScope] || rawScope;
-    if (!SCOPE_PROMPTS[scope]) {
-      return res.status(400).json({ error: `unknown scope: ${rawScope}` });
+    const resolved = resolveScope(req.query?.scope);
+    if (!resolved.ok) {
+      return res
+        .status(400)
+        .json({ error: `unknown scope: ${req.query?.scope}` });
     }
-    const messages = await loadHistory(userId, scope, 30);
+    const messages = await loadHistory(userId, resolved.scope, 30);
     return res.json({ ok: true, messages });
   }
 
   // DELETE: clear conversation for this scope
   if (req.method === "DELETE") {
-    const rawScope = String(req.query?.scope || "");
-    const scope = SCOPE_ALIASES[rawScope] || rawScope;
-    if (!SCOPE_PROMPTS[scope]) {
-      return res.status(400).json({ error: `unknown scope: ${rawScope}` });
+    const resolved = resolveScope(req.query?.scope);
+    if (!resolved.ok) {
+      return res
+        .status(400)
+        .json({ error: `unknown scope: ${req.query?.scope}` });
     }
-    await clearHistory(userId, scope);
+    await clearHistory(userId, resolved.scope);
     return res.json({ ok: true });
   }
 
   if (req.method !== "POST")
     return res.status(405).json({ error: "GET, POST, or DELETE" });
 
-  const rawScope = String(req.body?.scope || "");
-  const scope = SCOPE_ALIASES[rawScope] || rawScope;
+  const resolved = resolveScope(req.body?.scope);
+  if (!resolved.ok) {
+    return res
+      .status(400)
+      .json({ error: `unknown scope: ${req.body?.scope}` });
+  }
+  const scope = resolved.scope;
+  const scopeBucket = resolved.bucket;
   const payload = req.body?.payload || {};
   const question = String(req.body?.question || "").trim().slice(0, 1000);
   // Server is the source of truth — pull recent history rather than
   // trusting client-supplied scrollback.
   const stored = await loadHistory(userId, scope, 12);
   const history = stored.map((m) => ({ role: m.role, content: m.content }));
-
-  if (!SCOPE_PROMPTS[scope]) {
-    return res
-      .status(400)
-      .json({ error: `unknown scope: ${rawScope}` });
-  }
 
   try {
     // Pull light user context: identity + top desired outcomes.
@@ -159,8 +187,8 @@ export default async function handler(req, res) {
     };
 
     const system = question
-      ? `You are the Rise & Shine coach. The user is on the ${scope} page and asked a direct question. Answer in 2-4 sentences, concrete and tied to the page state they're looking at. Reference actual titles/numbers when useful. No headings, no markdown.`
-      : `You are the Rise & Shine page-scoped coach. ${SCOPE_PROMPTS[scope]}
+      ? `You are the Rise & Shine coach. The user is on the ${scopeBucket} page and asked a direct question. Answer in 2-4 sentences, concrete and tied to the page state they're looking at. Reference actual titles/numbers when useful. No headings, no markdown.`
+      : `You are the Rise & Shine page-scoped coach. ${SCOPE_PROMPTS[scopeBucket]}
 
 The user is looking at the page RIGHT NOW — they don't want a lecture, they want one honest observation tied to what's visible. Be concrete, not generic. Reference actual titles/numbers from the payload when useful.`;
 

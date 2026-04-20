@@ -31,8 +31,21 @@ const FALLBACK_SUGGESTIONS = {
   notes: ["Pin the important ones", "Show me all Ensenada notes", "What pattern am I repeating?"],
 };
 
+// Parameterized scopes look like "project:<uuid>" — treat the prefix
+// as the bucket for labels / suggestions.
+function scopeBucket(scope) {
+  if (!scope) return "today";
+  if (SCOPE_LABELS[scope]) return scope;
+  const colonIdx = scope.indexOf(":");
+  if (colonIdx > 0) {
+    const prefix = scope.slice(0, colonIdx);
+    if (SCOPE_LABELS[prefix]) return prefix;
+  }
+  return "today";
+}
+
 function ScopeMeta({ scope }) {
-  return SCOPE_LABELS[scope] || SCOPE_LABELS.today;
+  return SCOPE_LABELS[scopeBucket(scope)] || SCOPE_LABELS.today;
 }
 
 const MAX_STORED_MESSAGES = 30;
@@ -144,7 +157,7 @@ export default function PSCoach({
   const effectiveSuggestions =
     suggestions && suggestions.length > 0
       ? suggestions
-      : FALLBACK_SUGGESTIONS[scope] || [];
+      : FALLBACK_SUGGESTIONS[scopeBucket(scope)] || [];
 
   const postCoach = useCallback(
     async ({ question } = {}) => {
@@ -461,15 +474,14 @@ export default function PSCoach({
           <div className="ps-coach-input">
             <textarea
               rows={1}
-              placeholder={
-                scope === "review"
-                  ? "Reflect on the week…"
-                  : scope === "map"
-                  ? "Ask how the system works…"
-                  : scope === "project" || scope === "projects"
-                  ? "Ask about this project…"
-                  : "Tell your coach…"
-              }
+              placeholder={(() => {
+                const b = scopeBucket(scope);
+                if (b === "review") return "Reflect on the week…";
+                if (b === "map") return "Ask how the system works…";
+                if (b === "project" || b === "projects")
+                  return "Ask about this project…";
+                return "Tell your coach…";
+              })()}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
