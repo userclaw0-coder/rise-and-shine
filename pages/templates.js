@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import {
   DndContext,
   closestCenter,
@@ -129,8 +129,24 @@ export default function TemplatesPage() {
   const [addBucket, setAddBucket] = useState("anytime");
   const [addPriority, setAddPriority] = useState("Medium");
   const [adding, setAdding] = useState(false);
+  const [heatByTask, setHeatByTask] = useState({});
 
   const dateStr = todayStr();
+
+  const recentDates = useMemo(() => {
+    const list = [];
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      d.setDate(d.getDate() - i);
+      list.push(
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+          d.getDate()
+        ).padStart(2, "0")}`
+      );
+    }
+    return list;
+  }, []);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -158,34 +174,61 @@ export default function TemplatesPage() {
       setItems(list);
       const taskIds = list.map((i) => i.task.id);
       if (taskIds.length > 0) {
+        const rangeStart = (() => {
+          const d = new Date(dateStr + "T00:00:00");
+          d.setDate(d.getDate() - 29);
+          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+            d.getDate()
+          ).padStart(2, "0")}`;
+        })();
         const { data: events } = await supabase
           .from("task_events")
           .select("task_id, event_type, created_at")
           .eq("user_id", user.id)
           .in("event_type", ["completed", "uncompleted"])
           .in("task_id", taskIds)
-          .gte("created_at", `${dateStr}T00:00:00Z`)
+          .gte("created_at", `${rangeStart}T00:00:00Z`)
           .lt("created_at", `${dateStr}T23:59:59Z`);
-        const latest = {};
+
+        // Per task, per day: final state = latest event that day
+        const perTaskDay = {};
         for (const ev of events || []) {
-          const prev = latest[ev.task_id];
+          const tId = ev.task_id;
+          const day = new Date(ev.created_at).toISOString().slice(0, 10);
+          if (!perTaskDay[tId]) perTaskDay[tId] = {};
+          const prev = perTaskDay[tId][day];
           if (!prev || new Date(ev.created_at) > new Date(prev.created_at)) {
-            latest[ev.task_id] = ev;
+            perTaskDay[tId][day] = ev;
           }
         }
-        const map = {};
-        for (const id of taskIds)
-          map[id] = latest[id]?.event_type === "completed";
-        setDone(map);
+
+        // Today's completion map
+        const doneToday = {};
+        for (const id of taskIds) {
+          doneToday[id] = perTaskDay[id]?.[dateStr]?.event_type === "completed";
+        }
+        setDone(doneToday);
+
+        // 30-day heat grid
+        const heat = {};
+        for (const id of taskIds) {
+          heat[id] = {};
+          for (const d of recentDates) {
+            heat[id][d] =
+              perTaskDay[id]?.[d]?.event_type === "completed";
+          }
+        }
+        setHeatByTask(heat);
       } else {
         setDone({});
+        setHeatByTask({});
       }
     } catch (err) {
       setError(err.message || "Failed to load.");
     } finally {
       setLoading(false);
     }
-  }, [user, dateStr]);
+  }, [user, dateStr, recentDates]);
 
   useEffect(() => {
     load();
@@ -209,7 +252,23 @@ export default function TemplatesPage() {
   async function toggleDone(taskId) {
     const next = !done[taskId];
     setDone((d) => ({ ...d, [taskId]: next }));
+    setHeatByTask((h) => ({
+      ...h,
+      [taskId]: { ...(h[taskId] || {}), [dateStr]: next },
+    }));
     await setTaskCompletionForDate(user.id, taskId, dateStr, next);
+  }
+
+  async function toggleHistorical(taskId, day) {
+    const next = !heatByTask[taskId]?.[day];
+    setHeatByTask((h) => ({
+      ...h,
+      [taskId]: { ...(h[taskId] || {}), [day]: next },
+    }));
+    if (day === dateStr) {
+      setDone((d) => ({ ...d, [taskId]: next }));
+    }
+    await setTaskCompletionForDate(user.id, taskId, day, next);
   }
 
   async function handleRemove(itemId) {
@@ -387,6 +446,75 @@ export default function TemplatesPage() {
               ))}
             </DndContext>
           </div>
+
+          {items.length > 0 && (
+            <>
+              <div className="ps-section-title">Patterns · last 30 days</div>
+              <div className="ps-section-sub">
+                Each row is one hit, each cell one day. Click any past cell to
+                retro-mark it completed or clear it.
+              </div>
+              <div className="dh-heat">
+                <div
+                  className="dh-heat-grid"
+                  style={{
+                    gridTemplateColumns: `minmax(120px, 1fr) repeat(30, 14px)`,
+                  }}
+                >
+                  <div className="dh-heat-corner" />
+                  {recentDates.map((d, i) => {
+                    const isoDay = d.slice(8, 10);
+                    const isMondayish = new Date(d + "T00:00:00").getDay() === 1;
+                    return (
+                      <div
+                        key={d}
+                        className={
+                          "dh-heat-colcap" +
+                          (isMondayish ? " dh-heat-colcap--m" : "") +
+                          (i === recentDates.length - 1 ? " today" : "")
+                        }
+                        title={d}
+                      >
+                        {isoDay}
+                      </div>
+                    );
+                  })}
+                  {items.map((it) => {
+                    const pri = PRIO_META[it.task.priority] || PRIO_META.Medium;
+                    return (
+                      <Fragment key={it.id}>
+                        <div
+                          className="dh-heat-rowlabel"
+                          title={it.task.title}
+                        >
+                          {it.task.title}
+                        </div>
+                        {recentDates.map((d) => {
+                          const filled = !!heatByTask[it.task.id]?.[d];
+                          return (
+                            <button
+                              type="button"
+                              key={`${it.task.id}-${d}`}
+                              onClick={() => toggleHistorical(it.task.id, d)}
+                              className={
+                                "dh-heat-cell" + (filled ? " filled" : "")
+                              }
+                              style={{
+                                background: filled ? pri.color : undefined,
+                              }}
+                              aria-label={`${it.task.title} on ${d}: ${
+                                filled ? "done" : "not done"
+                              }`}
+                            />
+                          );
+                        })}
+                      </Fragment>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
 
           <div className="dh-add">
             <input
@@ -598,6 +726,63 @@ export default function TemplatesPage() {
         .dh-remove:hover {
           color: var(--ps-clay);
           border-color: var(--ps-clay);
+        }
+        .dh-heat {
+          margin-top: 12px;
+          background: #fff;
+          border: 1px solid var(--ps-ink-08);
+          border-radius: 12px;
+          padding: 14px 16px;
+          overflow-x: auto;
+        }
+        .dh-heat-grid {
+          display: grid;
+          gap: 3px;
+          min-width: 0;
+          align-items: center;
+        }
+        .dh-heat-corner {
+          grid-column: 1;
+        }
+        .dh-heat-colcap {
+          font-family: var(--ps-mono);
+          font-size: 9px;
+          letter-spacing: 0.04em;
+          text-align: center;
+          color: var(--ps-ink-40);
+        }
+        .dh-heat-colcap.today {
+          color: var(--ps-accent);
+          font-weight: 600;
+        }
+        .dh-heat-colcap--m {
+          color: var(--ps-ink-70);
+        }
+        .dh-heat-rowlabel {
+          font-size: 12px;
+          color: var(--ps-ink-70);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          padding-right: 10px;
+          line-height: 1.4;
+        }
+        .dh-heat-cell {
+          appearance: none;
+          border: 1px solid var(--ps-ink-08);
+          background: var(--ps-ink-05);
+          width: 14px;
+          height: 14px;
+          border-radius: 3px;
+          padding: 0;
+          cursor: pointer;
+          transition: filter 120ms;
+        }
+        .dh-heat-cell:hover {
+          border-color: var(--ps-ink-30);
+        }
+        .dh-heat-cell.filled {
+          border-color: transparent;
         }
         .dh-add {
           margin-top: 28px;
