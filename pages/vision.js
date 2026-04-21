@@ -483,8 +483,10 @@ export default function VisionPage() {
                   return (
                     <div key={key} className="vis-tile">
                       {img ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={img} alt={o.title} />
+                        <div className="vis-tile-img-wrap">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={img} alt={o.title} />
+                        </div>
                       ) : (
                         <div className="vis-tile-empty">+</div>
                       )}
@@ -905,15 +907,16 @@ export default function VisionPage() {
           inset: 0;
           width: 100%;
           height: 100%;
-          object-fit: cover;
+          object-fit: contain;
+          object-position: center;
           opacity: 0;
           transition: opacity 1400ms ease-in-out, transform 18s ease-in-out;
-          transform: scale(1.04);
-          filter: blur(2px);
+          transform: scale(1);
+          filter: blur(1px);
         }
         .vis-immerse-bg-img.active {
-          opacity: 0.32;
-          transform: scale(1.08);
+          opacity: 0.42;
+          transform: scale(1.02);
         }
         .vis-immerse-bg-veil {
           position: absolute;
@@ -999,8 +1002,13 @@ export default function VisionPage() {
         }
         .vis-board-hero {
           width: 100%;
-          max-height: 420px;
-          object-fit: cover;
+          /* Scale to the viewport without cropping. Letterboxing on the
+             matte is intentional so the full composition is visible. */
+          max-height: min(72vh, 640px);
+          object-fit: contain;
+          object-position: center;
+          display: block;
+          background: var(--ps-paper);
           border-radius: 14px;
           border: 1px solid var(--ps-ink-10);
         }
@@ -1027,14 +1035,27 @@ export default function VisionPage() {
           flex-direction: column;
           gap: 6px;
         }
-        .vis-tile img {
+        .vis-tile-img-wrap {
           width: 100%;
-          height: 120px;
-          object-fit: cover;
+          aspect-ratio: 4 / 3;
+          background: var(--ps-paper);
           border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          overflow: hidden;
+        }
+        .vis-tile-img-wrap img {
+          max-width: 100%;
+          max-height: 100%;
+          width: auto;
+          height: auto;
+          object-fit: contain;
+          display: block;
         }
         .vis-tile-empty {
-          height: 120px;
+          width: 100%;
+          aspect-ratio: 4 / 3;
           border-radius: 8px;
           background: var(--ps-paper);
           border: 1px dashed var(--ps-ink-15);
