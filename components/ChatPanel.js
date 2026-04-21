@@ -91,10 +91,11 @@ export default function ChatPanel({ isOverlay = false, isOpen = true, onClose })
     el.scrollTop = el.scrollHeight;
   }, [messages, isOpen, isLoadingHistory]);
 
-  // Observe the scroll container for size changes and re-pin. Handles
-  // late layout (fonts, markdown, image loads) that grows scrollHeight
-  // after the initial paint. Disengages once the user scrolls up so we
-  // don't fight them.
+  // Observe the scroll container for size/mutation changes and re-pin.
+  // Covers: initial paint before flex layout settles, async content
+  // (fonts, markdown, image loads) that grows scrollHeight after mount,
+  // and messages arriving after history load. Disengages once the user
+  // scrolls up so we don't fight them.
   const userScrolledUpRef = useRef(false);
   useEffect(() => {
     const el = scrollRef.current;
@@ -105,7 +106,6 @@ export default function ChatPanel({ isOverlay = false, isOpen = true, onClose })
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     };
 
-    // Pin a few times after initial mount to catch async content layout.
     pin();
     const timers = [
       setTimeout(pin, 50),
@@ -116,6 +116,14 @@ export default function ChatPanel({ isOverlay = false, isOpen = true, onClose })
 
     const ro = new ResizeObserver(() => pin());
     ro.observe(el);
+    // Re-attach a child observer whenever new bubbles get added —
+    // ResizeObserver on the container itself misses this when the
+    // container has a fixed height and only its children grow.
+    const mo = new MutationObserver(() => {
+      for (const child of el.children) ro.observe(child);
+      pin();
+    });
+    mo.observe(el, { childList: true, subtree: true, characterData: true });
     for (const child of el.children) ro.observe(child);
 
     const onScroll = () => {
@@ -126,10 +134,16 @@ export default function ChatPanel({ isOverlay = false, isOpen = true, onClose })
     };
     el.addEventListener("scroll", onScroll, { passive: true });
 
+    // Also pin on window load for the stragglers (font-face swaps etc).
+    const onLoad = () => pin();
+    window.addEventListener("load", onLoad);
+
     return () => {
       timers.forEach(clearTimeout);
       ro.disconnect();
+      mo.disconnect();
       el.removeEventListener("scroll", onScroll);
+      window.removeEventListener("load", onLoad);
     };
   }, [isLoadingHistory]);
 

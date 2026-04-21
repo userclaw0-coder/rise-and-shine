@@ -268,9 +268,9 @@ export default function PSCoach({
     el.scrollTop = el.scrollHeight;
   }, [messages, collapsed]);
 
-  // Observe the scroll container for size changes and keep it pinned
-  // until the user scrolls up. Handles async content layout on hard
-  // refresh where scrollHeight grows after the first paint.
+  // Observe size + child-list changes and pin to bottom. MutationObserver
+  // catches messages that arrive after the initial paint (which
+  // ResizeObserver on a fixed-height container can miss).
   const userScrolledUpRef = useRef(false);
   useEffect(() => {
     const el = bodyRef.current;
@@ -288,6 +288,11 @@ export default function PSCoach({
     ];
     const ro = new ResizeObserver(() => pin());
     ro.observe(el);
+    const mo = new MutationObserver(() => {
+      for (const child of el.children) ro.observe(child);
+      pin();
+    });
+    mo.observe(el, { childList: true, subtree: true, characterData: true });
     for (const child of el.children) ro.observe(child);
     const onScroll = () => {
       if (!bodyRef.current) return;
@@ -296,10 +301,14 @@ export default function PSCoach({
       userScrolledUpRef.current = !atBottom;
     };
     el.addEventListener("scroll", onScroll, { passive: true });
+    const onLoad = () => pin();
+    window.addEventListener("load", onLoad);
     return () => {
       timers.forEach(clearTimeout);
       ro.disconnect();
+      mo.disconnect();
       el.removeEventListener("scroll", onScroll);
+      window.removeEventListener("load", onLoad);
     };
   }, [hydrated, collapsed]);
 

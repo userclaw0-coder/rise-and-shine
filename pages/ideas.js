@@ -1,4 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDraggable,
+  useDroppable,
+} from "@dnd-kit/core";
 import PSShell from "../components/PSShell";
 import { useAuth } from "../hooks/useAuth";
 import { useRouter } from "next/router";
@@ -33,6 +41,53 @@ function statusToStage(status) {
   if (status === "promoted") return "promoted";
   if (status === "shaping") return "shaping";
   return "new";
+}
+
+function DroppableColumn({ id, children, active }) {
+  const { isOver, setNodeRef } = useDroppable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      className={
+        "ideas-col" +
+        (isOver ? " ideas-col--over" : "") +
+        (active ? " ideas-col--active" : "")
+      }
+    >
+      {children}
+    </div>
+  );
+}
+
+function DraggableCard({ id, onClick, selected, children }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    useDraggable({ id });
+  const style = transform
+    ? {
+        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+        zIndex: 50,
+      }
+    : undefined;
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={
+        "ideas-card" +
+        (selected ? " selected" : "") +
+        (isDragging ? " dragging" : "")
+      }
+      {...attributes}
+      {...listeners}
+      onClick={(e) => {
+        // Don't fire click if this was the end of a drag
+        if (isDragging) return;
+        onClick?.(e);
+      }}
+    >
+      {children}
+    </div>
+  );
 }
 
 export default function IdeasPage() {
@@ -113,12 +168,23 @@ export default function IdeasPage() {
   }
 
   async function setStatus(idea, nextStatus) {
+    if (!idea || idea.status === nextStatus) return;
     setBusy(idea.id);
+    setError("");
+    // Optimistic update
+    const prevStatus = idea.status;
+    setIdeas((l) =>
+      l.map((x) => (x.id === idea.id ? { ...x, status: nextStatus } : x))
+    );
     const res = await updateIdea(user.id, idea.id, { status: nextStatus });
-    if (!res.error && res.data) {
+    if (res.error) {
       setIdeas((l) =>
-        l.map((x) => (x.id === idea.id ? { ...x, status: nextStatus } : x))
+        l.map((x) => (x.id === idea.id ? { ...x, status: prevStatus } : x))
       );
+      const hint = /invalid input value for enum/i.test(res.error.message || "")
+        ? "Idea status enum missing values — run db/IDEAS_STATUS_ENUM.sql in Supabase."
+        : res.error.message || "Move failed.";
+      setError(hint);
     }
     setBusy("");
   }
@@ -126,11 +192,18 @@ export default function IdeasPage() {
   async function handleArchive(idea) {
     if (!window.confirm("Archive this idea?")) return;
     setBusy(idea.id);
+    setError("");
+    const prevStatus = idea.status;
+    setIdeas((l) =>
+      l.map((x) => (x.id === idea.id ? { ...x, status: "archived" } : x))
+    );
     const res = await archiveIdea(user.id, idea.id);
-    if (!res.error)
+    if (res.error) {
       setIdeas((l) =>
-        l.map((x) => (x.id === idea.id ? { ...x, status: "archived" } : x))
+        l.map((x) => (x.id === idea.id ? { ...x, status: prevStatus } : x))
       );
+      setError(res.error.message || "Archive failed.");
+    }
     setBusy("");
   }
 
@@ -156,6 +229,33 @@ export default function IdeasPage() {
       );
     }
     setBusy("");
+  }
+
+  const [dragActiveId, setDragActiveId] = useState(null);
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  );
+  function onDragStart(event) {
+    setDragActiveId(event.active?.id || null);
+  }
+  async function onDragEnd(event) {
+    setDragActiveId(null);
+    const ideaId = event.active?.id;
+    const target = event.over?.id;
+    if (!ideaId || !target) return;
+    const idea = ideas.find((x) => x.id === ideaId);
+    if (!idea) return;
+    const nextStatus =
+      target === "new" || target === "shaping" || target === "promoted" || target === "archived"
+        ? target
+        : null;
+    if (!nextStatus) return;
+    if (nextStatus === idea.status) return;
+    if (nextStatus === "promoted") {
+      // Promote runs extra side effects, so route through the handler
+      return handlePromoteToTask(idea);
+    }
+    return setStatus(idea, nextStatus);
   }
 
   async function scoreIdea(idea) {
@@ -289,48 +389,57 @@ export default function IdeasPage() {
           {loading && <div className="fit-empty">Loading…</div>}
 
           {!loading && view === "board" && (
-            <div className="ideas-board">
-              {STAGES.map((s) => (
-                <div key={s.id} className="ideas-col">
-                  <div className="ideas-col-head">
-                    <span
-                      className="ideas-col-dot"
-                      style={{ background: s.color }}
-                    />
-                    <div>
-                      <div className="ideas-col-label">{s.label}</div>
-                      <div className="ideas-col-sub">{s.sub}</div>
+            <DndContext
+              sensors={dndSensors}
+              onDragStart={onDragStart}
+              onDragEnd={onDragEnd}
+              onDragCancel={() => setDragActiveId(null)}
+            >
+              <div className="ideas-board">
+                {STAGES.map((s) => (
+                  <DroppableColumn
+                    key={s.id}
+                    id={s.id}
+                    active={!!dragActiveId}
+                  >
+                    <div className="ideas-col-head">
+                      <span
+                        className="ideas-col-dot"
+                        style={{ background: s.color }}
+                      />
+                      <div>
+                        <div className="ideas-col-label">{s.label}</div>
+                        <div className="ideas-col-sub">{s.sub}</div>
+                      </div>
+                      <div className="ideas-col-count">
+                        {grouped[s.id]?.length || 0}
+                      </div>
                     </div>
-                    <div className="ideas-col-count">
-                      {grouped[s.id]?.length || 0}
+                    <div className="ideas-col-items">
+                      {(grouped[s.id] || []).map((i) => (
+                        <DraggableCard
+                          key={i.id}
+                          id={i.id}
+                          selected={selectedId === i.id}
+                          onClick={() => setSelectedId(i.id)}
+                        >
+                          <div className="ideas-card-title">{i.title}</div>
+                          {i.details && (
+                            <div className="ideas-card-body">
+                              {(i.details || "").slice(0, 120)}
+                              {(i.details || "").length > 120 ? "…" : ""}
+                            </div>
+                          )}
+                        </DraggableCard>
+                      ))}
+                      {(grouped[s.id] || []).length === 0 && (
+                        <div className="ideas-col-empty">— drop here</div>
+                      )}
                     </div>
-                  </div>
-                  <div className="ideas-col-items">
-                    {(grouped[s.id] || []).map((i) => (
-                      <button
-                        key={i.id}
-                        className={
-                          "ideas-card" +
-                          (selectedId === i.id ? " selected" : "")
-                        }
-                        onClick={() => setSelectedId(i.id)}
-                      >
-                        <div className="ideas-card-title">{i.title}</div>
-                        {i.details && (
-                          <div className="ideas-card-body">
-                            {(i.details || "").slice(0, 120)}
-                            {(i.details || "").length > 120 ? "…" : ""}
-                          </div>
-                        )}
-                      </button>
-                    ))}
-                    {(grouped[s.id] || []).length === 0 && (
-                      <div className="ideas-col-empty">—</div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+                  </DroppableColumn>
+                ))}
+              </div>
+            </DndContext>
           )}
 
           {!loading && view === "list" && (
@@ -672,6 +781,14 @@ export default function IdeasPage() {
           display: flex;
           flex-direction: column;
           gap: 8px;
+          transition: border-color 120ms, background 120ms;
+        }
+        .ideas-col--active {
+          border-style: dashed;
+        }
+        .ideas-col--over {
+          border-color: var(--ps-accent);
+          background: var(--ps-accent-soft);
         }
         .ideas-col-head {
           display: grid;
@@ -723,9 +840,11 @@ export default function IdeasPage() {
           border: 1px solid var(--ps-ink-08);
           border-radius: 8px;
           padding: 10px 12px;
-          cursor: pointer;
-          transition: border-color 120ms, box-shadow 120ms;
+          cursor: grab;
+          transition: border-color 120ms, box-shadow 120ms, transform 0ms;
           font-family: inherit;
+          user-select: none;
+          touch-action: none;
         }
         .ideas-card:hover {
           border-color: var(--ps-ink-30);
@@ -733,6 +852,11 @@ export default function IdeasPage() {
         .ideas-card.selected {
           border-color: var(--ps-accent);
           box-shadow: 0 0 0 2px var(--ps-accent-soft);
+        }
+        .ideas-card.dragging {
+          cursor: grabbing;
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+          border-color: var(--ps-accent);
         }
         .ideas-card-title {
           font-family: var(--ps-serif);
