@@ -219,6 +219,18 @@ export default function VisionPage() {
     return Math.min(99, Math.round(raw));
   }, [outcomeList, thriveList]);
 
+  // Every image the user has composed on the board — the hero + each
+  // field tile. Immerse cycles these in the background, so Compose
+  // edits automatically feed Immerse with no extra wiring.
+  const immerseImages = useMemo(() => {
+    const list = [];
+    if (boardUrl) list.push(boardUrl);
+    for (const url of Object.values(fieldImages || {})) {
+      if (url && !list.includes(url)) list.push(url);
+    }
+    return list;
+  }, [boardUrl, fieldImages]);
+
   const scenes = useMemo(() => {
     const list = [];
     if (identityList.length > 0) {
@@ -379,6 +391,25 @@ export default function VisionPage() {
 
           {mode === "immerse" && (
             <div className="vis-immerse">
+              <div className="vis-immerse-bg" aria-hidden>
+                {immerseImages.map((url, i) => {
+                  const active =
+                    immerseImages.length > 0 &&
+                    i === imIdx % immerseImages.length;
+                  return (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      key={url}
+                      src={url}
+                      alt=""
+                      className={
+                        "vis-immerse-bg-img" + (active ? " active" : "")
+                      }
+                    />
+                  );
+                })}
+                <div className="vis-immerse-bg-veil" />
+              </div>
               <div className="vis-immerse-scene">
                 <div className="vis-immerse-tag">
                   {scenes[imIdx]?.tag} · present moment
@@ -859,6 +890,48 @@ export default function VisionPage() {
           background:
             radial-gradient(1200px 600px at 50% 50%, rgba(185, 115, 22, 0.08), transparent 60%),
             #0b0908;
+          position: relative;
+          overflow: hidden;
+        }
+        .vis-immerse-bg {
+          position: absolute;
+          inset: 0;
+          z-index: 0;
+          pointer-events: none;
+          overflow: hidden;
+        }
+        .vis-immerse-bg-img {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          opacity: 0;
+          transition: opacity 1400ms ease-in-out, transform 18s ease-in-out;
+          transform: scale(1.04);
+          filter: blur(2px);
+        }
+        .vis-immerse-bg-img.active {
+          opacity: 0.32;
+          transform: scale(1.08);
+        }
+        .vis-immerse-bg-veil {
+          position: absolute;
+          inset: 0;
+          background:
+            radial-gradient(
+              80% 60% at 50% 50%,
+              rgba(11, 9, 8, 0.25) 0%,
+              rgba(11, 9, 8, 0.7) 70%,
+              rgba(11, 9, 8, 0.9) 100%
+            );
+        }
+        .vis-immerse-scene,
+        .vis-immerse-controls,
+        .vis-immerse-bg + .vis-immerse-scene,
+        .vis-immerse > div:not(.vis-immerse-bg) {
+          position: relative;
+          z-index: 1;
         }
         .vis-immerse-scene {
           max-width: 720px;
