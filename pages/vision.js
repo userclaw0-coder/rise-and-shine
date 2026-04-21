@@ -37,24 +37,23 @@ const MODES = [
 ];
 
 // Auto-sizing textarea — grows to fit its content so the user can
-// always see everything they've written.
-function AutoTextarea({ value, onChange, minRows = 2, ...rest }) {
+// always see everything they've written. `minRows` sets the empty-state
+// floor; content always expands beyond it as needed.
+function AutoTextarea({ value, onChange, minRows = 2, style, ...rest }) {
   const ref = useRef(null);
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
     el.style.height = "auto";
-    // scrollHeight is the full content height; min line-based floor
-    // prevents collapse on empty.
-    const minPx = minRows * 22 + 12;
-    el.style.height = Math.max(minPx, el.scrollHeight) + "px";
-  }, [value, minRows]);
+    el.style.height = el.scrollHeight + "px";
+  }, [value]);
   return (
     <textarea
       ref={ref}
       value={value}
       onChange={onChange}
       rows={minRows}
+      style={{ resize: "none", overflow: "hidden", ...style }}
       {...rest}
     />
   );
@@ -760,20 +759,22 @@ export default function VisionPage() {
                   <div className="ps-eyebrow">Vision alignment</div>
                   <div className="vis-identity-row">
                     <span className="vis-identity-prefix">I am</span>
-                    <input
+                    <AutoTextarea
                       className="vis-identity-input"
                       value={identity}
                       onChange={(e) => setIdentity(e.target.value)}
                       placeholder="calm, disciplined, curious…"
+                      minRows={1}
                     />
                   </div>
                   <div className="vis-immediate">
                     <span className="vis-chip">Next step</span>
-                    <input
+                    <AutoTextarea
                       className="vis-immediate-input"
                       value={immediateStep}
                       onChange={(e) => setImmediateStep(e.target.value)}
                       placeholder="The smallest next move you could make today"
+                      minRows={1}
                     />
                   </div>
                 </div>
@@ -787,7 +788,7 @@ export default function VisionPage() {
                 </div>
                 {thriveList.map((t, i) => (
                   <div key={i} className="vis-bar-row">
-                    <input
+                    <AutoTextarea
                       className="vis-bar-input"
                       value={t}
                       onChange={(e) =>
@@ -797,6 +798,7 @@ export default function VisionPage() {
                           return lines.join("\n");
                         })
                       }
+                      minRows={1}
                     />
                     <div className="vis-bar">
                       <div
@@ -844,7 +846,7 @@ export default function VisionPage() {
                   {outcomes.split("\n").map((line, i) => (
                     <div key={i} className="vis-outcome">
                       <div className="vis-outcome-row">
-                        <input
+                        <AutoTextarea
                           className="vis-outcome-input"
                           value={line}
                           onChange={(e) =>
@@ -855,6 +857,7 @@ export default function VisionPage() {
                             })
                           }
                           placeholder="An outcome this quarter"
+                          minRows={1}
                         />
                         <button
                           type="button"
@@ -903,11 +906,12 @@ export default function VisionPage() {
                 <div className="ps-section-sub">
                   Comma-separated. The top 3 focus areas for this block.
                 </div>
-                <input
+                <AutoTextarea
                   className="vis-quarter-input"
                   value={quarterFocus}
                   onChange={(e) => setQuarterFocus(e.target.value)}
                   placeholder="Ensenada, Business, Health"
+                  minRows={1}
                 />
               </div>
 
@@ -918,7 +922,7 @@ export default function VisionPage() {
                 </div>
                 {leverage.split("\n").map((line, i) => (
                   <div key={i} className="vis-bar-row">
-                    <input
+                    <AutoTextarea
                       className="vis-bar-input"
                       value={line}
                       onChange={(e) =>
@@ -929,6 +933,7 @@ export default function VisionPage() {
                         })
                       }
                       placeholder="A high-leverage move"
+                      minRows={1}
                     />
                     <button
                       type="button"
@@ -1418,6 +1423,10 @@ export default function VisionPage() {
           color: var(--ps-ink);
           padding: 2px 0 3px;
           outline: none;
+          resize: none;
+          overflow: hidden;
+          word-break: break-word;
+          min-width: 0;
         }
         .vis-identity-input:focus {
           border-bottom-color: var(--ps-accent);
@@ -1430,10 +1439,15 @@ export default function VisionPage() {
           border-bottom: 1px dashed var(--ps-ink-15);
           background: transparent;
           font-size: 13px;
+          line-height: 1.5;
           color: var(--ps-ink-80);
           padding: 2px 0 3px;
           outline: none;
           font-family: inherit;
+          resize: none;
+          overflow: hidden;
+          word-break: break-word;
+          min-width: 0;
         }
         .vis-immediate-input:focus {
           border-bottom-color: var(--ps-accent);
@@ -1444,12 +1458,18 @@ export default function VisionPage() {
           border: 1px solid transparent;
           background: transparent;
           font-size: 13px;
+          line-height: 1.5;
           color: var(--ps-ink-80);
           padding: 4px 8px;
           border-radius: 6px;
           width: 100%;
           outline: none;
           font-family: inherit;
+          resize: none;
+          overflow: hidden;
+          word-break: break-word;
+          min-width: 0;
+          box-sizing: border-box;
         }
         .vis-bar-input:hover {
           border-color: var(--ps-ink-08);
@@ -1461,8 +1481,9 @@ export default function VisionPage() {
         }
         .vis-outcome-row {
           display: flex;
-          align-items: center;
+          align-items: flex-start;
           gap: 6px;
+          min-width: 0;
         }
         .vis-outcome-input {
           flex: 1;
@@ -1470,11 +1491,17 @@ export default function VisionPage() {
           border: 1px solid transparent;
           background: transparent;
           font-size: 13px;
+          line-height: 1.5;
           color: var(--ps-ink-80);
           padding: 4px 8px;
           border-radius: 6px;
           outline: none;
           font-family: inherit;
+          resize: none;
+          overflow: hidden;
+          word-break: break-word;
+          min-width: 0;
+          box-sizing: border-box;
         }
         .vis-outcome-input:hover {
           border-color: var(--ps-ink-08);
@@ -1493,8 +1520,13 @@ export default function VisionPage() {
           border-radius: 8px;
           font-family: inherit;
           font-size: 13px;
+          line-height: 1.5;
           color: var(--ps-ink-80);
           outline: none;
+          resize: none;
+          overflow: hidden;
+          word-break: break-word;
+          box-sizing: border-box;
         }
         .vis-quarter-input:focus {
           border-color: var(--ps-accent);
@@ -1591,7 +1623,7 @@ export default function VisionPage() {
         }
         .vis-bar-row {
           display: grid;
-          grid-template-columns: 1fr 140px 28px;
+          grid-template-columns: minmax(0, 1fr) 140px 28px;
           gap: 10px;
           align-items: center;
           padding: 6px 0;
