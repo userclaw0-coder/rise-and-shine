@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import PSShell from "../components/PSShell";
 import { useAuth } from "../hooks/useAuth";
 import { getUserProfile, upsertUserProfile } from "../lib/db";
@@ -28,6 +35,30 @@ const MODES = [
   { id: "clarify", label: "Clarify", sub: "Upgrade your goals", icon: "✎" },
   { id: "align", label: "Align", sub: "See the system", icon: "◇" },
 ];
+
+// Auto-sizing textarea — grows to fit its content so the user can
+// always see everything they've written.
+function AutoTextarea({ value, onChange, minRows = 2, ...rest }) {
+  const ref = useRef(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    // scrollHeight is the full content height; min line-based floor
+    // prevents collapse on empty.
+    const minPx = minRows * 22 + 12;
+    el.style.height = Math.max(minPx, el.scrollHeight) + "px";
+  }, [value, minRows]);
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      onChange={onChange}
+      rows={minRows}
+      {...rest}
+    />
+  );
+}
 
 function normalizeOutcomes(list) {
   return (list || []).map((o, i) => ({
@@ -523,11 +554,12 @@ export default function VisionPage() {
                     </div>
                   </div>
                 </div>
-                <textarea
+                <AutoTextarea
                   className="vis-textarea"
                   placeholder="e.g. 'get in shape', 'build a successful business', 'spend more time with family'"
                   value={upgradeInput}
                   onChange={(e) => setUpgradeInput(e.target.value)}
+                  minRows={2}
                 />
                 <div className="vis-upgrade-actions">
                   <button
@@ -598,11 +630,12 @@ export default function VisionPage() {
                   One per line. These become tiles on the board and chips on
                   Today.
                 </div>
-                <textarea
+                <AutoTextarea
                   className="vis-textarea"
                   value={outcomes}
                   onChange={(e) => setOutcomes(e.target.value)}
                   placeholder="Ship v1 positioning doc&#10;Lock Q2 rental plan"
+                  minRows={3}
                 />
               </div>
 
@@ -611,11 +644,12 @@ export default function VisionPage() {
                 <div className="vis-field-sub">
                   One per line. Lived as baseline standards.
                 </div>
-                <textarea
+                <AutoTextarea
                   className="vis-textarea"
                   value={thriveGoals}
                   onChange={(e) => setThriveGoals(e.target.value)}
                   placeholder="15% body fat, 1x bench, 2x squat&#10;Business generating $10k/mo&#10;Hawkwood on the water"
+                  minRows={3}
                 />
               </div>
 
@@ -624,10 +658,11 @@ export default function VisionPage() {
                 <div className="vis-field-sub">
                   One per line. The compounding moves.
                 </div>
-                <textarea
+                <AutoTextarea
                   className="vis-textarea"
                   value={leverage}
                   onChange={(e) => setLeverage(e.target.value)}
+                  minRows={3}
                 />
               </div>
 
@@ -642,7 +677,7 @@ export default function VisionPage() {
                   {NEEDS_META.map((n) => (
                     <div key={n.key} className="vis-need-card">
                       <div className="vis-need-label">{n.label}</div>
-                      <textarea
+                      <AutoTextarea
                         className="vis-input vis-need-input"
                         placeholder={`Strategy — e.g. "${n.example}"`}
                         value={needsStrategies[n.key] || ""}
@@ -652,8 +687,9 @@ export default function VisionPage() {
                             [n.key]: e.target.value,
                           }))
                         }
+                        minRows={2}
                       />
-                      <textarea
+                      <AutoTextarea
                         className="vis-input vis-need-input vis-need-risk"
                         placeholder={`Risk — e.g. "${n.risk}"`}
                         value={needsRisks[n.key] || ""}
@@ -663,6 +699,7 @@ export default function VisionPage() {
                             [n.key]: e.target.value,
                           }))
                         }
+                        minRows={2}
                       />
                     </div>
                   ))}
@@ -721,87 +758,207 @@ export default function VisionPage() {
                 </div>
                 <div className="vis-align-hero-body">
                   <div className="ps-eyebrow">Vision alignment</div>
-                  <div className="vis-identity">
-                    I am {identityList.join(", ") || "— (set in Clarify)"}.
+                  <div className="vis-identity-row">
+                    <span className="vis-identity-prefix">I am</span>
+                    <input
+                      className="vis-identity-input"
+                      value={identity}
+                      onChange={(e) => setIdentity(e.target.value)}
+                      placeholder="calm, disciplined, curious…"
+                    />
                   </div>
-                  {immediateStep && (
-                    <div className="vis-immediate">
-                      <span className="vis-chip">Next step</span>
-                      {immediateStep}
-                    </div>
-                  )}
+                  <div className="vis-immediate">
+                    <span className="vis-chip">Next step</span>
+                    <input
+                      className="vis-immediate-input"
+                      value={immediateStep}
+                      onChange={(e) => setImmediateStep(e.target.value)}
+                      placeholder="The smallest next move you could make today"
+                    />
+                  </div>
                 </div>
               </div>
 
-              {thriveList.length > 0 && (
-                <div className="vis-block">
-                  <div className="ps-section-title">Thrive goals</div>
-                  <div className="ps-section-sub">
-                    Non-negotiable baselines, all lived at once.
+              <div className="vis-block">
+                <div className="ps-section-title">Thrive goals</div>
+                <div className="ps-section-sub">
+                  Non-negotiable baselines, all lived at once. Edit in place;
+                  changes autosave.
+                </div>
+                {thriveList.map((t, i) => (
+                  <div key={i} className="vis-bar-row">
+                    <input
+                      className="vis-bar-input"
+                      value={t}
+                      onChange={(e) =>
+                        setThriveGoals((prev) => {
+                          const lines = prev.split("\n");
+                          lines[i] = e.target.value;
+                          return lines.join("\n");
+                        })
+                      }
+                    />
+                    <div className="vis-bar">
+                      <div
+                        className="vis-bar-fill"
+                        style={{ width: "45%", background: "var(--ps-indigo)" }}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      className="vis-row-remove"
+                      aria-label="Remove"
+                      onClick={() =>
+                        setThriveGoals((prev) =>
+                          prev
+                            .split("\n")
+                            .filter((_, idx) => idx !== i)
+                            .join("\n")
+                        )
+                      }
+                    >
+                      ×
+                    </button>
                   </div>
-                  {thriveList.map((t, i) => (
-                    <div key={i} className="vis-bar-row">
-                      <div className="vis-bar-label">{t}</div>
-                      <div className="vis-bar">
+                ))}
+                <button
+                  type="button"
+                  className="vis-row-add"
+                  onClick={() =>
+                    setThriveGoals((prev) =>
+                      (prev.trimEnd() ? prev.trimEnd() + "\n" : "") + "New thrive goal"
+                    )
+                  }
+                >
+                  + add thrive goal
+                </button>
+              </div>
+
+              <div className="vis-block">
+                <div className="ps-section-title">Desired outcomes</div>
+                <div className="ps-section-sub">
+                  90-day bets. Each becomes a tile on Compose and a tag target
+                  on tasks.
+                </div>
+                <div className="vis-outcomes">
+                  {outcomes.split("\n").map((line, i) => (
+                    <div key={i} className="vis-outcome">
+                      <div className="vis-outcome-row">
+                        <input
+                          className="vis-outcome-input"
+                          value={line}
+                          onChange={(e) =>
+                            setOutcomes((prev) => {
+                              const lines = prev.split("\n");
+                              lines[i] = e.target.value;
+                              return lines.join("\n");
+                            })
+                          }
+                          placeholder="An outcome this quarter"
+                        />
+                        <button
+                          type="button"
+                          className="vis-row-remove"
+                          aria-label="Remove"
+                          onClick={() =>
+                            setOutcomes((prev) =>
+                              prev
+                                .split("\n")
+                                .filter((_, idx) => idx !== i)
+                                .join("\n")
+                            )
+                          }
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <div className="vis-outcome-bar">
                         <div
-                          className="vis-bar-fill"
+                          className="vis-outcome-fill"
                           style={{
-                            width: "45%",
-                            background: "var(--ps-indigo)",
+                            width:
+                              (outcomeList[i]?.progress ?? 30) + "%",
+                            background: "var(--ps-accent)",
                           }}
                         />
                       </div>
-                      <div className="vis-bar-num">—</div>
                     </div>
                   ))}
                 </div>
-              )}
+                <button
+                  type="button"
+                  className="vis-row-add"
+                  onClick={() =>
+                    setOutcomes((prev) =>
+                      (prev.trimEnd() ? prev.trimEnd() + "\n" : "") + "New outcome"
+                    )
+                  }
+                >
+                  + add outcome
+                </button>
+              </div>
 
-              {outcomeList.length > 0 && (
-                <div className="vis-block">
-                  <div className="ps-section-title">Desired outcomes</div>
-                  <div className="vis-outcomes">
-                    {outcomeList.map((o) => (
-                      <div key={o.id} className="vis-outcome">
-                        <div className="vis-outcome-label">{o.title}</div>
-                        <div className="vis-outcome-bar">
-                          <div
-                            className="vis-outcome-fill"
-                            style={{
-                              width: (o.progress ?? 30) + "%",
-                              background: "var(--ps-accent)",
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ))}
+              <div className="vis-block">
+                <div className="ps-section-title">This quarter</div>
+                <div className="ps-section-sub">
+                  Comma-separated. The top 3 focus areas for this block.
+                </div>
+                <input
+                  className="vis-quarter-input"
+                  value={quarterFocus}
+                  onChange={(e) => setQuarterFocus(e.target.value)}
+                  placeholder="Ensenada, Business, Health"
+                />
+              </div>
+
+              <div className="vis-block">
+                <div className="ps-section-title">Leverage focus</div>
+                <div className="ps-section-sub">
+                  One per line. The compounding moves.
+                </div>
+                {leverage.split("\n").map((line, i) => (
+                  <div key={i} className="vis-bar-row">
+                    <input
+                      className="vis-bar-input"
+                      value={line}
+                      onChange={(e) =>
+                        setLeverage((prev) => {
+                          const lines = prev.split("\n");
+                          lines[i] = e.target.value;
+                          return lines.join("\n");
+                        })
+                      }
+                      placeholder="A high-leverage move"
+                    />
+                    <button
+                      type="button"
+                      className="vis-row-remove"
+                      aria-label="Remove"
+                      onClick={() =>
+                        setLeverage((prev) =>
+                          prev
+                            .split("\n")
+                            .filter((_, idx) => idx !== i)
+                            .join("\n")
+                        )
+                      }
+                    >
+                      ×
+                    </button>
                   </div>
-                </div>
-              )}
-
-              {quarterList.length > 0 && (
-                <div className="vis-block">
-                  <div className="ps-section-title">This quarter</div>
-                  <div className="vis-pills">
-                    {quarterList.map((q, i) => (
-                      <span key={i} className="vis-pill">
-                        {q}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {leverageList.length > 0 && (
-                <div className="vis-block">
-                  <div className="ps-section-title">Leverage focus</div>
-                  <ul className="vis-list">
-                    {leverageList.map((l, i) => (
-                      <li key={i}>{l}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+                ))}
+                <button
+                  type="button"
+                  className="vis-row-add"
+                  onClick={() =>
+                    setLeverage((prev) =>
+                      (prev.trimEnd() ? prev.trimEnd() + "\n" : "") + "New leverage move"
+                    )
+                  }
+                >
+                  + add leverage move
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -1190,7 +1347,11 @@ export default function VisionPage() {
           color: var(--ps-ink-80);
           line-height: 1.55;
         }
-        .vis-textarea { min-height: 110px; resize: vertical; }
+        .vis-textarea {
+          min-height: 60px;
+          resize: none;
+          overflow: hidden;
+        }
         .vis-needs-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
@@ -1214,9 +1375,11 @@ export default function VisionPage() {
           color: var(--ps-ink-60);
         }
         .vis-need-input {
-          min-height: 48px;
+          min-height: 36px;
           font-size: 12.5px;
           padding: 8px 10px;
+          resize: none;
+          overflow: hidden;
         }
         .vis-need-risk {
           border-color: var(--ps-clay-soft) !important;
@@ -1229,6 +1392,148 @@ export default function VisionPage() {
         }
 
         .vis-align { display: flex; flex-direction: column; gap: 22px; }
+        .vis-identity-row {
+          display: flex;
+          align-items: baseline;
+          gap: 8px;
+          margin-top: 6px;
+        }
+        .vis-identity-prefix {
+          font-family: var(--ps-serif);
+          font-size: 22px;
+          letter-spacing: -0.015em;
+          color: var(--ps-ink-70);
+          flex-shrink: 0;
+        }
+        .vis-identity-input {
+          flex: 1;
+          appearance: none;
+          border: none;
+          border-bottom: 1px dashed var(--ps-ink-15);
+          background: transparent;
+          font-family: var(--ps-serif);
+          font-size: 22px;
+          letter-spacing: -0.015em;
+          line-height: 1.3;
+          color: var(--ps-ink);
+          padding: 2px 0 3px;
+          outline: none;
+        }
+        .vis-identity-input:focus {
+          border-bottom-color: var(--ps-accent);
+          border-bottom-style: solid;
+        }
+        .vis-immediate-input {
+          flex: 1;
+          appearance: none;
+          border: none;
+          border-bottom: 1px dashed var(--ps-ink-15);
+          background: transparent;
+          font-size: 13px;
+          color: var(--ps-ink-80);
+          padding: 2px 0 3px;
+          outline: none;
+          font-family: inherit;
+        }
+        .vis-immediate-input:focus {
+          border-bottom-color: var(--ps-accent);
+          border-bottom-style: solid;
+        }
+        .vis-bar-input {
+          appearance: none;
+          border: 1px solid transparent;
+          background: transparent;
+          font-size: 13px;
+          color: var(--ps-ink-80);
+          padding: 4px 8px;
+          border-radius: 6px;
+          width: 100%;
+          outline: none;
+          font-family: inherit;
+        }
+        .vis-bar-input:hover {
+          border-color: var(--ps-ink-08);
+          background: var(--ps-paper);
+        }
+        .vis-bar-input:focus {
+          border-color: var(--ps-accent);
+          background: var(--ps-paper);
+        }
+        .vis-outcome-row {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .vis-outcome-input {
+          flex: 1;
+          appearance: none;
+          border: 1px solid transparent;
+          background: transparent;
+          font-size: 13px;
+          color: var(--ps-ink-80);
+          padding: 4px 8px;
+          border-radius: 6px;
+          outline: none;
+          font-family: inherit;
+        }
+        .vis-outcome-input:hover {
+          border-color: var(--ps-ink-08);
+          background: var(--ps-paper);
+        }
+        .vis-outcome-input:focus {
+          border-color: var(--ps-accent);
+          background: var(--ps-paper);
+        }
+        .vis-quarter-input {
+          width: 100%;
+          appearance: none;
+          border: 1px solid var(--ps-ink-10);
+          background: var(--ps-paper);
+          padding: 8px 10px;
+          border-radius: 8px;
+          font-family: inherit;
+          font-size: 13px;
+          color: var(--ps-ink-80);
+          outline: none;
+        }
+        .vis-quarter-input:focus {
+          border-color: var(--ps-accent);
+        }
+        .vis-row-remove {
+          appearance: none;
+          border: none;
+          background: transparent;
+          color: var(--ps-ink-40);
+          font-size: 16px;
+          line-height: 1;
+          cursor: pointer;
+          padding: 4px 6px;
+          border-radius: 4px;
+          flex-shrink: 0;
+        }
+        .vis-row-remove:hover {
+          color: var(--ps-clay);
+          background: var(--ps-clay-soft);
+        }
+        .vis-row-add {
+          appearance: none;
+          border: 1px dashed var(--ps-ink-15);
+          background: transparent;
+          padding: 6px 12px;
+          border-radius: 6px;
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          color: var(--ps-ink-60);
+          cursor: pointer;
+          margin-top: 4px;
+          align-self: flex-start;
+        }
+        .vis-row-add:hover {
+          color: var(--ps-accent);
+          border-color: var(--ps-accent);
+        }
         .vis-align-hero {
           display: grid;
           grid-template-columns: auto 1fr;
@@ -1286,10 +1591,10 @@ export default function VisionPage() {
         }
         .vis-bar-row {
           display: grid;
-          grid-template-columns: 1fr 140px 42px;
+          grid-template-columns: 1fr 140px 28px;
           gap: 10px;
           align-items: center;
-          padding: 8px 0;
+          padding: 6px 0;
           border-bottom: 1px solid var(--ps-ink-05);
         }
         .vis-bar-row:last-child { border-bottom: none; }
