@@ -363,8 +363,6 @@ export default function ProjectPage() {
     return `${days}d ago`;
   }, [tasks]);
 
-  if (!user) return null;
-
   const alignmentScore = useMemo(() => {
     const roots = tasks.filter((t) => !t.parent_task_id);
     return computeProjectAlignment(roots, mantra, narrative);
@@ -376,6 +374,8 @@ export default function ProjectPage() {
     if (!ts) return null;
     return Math.max(0, Math.round((Date.now() - ts) / 86400000));
   }, [lastAlignedAt]);
+
+  if (!user) return null;
 
   const stalenessTone =
     daysSinceAligned == null
