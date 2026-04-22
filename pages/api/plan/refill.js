@@ -57,6 +57,7 @@ export default async function handler(req, res) {
       categories,
       { data: completedEvents, error: compErr },
       { data: profileRow, error: profileErr },
+      { data: workspaceRows, error: wsErr },
     ] = await Promise.all([
       listBacklogTasksForActor(userId, { includeArchived: false }),
       listAccessibleCategoriesWithMeta(userId),
@@ -67,7 +68,14 @@ export default async function handler(req, res) {
         .eq("event_type", "completed")
         .order("created_at", { ascending: false }),
       supabase.from("user_profile").select("profile").eq("user_id", userId).maybeSingle(),
+      supabase
+        .from("shared_project_workspaces")
+        .select("category_id, workspace")
+        .eq("owner_user_id", userId),
     ]);
+    if (wsErr) {
+      // non-fatal; arbiter signals just default to nothing
+    }
 
     if (compErr) throw compErr;
 
@@ -123,6 +131,43 @@ export default async function handler(req, res) {
       .filter((t) => !todayCompletedIds.has(t.id))
       .filter((t) => t.category !== "Daily Repeat")
       .filter((t) => !t.tags.includes("blocked") && !t.tags.includes("waiting"));
+    // --- Cross-project arbiter signals ---
+    const nextActionTaskIds = new Set();
+    const staleProjectCategoryIds = new Set();
+    const THIRTY_DAYS_MS = 30 * 86400 * 1000;
+    for (const row of workspaceRows || []) {
+      const ws = row.workspace || {};
+      if (ws.next_action?.task_id) nextActionTaskIds.add(ws.next_action.task_id);
+      const alignedAt = ws.last_aligned_at ? new Date(ws.last_aligned_at).getTime() : 0;
+      if (!alignedAt || Date.now() - alignedAt > THIRTY_DAYS_MS) {
+        staleProjectCategoryIds.add(String(row.category_id));
+      }
+    }
+    const quarterFocusOutcomeIds = new Set(
+      Array.isArray(profile.quarter_focus) ? profile.quarter_focus.map(String) : []
+    );
+    const dailyCap = prefs.daily_capacity || {};
+    const capacity = dailyCap[today] || "normal";
+    const activeSituations = Array.isArray(prefs.life_situations)
+      ? prefs.life_situations.filter((s) => !s.archived_at)
+      : [];
+    const lifeSituationKeywords = new Set();
+    for (const s of activeSituations) {
+      const parts = String(s.label || "")
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter((w) => w.length >= 3);
+      for (const w of parts) lifeSituationKeywords.add(w);
+    }
+
+    const arbiterOptions = {
+      nextActionTaskIds,
+      quarterFocusOutcomeIds,
+      capacity,
+      lifeSituationKeywords,
+      staleProjectCategoryIds,
+    };
+
     const reduced = reduceParentsToBestSubtask(filtered, {
       dailyTemplateTaskIds: [],
       mode: chosenMode,
@@ -130,6 +175,7 @@ export default async function handler(req, res) {
       lastCompletedMap,
       baseCategoryWeights: effectiveWeights,
       quickWinMinutes: quick_win_minutes ?? prefs.quick_win_definition_minutes,
+      ...arbiterOptions,
     });
 
     const chosen = chooseKeyOutcomes(reduced, {
@@ -138,6 +184,7 @@ export default async function handler(req, res) {
       lastCompletedMap,
       baseCategoryWeights: effectiveWeights,
       quickWinMinutes: quick_win_minutes ?? prefs.quick_win_definition_minutes,
+      ...arbiterOptions,
     });
 
     const newQueue = buildQueueFromChosen(chosen);

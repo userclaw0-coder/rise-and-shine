@@ -101,6 +101,14 @@ export default function TodayPage() {
   const [capacity, setCapacity] = useState("normal");
   const contextSaveTimer = useRef(null);
 
+  // Morning approvals
+  const [morningProposals, setMorningProposals] = useState([]);
+  const [morningOpen, setMorningOpen] = useState(false);
+  const [morningLoading, setMorningLoading] = useState(false);
+  const [morningApproved, setMorningApproved] = useState({});
+  const [morningApplying, setMorningApplying] = useState(false);
+  const morningCheckedRef = useRef(false);
+
   const dateStr = todayStr();
 
   const load = useCallback(async () => {
@@ -229,6 +237,71 @@ export default function TodayPage() {
     load();
   }, [load]);
 
+  // Morning approvals — once per local morning, after 4am, if not dismissed.
+  useEffect(() => {
+    if (!user || loading) return;
+    if (morningCheckedRef.current) return;
+    const prefs = profile?.profile?.preferences || {};
+    const lastDismissed = prefs.morning_approvals?.last_dismissed_date || null;
+    const hour = new Date().getHours();
+    if (lastDismissed === dateStr) return;
+    if (hour < 4) return;
+    morningCheckedRef.current = true;
+
+    (async () => {
+      setMorningLoading(true);
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        if (!token) return;
+        const res = await fetch("/api/morning/approvals", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const body = await res.json();
+        const list = Array.isArray(body?.proposals) ? body.proposals : [];
+        setMorningProposals(list);
+        if (list.length > 0) {
+          // Default: all approved. User can uncheck individual ones.
+          const def = {};
+          for (const p of list) def[p.id] = true;
+          setMorningApproved(def);
+        }
+      } catch {
+        // silent
+      } finally {
+        setMorningLoading(false);
+      }
+    })();
+  }, [user, loading, profile, dateStr]);
+
+  async function applyMorning(skip = false) {
+    if (morningApplying) return;
+    setMorningApplying(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) return;
+      const approved = skip
+        ? []
+        : morningProposals.filter((p) => morningApproved[p.id]);
+      await fetch("/api/morning/approvals", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ approved }),
+      });
+      setMorningProposals([]);
+      setMorningOpen(false);
+      // Refresh Today data so promotions land.
+      await load();
+    } finally {
+      setMorningApplying(false);
+    }
+  }
+
   // Debounced save for daily context text
   useEffect(() => {
     if (!user || loading) return;
@@ -311,6 +384,9 @@ export default function TodayPage() {
       await setTaskCompletionForDate(user.id, task.id, dateStr, next);
       if (next) {
         await updateTaskStatusWithEvent(user.id, task.id, "done");
+        // Fire-and-forget: promote the next ≤30m candidate in this
+        // project's next_action slot if this task was the active one.
+        fireAutoRefill(task.id);
       } else {
         await updateTaskStatusWithEvent(user.id, task.id, "todo");
       }
@@ -318,6 +394,24 @@ export default function TodayPage() {
       setCompleted((c) => ({ ...c, [task.id]: !next }));
     } finally {
       setBusyTask(null);
+    }
+  }
+
+  async function fireAutoRefill(taskId) {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) return;
+      fetch("/api/tasks/auto-refill", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ task_id: taskId }),
+      }).catch(() => {});
+    } catch {
+      // silent — auto-refill is best-effort
     }
   }
 
@@ -510,6 +604,114 @@ export default function TodayPage() {
           </p>
 
           {error && <div className="today-error">{error}</div>}
+
+          {morningProposals.length > 0 && !morningOpen && (
+            <button
+              type="button"
+              className="today-morning-banner"
+              onClick={() => setMorningOpen(true)}
+            >
+              <span className="today-morning-dot" />
+              <span className="today-morning-text">
+                <strong>Good morning</strong> · {morningProposals.length} decision
+                {morningProposals.length === 1 ? "" : "s"} · 90 seconds
+              </span>
+              <span className="today-morning-arrow">→</span>
+            </button>
+          )}
+
+          {morningProposals.length > 0 && morningOpen && (
+            <section className="today-morning-drawer">
+              <div className="today-morning-head">
+                <div>
+                  <div className="today-morning-eyebrow">Morning check-in</div>
+                  <div className="today-morning-title">
+                    {morningProposals.length} decision{morningProposals.length === 1 ? "" : "s"} from overnight
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="ps-btn"
+                  onClick={() => setMorningOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+              <div className="today-morning-list">
+                {morningProposals.map((p) => (
+                  <label key={p.id} className="today-morning-card">
+                    <input
+                      type="checkbox"
+                      checked={!!morningApproved[p.id]}
+                      onChange={(e) =>
+                        setMorningApproved((m) => ({ ...m, [p.id]: e.target.checked }))
+                      }
+                    />
+                    <div className="today-morning-card-body">
+                      <div className="today-morning-card-cap">
+                        {p.project_name} · {p.type.replace("_", " ")}
+                      </div>
+                      {p.type === "break_down" && (
+                        <>
+                          <div className="today-morning-card-title">
+                            Break down: {p.parent_title}
+                          </div>
+                          <ul className="today-morning-card-sub">
+                            {(p.proposed_subtasks || []).map((s, idx) => (
+                              <li key={idx}>
+                                {s.title} <span>({s.minutes || "?"}m)</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </>
+                      )}
+                      {p.type === "new_next_action" && (
+                        <>
+                          <div className="today-morning-card-title">
+                            {p.proposed?.title}
+                            {p.proposed?.minutes ? (
+                              <span className="today-morning-card-m">~{p.proposed.minutes}m</span>
+                            ) : null}
+                          </div>
+                          {p.proposed?.why && (
+                            <div className="today-morning-card-why">{p.proposed.why}</div>
+                          )}
+                        </>
+                      )}
+                      {p.type === "reorder" && (
+                        <div className="today-morning-card-title">
+                          Reorder {(p.proposed_order || []).length} tasks
+                        </div>
+                      )}
+                      {p.rationale && (
+                        <div className="today-morning-card-rat">{p.rationale}</div>
+                      )}
+                    </div>
+                  </label>
+                ))}
+              </div>
+              <div className="today-morning-foot">
+                <button
+                  type="button"
+                  className="ps-btn"
+                  onClick={() => applyMorning(true)}
+                  disabled={morningApplying}
+                >
+                  Skip morning
+                </button>
+                <button
+                  type="button"
+                  className="ps-btn ps-btn--primary"
+                  onClick={() => applyMorning(false)}
+                  disabled={morningApplying}
+                >
+                  {morningApplying
+                    ? "Applying…"
+                    : `Approve ${Object.values(morningApproved).filter(Boolean).length}`}
+                </button>
+              </div>
+            </section>
+          )}
 
           <div className="today-hero">
             <div className="today-hero__head">
@@ -854,6 +1056,129 @@ export default function TodayPage() {
           color: var(--ps-clay);
           font-size: 13px;
           border: 1px solid rgba(184, 92, 62, 0.22);
+        }
+        .today-morning-banner {
+          appearance: none;
+          width: 100%;
+          margin: 14px 0 0;
+          padding: 12px 16px;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          background: var(--ps-accent-soft);
+          border: 1px solid var(--ps-accent);
+          border-radius: 12px;
+          cursor: pointer;
+          color: var(--ps-ink);
+          font-family: inherit;
+          font-size: 14px;
+          text-align: left;
+        }
+        .today-morning-dot {
+          width: 10px;
+          height: 10px;
+          border-radius: 999px;
+          background: var(--ps-accent);
+          flex-shrink: 0;
+        }
+        .today-morning-text { flex: 1; }
+        .today-morning-arrow {
+          color: var(--ps-accent);
+          font-family: var(--ps-mono);
+        }
+        .today-morning-drawer {
+          margin-top: 14px;
+          padding: 18px 20px;
+          background: var(--ps-paper-soft);
+          border: 1px solid var(--ps-accent);
+          border-radius: 14px;
+        }
+        .today-morning-head {
+          display: flex;
+          justify-content: space-between;
+          align-items: baseline;
+          gap: 12px;
+          flex-wrap: wrap;
+          margin-bottom: 12px;
+        }
+        .today-morning-eyebrow {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: var(--ps-accent);
+        }
+        .today-morning-title {
+          font-family: var(--ps-serif);
+          font-size: 20px;
+          letter-spacing: -0.01em;
+          color: var(--ps-ink);
+        }
+        .today-morning-list {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .today-morning-card {
+          display: flex;
+          gap: 12px;
+          padding: 12px 14px;
+          background: #fff;
+          border: 1px solid var(--ps-ink-08);
+          border-radius: 10px;
+          cursor: pointer;
+        }
+        .today-morning-card input[type="checkbox"] {
+          margin-top: 4px;
+          flex-shrink: 0;
+        }
+        .today-morning-card-body { flex: 1; min-width: 0; }
+        .today-morning-card-cap {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+        }
+        .today-morning-card-title {
+          margin-top: 3px;
+          font-family: var(--ps-serif);
+          font-size: 16px;
+          color: var(--ps-ink);
+          line-height: 1.35;
+        }
+        .today-morning-card-m {
+          font-family: var(--ps-mono);
+          font-size: 11px;
+          color: var(--ps-ink-50);
+          margin-left: 8px;
+        }
+        .today-morning-card-sub {
+          margin: 6px 0 0;
+          padding-left: 18px;
+          font-size: 13px;
+          color: var(--ps-ink-80);
+          line-height: 1.5;
+        }
+        .today-morning-card-sub span {
+          font-family: var(--ps-mono);
+          font-size: 11px;
+          color: var(--ps-ink-50);
+          margin-left: 4px;
+        }
+        .today-morning-card-why,
+        .today-morning-card-rat {
+          margin-top: 4px;
+          font-size: 12px;
+          color: var(--ps-ink-60);
+          line-height: 1.5;
+        }
+        .today-morning-card-rat { font-style: italic; }
+        .today-morning-foot {
+          margin-top: 14px;
+          display: flex;
+          justify-content: flex-end;
+          gap: 8px;
         }
         .today-context {
           margin-top: 18px;

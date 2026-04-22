@@ -25,13 +25,14 @@ export default function ProjectsPage() {
   const [error, setError] = useState("");
   const [categories, setCategories] = useState([]);
   const [tasks, setTasks] = useState([]);
+  const [workspaces, setWorkspaces] = useState({});
 
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     setError("");
     try {
-      const [catRes, taskRes] = await Promise.all([
+      const [catRes, taskRes, wsRes] = await Promise.all([
         supabase
           .from("categories")
           .select("id, name")
@@ -42,11 +43,20 @@ export default function ProjectsPage() {
           .select("id, category_id, status, priority, updated_at, effort_hours, due_date, title")
           .eq("user_id", user.id)
           .is("archived_at", null),
+        supabase
+          .from("shared_project_workspaces")
+          .select("category_id, workspace")
+          .eq("owner_user_id", user.id),
       ]);
       if (catRes.error) throw new Error(catRes.error.message);
       if (taskRes.error) throw new Error(taskRes.error.message);
       setCategories(catRes.data || []);
       setTasks(taskRes.data || []);
+      const wsMap = {};
+      for (const row of wsRes?.data || []) {
+        wsMap[row.category_id] = row.workspace || {};
+      }
+      setWorkspaces(wsMap);
     } catch (err) {
       setError(err.message || "Failed to load projects.");
     } finally {
@@ -84,6 +94,11 @@ export default function ProjectsPage() {
         ""
       );
       const progress = open + done > 0 ? done / (open + done) : 0;
+      const ws = workspaces[c.id] || {};
+      const lastAligned = ws.last_aligned_at
+        ? Math.round((Date.now() - new Date(ws.last_aligned_at).getTime()) / 86400000)
+        : null;
+      const stale = lastAligned == null || lastAligned > 30;
       return {
         id: c.id,
         name: c.name,
@@ -91,12 +106,14 @@ export default function ProjectsPage() {
         open,
         done,
         overdue,
-        next: next?.title || null,
+        next: next?.title || ws.next_action?.title || null,
         lastTouchDays: lastTouch ? daysSince(lastTouch) : null,
         progress,
+        lastAlignedDays: lastAligned,
+        stale,
       };
     });
-  }, [categories, tasks]);
+  }, [categories, tasks, workspaces]);
 
   const coachPayload = {
     total_projects: tiles.length,
@@ -141,6 +158,11 @@ export default function ProjectsPage() {
                     style={{ background: t.color }}
                   />
                   <div className="pj-tile-name">{t.name}</div>
+                  {t.stale && (
+                    <span className="pj-tile-stale" title="Last aligned > 30 days ago — run Refresh">
+                      Needs refresh
+                    </span>
+                  )}
                 </div>
                 {t.next && (
                   <div className="pj-tile-next">
@@ -270,6 +292,17 @@ export default function ProjectsPage() {
         .pj-tile-meta strong {
           color: var(--ps-ink);
           font-weight: 600;
+        }
+        .pj-tile-stale {
+          margin-left: auto;
+          font-family: var(--ps-mono);
+          font-size: 9px;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          color: var(--ps-clay);
+          background: var(--ps-clay-soft);
+          border-radius: 999px;
+          padding: 2px 8px;
         }
         .pj-tile-overdue {
           color: var(--ps-clay);

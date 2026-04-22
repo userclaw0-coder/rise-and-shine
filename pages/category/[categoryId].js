@@ -37,6 +37,7 @@ import {
   updateTaskStatusWithEvent,
   createTask,
 } from "../../lib/db";
+import { computeProjectAlignment } from "../../lib/projectWorkspace";
 
 const PROJECT_COLORS = [
   "var(--ps-clay)",
@@ -90,6 +91,10 @@ export default function ProjectPage() {
   const [knowledgeBase, setKnowledgeBase] = useState("");
   const [resources, setResources] = useState([]);
   const [mantra, setMantra] = useState("");
+  const [narrative, setNarrative] = useState("");
+  const [lastAlignedAt, setLastAlignedAt] = useState(null);
+  const [nextAction, setNextAction] = useState(null);
+  const [refreshMode, setRefreshMode] = useState(false);
   const [projectOutcomeIds, setProjectOutcomeIds] = useState([]);
   const [projectPrimaryDomain, setProjectPrimaryDomain] = useState(null);
   const [projectLifeDomains, setProjectLifeDomains] = useState([]);
@@ -165,6 +170,9 @@ export default function ProjectPage() {
         const wsObj = ws?.workspace || {};
         setResources(wsObj.resources || []);
         setMantra(wsObj.mantra || "");
+        setNarrative(wsObj.narrative || "");
+        setLastAlignedAt(wsObj.last_aligned_at || null);
+        setNextAction(wsObj.next_action || null);
         setProjectOutcomeIds(wsObj.outcome_ids || []);
         setProjectPrimaryDomain(wsObj.primary_life_domain || null);
         setProjectLifeDomains(
@@ -357,8 +365,30 @@ export default function ProjectPage() {
 
   if (!user) return null;
 
+  const alignmentScore = useMemo(() => {
+    const roots = tasks.filter((t) => !t.parent_task_id);
+    return computeProjectAlignment(roots, mantra, narrative);
+  }, [tasks, mantra, narrative]);
+
+  const daysSinceAligned = useMemo(() => {
+    if (!lastAlignedAt) return null;
+    const ts = new Date(lastAlignedAt).getTime();
+    if (!ts) return null;
+    return Math.max(0, Math.round((Date.now() - ts) / 86400000));
+  }, [lastAlignedAt]);
+
+  const stalenessTone =
+    daysSinceAligned == null
+      ? "clay"
+      : daysSinceAligned <= 14
+      ? "sage"
+      : daysSinceAligned <= 30
+      ? "gold"
+      : "clay";
+
   const coachPayload = {
     project: category?.name || null,
+    category_id: categoryId,
     linked_outcomes: outcomes.map((o) => ({
       title: o.title,
       progress: o.progress,
@@ -367,11 +397,17 @@ export default function ProjectPage() {
       .filter((t) => t.status !== "done")
       .slice(0, 12)
       .map((t) => ({
+        id: t.id,
         title: t.title,
         priority: t.priority,
         minutes: Math.round((t.effort_hours || 0) * 60),
       })),
     done_this_week: doneThisWeek,
+    last_aligned_at: lastAlignedAt,
+    days_since_aligned: daysSinceAligned,
+    alignment_score: alignmentScore,
+    current_next_action: nextAction,
+    refresh_mode: refreshMode ? "interview" : null,
   };
 
   const coachScope = categoryId ? `project:${categoryId}` : "project";
@@ -529,6 +565,48 @@ export default function ProjectPage() {
                     </div>
                   </div>
                 )}
+              </div>
+
+              <div className={"pj-align pj-align--" + stalenessTone}>
+                <div className="pj-align-main">
+                  <span className="pj-align-cap">Alignment</span>
+                  <span className="pj-align-val">{alignmentScore}<span>/100</span></span>
+                  <span className="pj-align-sep">·</span>
+                  <span className="pj-align-last">
+                    Last aligned{" "}
+                    <strong>
+                      {daysSinceAligned == null
+                        ? "never"
+                        : daysSinceAligned === 0
+                        ? "today"
+                        : daysSinceAligned === 1
+                        ? "1 day ago"
+                        : `${daysSinceAligned} days ago`}
+                    </strong>
+                  </span>
+                </div>
+                <div className="pj-align-actions">
+                  {refreshMode ? (
+                    <>
+                      <span className="pj-align-badge">Refresh in progress</span>
+                      <button
+                        type="button"
+                        className="ps-btn"
+                        onClick={() => setRefreshMode(false)}
+                      >
+                        End refresh
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className="ps-btn ps-btn--primary"
+                      onClick={() => setRefreshMode(true)}
+                    >
+                      Refresh alignment
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="pj-meta">
@@ -749,6 +827,35 @@ export default function ProjectPage() {
             ))}
           </div>
 
+          {nextAction ? (
+            <div className="pj-next">
+              <div className="pj-next-cap">Next best ≤30-minute action</div>
+              <div className="pj-next-title">{nextAction.title}</div>
+              <div className="pj-next-meta">
+                {nextAction.minutes ? <span>~{nextAction.minutes}m</span> : null}
+                {nextAction.source ? (
+                  <span className="pj-next-src">{nextAction.source.replace("_", " ")}</span>
+                ) : null}
+                {nextAction.needs_breakdown ? (
+                  <span className="pj-next-warn">
+                    Too big for 30m — break it down in tomorrow&apos;s morning check-in.
+                  </span>
+                ) : null}
+              </div>
+              {nextAction.why ? (
+                <div className="pj-next-why">{nextAction.why}</div>
+              ) : null}
+            </div>
+          ) : daysSinceAligned != null ? (
+            <div className="pj-next pj-next--empty">
+              <div className="pj-next-cap">Next best ≤30-minute action</div>
+              <div className="pj-next-empty">
+                Nothing queued. Run a Refresh to commit a next action,
+                or add a task and the coach will auto-refill it.
+              </div>
+            </div>
+          ) : null}
+
           <div className="pj-kb-wrap">
             <div className="pj-kb-head">
               <div>
@@ -838,6 +945,117 @@ export default function ProjectPage() {
           margin-bottom: 4px;
         }
         .pj-dot { width: 10px; height: 10px; border-radius: 3px; }
+        .pj-align {
+          margin-top: 12px;
+          padding: 10px 14px;
+          background: var(--ps-paper-soft);
+          border: 1px solid var(--ps-ink-08);
+          border-left: 3px solid var(--ps-ink-30);
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 14px;
+          flex-wrap: wrap;
+        }
+        .pj-align--sage { border-left-color: var(--ps-sage); }
+        .pj-align--gold { border-left-color: var(--ps-gold); }
+        .pj-align--clay { border-left-color: var(--ps-clay); }
+        .pj-align-main {
+          display: inline-flex;
+          align-items: baseline;
+          gap: 10px;
+          flex-wrap: wrap;
+          font-size: 13px;
+        }
+        .pj-align-cap {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+        }
+        .pj-align-val {
+          font-family: var(--ps-serif);
+          font-size: 18px;
+          letter-spacing: -0.01em;
+          color: var(--ps-ink);
+        }
+        .pj-align-val span { color: var(--ps-ink-50); font-size: 12px; }
+        .pj-align-sep { color: var(--ps-ink-30); }
+        .pj-align-last { color: var(--ps-ink-70); }
+        .pj-align-last strong { color: var(--ps-ink); }
+        .pj-align-actions {
+          display: inline-flex;
+          gap: 8px;
+          align-items: center;
+        }
+        .pj-align-badge {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: var(--ps-accent);
+          background: var(--ps-accent-soft);
+          padding: 4px 10px;
+          border-radius: 999px;
+        }
+        .pj-next {
+          margin-top: 16px;
+          padding: 16px 18px;
+          background: var(--ps-paper-soft);
+          border: 1px solid var(--ps-ink-08);
+          border-left: 3px solid var(--ps-accent);
+          border-radius: 12px;
+        }
+        .pj-next--empty {
+          border-left-color: var(--ps-ink-15);
+        }
+        .pj-next-cap {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+          margin-bottom: 6px;
+        }
+        .pj-next-title {
+          font-family: var(--ps-serif);
+          font-size: 20px;
+          letter-spacing: -0.01em;
+          color: var(--ps-ink);
+          line-height: 1.3;
+        }
+        .pj-next-meta {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          flex-wrap: wrap;
+          font-family: var(--ps-mono);
+          font-size: 11px;
+          color: var(--ps-ink-60);
+          margin-top: 6px;
+        }
+        .pj-next-src {
+          text-transform: lowercase;
+          color: var(--ps-ink-50);
+        }
+        .pj-next-warn {
+          color: var(--ps-clay);
+          font-family: var(--ps-sans);
+          font-size: 12px;
+        }
+        .pj-next-why {
+          margin-top: 8px;
+          font-size: 13px;
+          color: var(--ps-ink-70);
+          line-height: 1.5;
+        }
+        .pj-next-empty {
+          font-size: 13px;
+          color: var(--ps-ink-60);
+          line-height: 1.5;
+        }
         .pj-meta {
           display: flex;
           flex-wrap: wrap;
