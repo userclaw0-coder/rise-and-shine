@@ -6,7 +6,16 @@ import {
   getWeeklyReview,
   upsertWeeklyReview,
   listWeeklyReviews,
+  getDailyNotes,
+  getUserProfile,
 } from "../lib/db";
+
+const CAPACITY_DOT_COLORS = {
+  light: "var(--ps-sage)",
+  normal: "var(--ps-indigo)",
+  heavy: "var(--ps-gold)",
+  overwhelmed: "var(--ps-clay)",
+};
 
 const NEEDS = [
   { id: "growth", label: "Growth", color: "var(--ps-indigo)" },
@@ -131,6 +140,8 @@ export default function WeeklyReviewPage() {
   const [error, setError] = useState("");
   const [pastReviews, setPastReviews] = useState([]);
   const [projectMovement, setProjectMovement] = useState([]);
+  const [weekContext, setWeekContext] = useState([]);
+  const [expandedContextDate, setExpandedContextDate] = useState(null);
   const [coachRun, setCoachRun] = useState(null);
   const [coachLoading, setCoachLoading] = useState(false);
   const [coachApplying, setCoachApplying] = useState(false);
@@ -259,6 +270,54 @@ export default function WeeklyReviewPage() {
   useEffect(() => {
     loadMovement();
   }, [loadMovement]);
+
+  const loadWeekContext = useCallback(async () => {
+    if (!user) return;
+    const weekDates = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(weekStart + "T00:00:00Z");
+      d.setUTCDate(d.getUTCDate() + i);
+      weekDates.push(d.toISOString().slice(0, 10));
+    }
+    const [notesRes, profileRes, taggedTasksRes] = await Promise.all([
+      getDailyNotes(user.id, 40),
+      getUserProfile(user.id),
+      supabase
+        .from("task_tags")
+        .select("task_id, tags!inner(name)")
+        .eq("user_id", user.id)
+        .like("tags.name", "ctx:%"),
+    ]);
+    const notesMap = {};
+    for (const n of notesRes?.data || []) {
+      notesMap[n.date] = n;
+    }
+    const prefs = profileRes?.data?.profile?.preferences || {};
+    const dailyCap = prefs.daily_capacity || {};
+    // Count tasks per ctx:YYYY-MM-DD tag
+    const ctxCounts = {};
+    for (const row of taggedTasksRes?.data || []) {
+      const name = row.tags?.name || "";
+      if (!name.startsWith("ctx:")) continue;
+      const d = name.slice(4);
+      ctxCounts[d] = (ctxCounts[d] || 0) + 1;
+    }
+    const rows = weekDates.map((date) => ({
+      date,
+      weekday: new Date(date + "T12:00:00").toLocaleDateString(undefined, {
+        weekday: "short",
+      }),
+      day: new Date(date + "T12:00:00").getDate(),
+      note: notesMap[date]?.note || "",
+      capacity: dailyCap[date] || null,
+      tasks_created: ctxCounts[date] || 0,
+    }));
+    setWeekContext(rows);
+  }, [user, weekStart]);
+
+  useEffect(() => {
+    loadWeekContext();
+  }, [loadWeekContext]);
 
   const movementMax = Math.max(1, ...projectMovement.map((p) => p.moved));
 
@@ -425,6 +484,13 @@ export default function WeeklyReviewPage() {
     },
     needs,
     movement: projectMovement,
+    week_context: weekContext.map((row) => ({
+      date: row.date,
+      weekday: row.weekday,
+      capacity: row.capacity,
+      tasks_created: row.tasks_created,
+      note_excerpt: (row.note || "").slice(0, 220),
+    })),
   };
 
   return (
@@ -750,6 +816,55 @@ export default function WeeklyReviewPage() {
             </div>
 
             <div className="wr-card">
+              <div className="wr-card-cap">Week in context</div>
+              <div className="wr-ctx-list">
+                {weekContext.length === 0 ? (
+                  <div className="wr-empty">Loading…</div>
+                ) : (
+                  weekContext.map((row) => {
+                    const isOpen = expandedContextDate === row.date;
+                    const hasText = (row.note || "").trim().length > 0;
+                    const capColor = row.capacity
+                      ? CAPACITY_DOT_COLORS[row.capacity] || "var(--ps-ink-30)"
+                      : "transparent";
+                    return (
+                      <button
+                        key={row.date}
+                        type="button"
+                        className={"wr-ctx-row" + (isOpen ? " wr-ctx-row--open" : "")}
+                        onClick={() => setExpandedContextDate(isOpen ? null : row.date)}
+                        disabled={!hasText}
+                      >
+                        <span
+                          className="wr-ctx-dot"
+                          style={{
+                            background: capColor,
+                            borderColor: row.capacity ? capColor : "var(--ps-ink-15)",
+                          }}
+                          title={row.capacity || "no capacity set"}
+                        />
+                        <span className="wr-ctx-dow">{row.weekday}</span>
+                        <span className="wr-ctx-day">{row.day}</span>
+                        <span className="wr-ctx-text">
+                          {hasText ? (
+                            isOpen ? row.note : row.note.slice(0, 80) + (row.note.length > 80 ? "…" : "")
+                          ) : (
+                            <span className="wr-ctx-empty">—</span>
+                          )}
+                        </span>
+                        {row.tasks_created > 0 && (
+                          <span className="wr-ctx-tasks">
+                            {row.tasks_created} task{row.tasks_created === 1 ? "" : "s"}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            <div className="wr-card">
               <div className="wr-card-cap">Past reviews</div>
               <div className="wr-past">
                 {pastReviews.length === 0 ? (
@@ -1057,6 +1172,84 @@ export default function WeeklyReviewPage() {
           font-size: 11px;
           color: var(--ps-ink-60);
           text-align: right;
+        }
+        .wr-ctx-list {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+        .wr-ctx-row {
+          appearance: none;
+          border: none;
+          background: transparent;
+          display: grid;
+          grid-template-columns: 14px 32px 22px 1fr auto;
+          align-items: center;
+          gap: 10px;
+          padding: 6px 6px;
+          border-radius: 6px;
+          cursor: pointer;
+          font-family: inherit;
+          text-align: left;
+          color: var(--ps-ink-70);
+          font-size: 12px;
+        }
+        .wr-ctx-row:disabled {
+          cursor: default;
+          color: var(--ps-ink-40);
+        }
+        .wr-ctx-row:not(:disabled):hover {
+          background: var(--ps-ink-05);
+          color: var(--ps-ink);
+        }
+        .wr-ctx-row--open {
+          background: var(--ps-ink-05);
+          align-items: flex-start;
+        }
+        .wr-ctx-row--open .wr-ctx-text {
+          white-space: normal;
+          overflow: visible;
+          text-overflow: clip;
+          padding-top: 1px;
+        }
+        .wr-ctx-dot {
+          width: 10px;
+          height: 10px;
+          border-radius: 999px;
+          border: 1px solid var(--ps-ink-15);
+          margin-left: 2px;
+        }
+        .wr-ctx-dow {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+        }
+        .wr-ctx-day {
+          font-family: var(--ps-mono);
+          font-size: 11px;
+          color: var(--ps-ink-60);
+          text-align: right;
+        }
+        .wr-ctx-text {
+          min-width: 0;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          line-height: 1.45;
+        }
+        .wr-ctx-empty {
+          color: var(--ps-ink-30);
+        }
+        .wr-ctx-tasks {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          padding: 2px 8px;
+          border-radius: 999px;
+          background: var(--ps-accent-soft);
+          color: var(--ps-accent);
+          white-space: nowrap;
         }
         .wr-past { display: flex; flex-direction: column; gap: 3px; }
         .wr-past-row {

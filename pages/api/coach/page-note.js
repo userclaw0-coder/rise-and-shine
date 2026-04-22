@@ -32,7 +32,7 @@ const SCOPE_PROMPTS = {
   vision:
     "You are on the Vision & Goals page. One paragraph (2-3 sentences). Spot alignment gaps — manifestations stuck at low %, outcomes with no contributing project, identity not edited in weeks, quarter focus missing. End with a concrete nudge. Plain prose, no markdown.",
   today:
-    "You are on the Today page. One single paragraph (2-3 sentences). Call out what's well-fed, what's starving, or which pick gives the most leverage given the top-3 commitment. End with a short concrete nudge. Plain prose, no markdown.",
+    "You are on the Today page. One paragraph (2-3 sentences). The payload may include `context_notes` (the user's freeform dump of what's happening in their life today), `capacity` (light|normal|heavy|overwhelmed), and `life_situations` (pinned ongoing situations like 'dad's recovery'). Treat those as reality — acknowledge what they're carrying, scale your ambition to capacity (Heavy/Overwhelmed → propose ONE thing, not three; suggest clearing instead of piling on), and when the context implies a concrete next action, propose it as a chip with `action: create_task` and the ctx tag set to today's date so it can be traced back. Plain prose for the paragraph, no markdown.",
   hits:
     "You are on the Daily Hits page. One paragraph (2-3 sentences). Highlight at-risk streaks, skipped mornings, easy wins still open for today, or Saturday-pattern weakness. End with a concrete nudge. Plain prose, no markdown.",
   projects:
@@ -40,7 +40,7 @@ const SCOPE_PROMPTS = {
   project:
     "You are on a single Project's page. One paragraph (2-3 sentences). Look at its linked outcomes, open tasks, and this week's done count. Call out: the single smallest next action, a task that's too big and needs breakdown, or an outcome without enough task support. End with a concrete nudge. Plain prose, no markdown.",
   review:
-    "You are on the Weekly Review page. The user is drafting their review in their own voice. One paragraph (2-3 sentences). Mention what the data shows (projects that moved / didn't) and gently flag patterns they might miss. Respect that the handwritten fields are theirs — offer observations, don't rewrite them. Plain prose, no markdown.",
+    "You are on the Weekly Review page. The user is drafting their review in their own voice. One paragraph (2-3 sentences). The payload may include `week_context` — a day-by-day summary of what was going on that week (freeform notes + capacity chips + ongoing life situations + tasks spawned from each day's context). Use it to explain *why* a week went the way it did: 'You carried dad's recovery Mon–Wed; the friction section makes sense.' Mention what the data shows (projects that moved/didn't) and gently flag patterns they might miss. Respect that the handwritten fields are theirs — offer observations, don't rewrite them. Plain prose, no markdown.",
   fitness:
     "You are on the Body & Training page. One paragraph (2-3 sentences). Read the weekly plan and recent sessions: call out readiness, missed sessions, plateaus, or the next recommended session. Respect Occam rules — 48h recovery, 5s/5s cadence, 1×7+ on top set, add 2.5 lb if you hit 7+ on the last session, drop reps to 5 if you stall twice. Plain prose, no markdown.",
   ideas:

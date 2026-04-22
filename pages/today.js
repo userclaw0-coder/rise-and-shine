@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import PSShell from "../components/PSShell";
 import { useAuth } from "../hooks/useAuth";
@@ -7,9 +7,23 @@ import {
   getOrCreateDailyPlan,
   updateDailyPlan,
   getUserProfile,
+  upsertUserProfile,
   setTaskCompletionForDate,
   updateTaskStatusWithEvent,
+  getDailyNoteForDate,
+  upsertDailyNote,
 } from "../lib/db";
+
+const CAPACITY_LEVELS = [
+  { id: "light", label: "Light", color: "var(--ps-sage)" },
+  { id: "normal", label: "Normal", color: "var(--ps-indigo)" },
+  { id: "heavy", label: "Heavy", color: "var(--ps-gold)" },
+  { id: "overwhelmed", label: "Overwhelmed", color: "var(--ps-clay)" },
+];
+
+function randomId() {
+  return "sit_" + Math.random().toString(36).slice(2, 10);
+}
 
 const NEEDS = [
   { id: "certainty", label: "Certainty", color: "var(--ps-gold)" },
@@ -76,6 +90,17 @@ export default function TodayPage() {
   // don't all land on slot 3.
   const [replaceIdx, setReplaceIdx] = useState(0);
 
+  // Daily context state
+  const [profile, setProfile] = useState(null);
+  const [contextText, setContextText] = useState("");
+  const [contextSaving, setContextSaving] = useState(false);
+  const [contextSavedAt, setContextSavedAt] = useState(null);
+  const [lifeSituations, setLifeSituations] = useState([]);
+  const [addingSituation, setAddingSituation] = useState(false);
+  const [newSituationLabel, setNewSituationLabel] = useState("");
+  const [capacity, setCapacity] = useState("normal");
+  const contextSaveTimer = useRef(null);
+
   const dateStr = todayStr();
 
   const load = useCallback(async () => {
@@ -83,7 +108,7 @@ export default function TodayPage() {
     setLoading(true);
     setError("");
     try {
-      const [planRes, profileRes, categoriesRes] = await Promise.all([
+      const [planRes, profileRes, categoriesRes, noteRes] = await Promise.all([
         getOrCreateDailyPlan(user.id, dateStr),
         getUserProfile(user.id),
         supabase
@@ -91,10 +116,23 @@ export default function TodayPage() {
           .select("id, name")
           .eq("user_id", user.id)
           .order("name", { ascending: true }),
+        getDailyNoteForDate(user.id, dateStr),
       ]);
 
       if (planRes.error) throw new Error(planRes.error.message);
       setPlan(planRes.data);
+
+      const profileData = profileRes?.data?.profile || {};
+      setProfile(profileRes?.data || null);
+      const prefs = profileData.preferences || {};
+      const situations = Array.isArray(prefs.life_situations)
+        ? prefs.life_situations.filter((s) => !s.archived_at)
+        : [];
+      setLifeSituations(situations);
+      const dailyCap = prefs.daily_capacity || {};
+      setCapacity(dailyCap[dateStr] || "normal");
+      setContextText(noteRes?.data?.note || "");
+      setContextSavedAt(noteRes?.data?.updated_at || null);
 
       const categories = categoriesRes.data || [];
       const colorMap = {};
@@ -180,7 +218,6 @@ export default function TodayPage() {
       }
       setCompleted(byTask);
 
-      void profileRes;
     } catch (err) {
       setError(err.message || "Failed to load today.");
     } finally {
@@ -191,6 +228,79 @@ export default function TodayPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Debounced save for daily context text
+  useEffect(() => {
+    if (!user || loading) return;
+    clearTimeout(contextSaveTimer.current);
+    setContextSaving(true);
+    contextSaveTimer.current = setTimeout(async () => {
+      try {
+        const { data } = await upsertDailyNote(user.id, dateStr, contextText);
+        if (data?.updated_at) setContextSavedAt(data.updated_at);
+      } finally {
+        setContextSaving(false);
+      }
+    }, 800);
+    return () => clearTimeout(contextSaveTimer.current);
+  }, [contextText, user, dateStr, loading]);
+
+  // Persist a patch to profile.preferences without stomping other keys.
+  const savePrefPatch = useCallback(
+    async (patch) => {
+      if (!user) return;
+      const base = profile?.profile || {};
+      const prefs = { ...(base.preferences || {}), ...patch };
+      const nextProfile = { ...base, preferences: prefs };
+      const res = await upsertUserProfile(user.id, nextProfile);
+      if (res?.data) setProfile(res.data);
+    },
+    [user, profile]
+  );
+
+  async function handleCapacityChange(nextId) {
+    if (!user) return;
+    setCapacity(nextId);
+    const base = profile?.profile || {};
+    const prefs = base.preferences || {};
+    const dailyCap = { ...(prefs.daily_capacity || {}), [dateStr]: nextId };
+    await savePrefPatch({ daily_capacity: dailyCap });
+  }
+
+  async function handleAddSituation() {
+    const label = String(newSituationLabel || "").trim();
+    if (!label) {
+      setAddingSituation(false);
+      return;
+    }
+    const entry = {
+      id: randomId(),
+      label,
+      opened_on: dateStr,
+    };
+    const next = [...lifeSituations, entry];
+    setLifeSituations(next);
+    setNewSituationLabel("");
+    setAddingSituation(false);
+    const base = profile?.profile || {};
+    const prefs = base.preferences || {};
+    const allExisting = Array.isArray(prefs.life_situations) ? prefs.life_situations : [];
+    await savePrefPatch({
+      life_situations: [...allExisting, entry],
+    });
+  }
+
+  async function handleArchiveSituation(id) {
+    const now = new Date().toISOString();
+    setLifeSituations((list) => list.filter((s) => s.id !== id));
+    const base = profile?.profile || {};
+    const prefs = base.preferences || {};
+    const allExisting = Array.isArray(prefs.life_situations) ? prefs.life_situations : [];
+    const next = allExisting.map((s) =>
+      s.id === id ? { ...s, archived_at: now } : s
+    );
+    await savePrefPatch({ life_situations: next });
+  }
 
   async function toggleComplete(task) {
     if (!user || !task?.id || busyTask) return;
@@ -381,6 +491,12 @@ export default function TodayPage() {
       need: n.id,
       count: n.count,
     })),
+    context_notes: (contextText || "").slice(0, 1200),
+    capacity,
+    life_situations: lifeSituations.map((s) => ({
+      label: s.label,
+      opened_on: s.opened_on,
+    })),
   };
 
   return (
@@ -518,6 +634,113 @@ export default function TodayPage() {
             </div>
           </div>
 
+          <section className="today-context">
+            <div className="today-context__head">
+              <div>
+                <div className="today-context__eyebrow">Today · context</div>
+                <div className="today-context__title">
+                  What&apos;s going on?
+                </div>
+              </div>
+              <div className="today-capacity" role="radiogroup" aria-label="Capacity">
+                {CAPACITY_LEVELS.map((lvl) => (
+                  <button
+                    key={lvl.id}
+                    type="button"
+                    className={
+                      "today-cap-chip" +
+                      (capacity === lvl.id ? " today-cap-chip--on" : "")
+                    }
+                    style={{ "--chip-color": lvl.color }}
+                    onClick={() => handleCapacityChange(lvl.id)}
+                    aria-pressed={capacity === lvl.id}
+                    title={`Mark today as ${lvl.label.toLowerCase()}`}
+                  >
+                    {lvl.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="today-situations">
+              <span className="today-situations__cap">Ongoing</span>
+              {lifeSituations.length === 0 && !addingSituation && (
+                <span className="today-situations__empty">
+                  Nothing pinned. Add a situation the coach should factor in
+                  every day.
+                </span>
+              )}
+              {lifeSituations.map((s) => (
+                <span key={s.id} className="today-situation">
+                  {s.label}
+                  <button
+                    type="button"
+                    className="today-situation__x"
+                    onClick={() => handleArchiveSituation(s.id)}
+                    aria-label={`Archive ${s.label}`}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              {addingSituation ? (
+                <span className="today-situation-add">
+                  <input
+                    autoFocus
+                    type="text"
+                    value={newSituationLabel}
+                    onChange={(e) => setNewSituationLabel(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleAddSituation();
+                      if (e.key === "Escape") {
+                        setAddingSituation(false);
+                        setNewSituationLabel("");
+                      }
+                    }}
+                    placeholder="e.g. dad's recovery"
+                    className="today-situation-add__input"
+                  />
+                  <button
+                    type="button"
+                    className="today-situation-add__save"
+                    onClick={handleAddSituation}
+                  >
+                    Add
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  className="today-situations__plus"
+                  onClick={() => setAddingSituation(true)}
+                >
+                  + add
+                </button>
+              )}
+            </div>
+
+            <textarea
+              className="today-context__textarea"
+              value={contextText}
+              onChange={(e) => setContextText(e.target.value)}
+              placeholder="Dump what's happening today — family stuff, energy, distractions, anything the coach should know. No structure needed."
+              rows={4}
+            />
+
+            <div className="today-context__foot">
+              <span className="today-context__readers">
+                Coach reads this on Today, Jarvis, and the weekly review.
+              </span>
+              <span className="today-context__saved">
+                {contextSaving
+                  ? "Saving…"
+                  : contextSavedAt
+                  ? `Saved ${new Date(contextSavedAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`
+                  : ""}
+              </span>
+            </div>
+          </section>
+
           <div className="ps-section-title">Next best action per project</div>
           <div className="ps-section-sub">
             {loading
@@ -631,6 +854,178 @@ export default function TodayPage() {
           color: var(--ps-clay);
           font-size: 13px;
           border: 1px solid rgba(184, 92, 62, 0.22);
+        }
+        .today-context {
+          margin-top: 18px;
+          padding: 18px 20px;
+          background: var(--ps-paper-soft);
+          border: 1px solid var(--ps-ink-08);
+          border-radius: 14px;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        .today-context__head {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 16px;
+          flex-wrap: wrap;
+        }
+        .today-context__eyebrow {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+        }
+        .today-context__title {
+          font-family: var(--ps-serif);
+          font-size: 20px;
+          letter-spacing: -0.01em;
+          color: var(--ps-ink);
+          margin-top: 2px;
+        }
+        .today-capacity {
+          display: inline-flex;
+          gap: 6px;
+          flex-wrap: wrap;
+        }
+        .today-cap-chip {
+          appearance: none;
+          padding: 6px 12px;
+          border-radius: 999px;
+          border: 1px solid var(--ps-ink-15);
+          background: transparent;
+          color: var(--ps-ink-70);
+          font-family: var(--ps-mono);
+          font-size: 11px;
+          letter-spacing: 0.04em;
+          cursor: pointer;
+          transition: border-color 120ms, background 120ms, color 120ms;
+        }
+        .today-cap-chip:hover {
+          border-color: var(--chip-color);
+          color: var(--ps-ink);
+        }
+        .today-cap-chip--on {
+          border-color: var(--chip-color);
+          background: var(--chip-color);
+          color: #fff;
+        }
+        .today-situations {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 6px;
+        }
+        .today-situations__cap {
+          font-family: var(--ps-mono);
+          font-size: 9px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+          margin-right: 4px;
+        }
+        .today-situations__empty {
+          font-size: 12px;
+          color: var(--ps-ink-50);
+        }
+        .today-situation {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 4px 6px 4px 10px;
+          border-radius: 999px;
+          background: var(--ps-ink-05);
+          border: 1px solid var(--ps-ink-10);
+          font-size: 12px;
+          color: var(--ps-ink-80);
+        }
+        .today-situation__x {
+          appearance: none;
+          border: none;
+          background: transparent;
+          color: var(--ps-ink-50);
+          cursor: pointer;
+          padding: 0 4px;
+          font-size: 14px;
+          line-height: 1;
+        }
+        .today-situation__x:hover {
+          color: var(--ps-clay);
+        }
+        .today-situation-add {
+          display: inline-flex;
+          gap: 6px;
+          align-items: center;
+        }
+        .today-situation-add__input {
+          padding: 4px 10px;
+          border-radius: 999px;
+          border: 1px solid var(--ps-ink-15);
+          background: #fff;
+          font-size: 12px;
+          font-family: inherit;
+          min-width: 160px;
+        }
+        .today-situation-add__input:focus {
+          outline: none;
+          border-color: var(--ps-accent);
+        }
+        .today-situation-add__save {
+          appearance: none;
+          border: none;
+          background: var(--ps-ink);
+          color: var(--ps-paper);
+          padding: 4px 12px;
+          border-radius: 999px;
+          font-size: 12px;
+          cursor: pointer;
+        }
+        .today-situations__plus {
+          appearance: none;
+          border: 1px dashed var(--ps-ink-15);
+          background: transparent;
+          color: var(--ps-ink-60);
+          padding: 4px 10px;
+          border-radius: 999px;
+          font-size: 11px;
+          font-family: var(--ps-mono);
+          cursor: pointer;
+          letter-spacing: 0.04em;
+        }
+        .today-situations__plus:hover {
+          border-color: var(--ps-ink-30);
+          color: var(--ps-ink);
+        }
+        .today-context__textarea {
+          width: 100%;
+          min-height: 92px;
+          padding: 12px 14px;
+          border-radius: 10px;
+          border: 1px solid var(--ps-ink-10);
+          background: #fff;
+          font: inherit;
+          font-size: 14px;
+          line-height: 1.55;
+          color: var(--ps-ink);
+          resize: vertical;
+        }
+        .today-context__textarea:focus {
+          outline: none;
+          border-color: var(--ps-accent);
+          box-shadow: 0 0 0 3px rgba(185, 115, 22, 0.10);
+        }
+        .today-context__foot {
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+          flex-wrap: wrap;
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.06em;
+          color: var(--ps-ink-50);
         }
         .today-hero {
           background: var(--ps-ink);
