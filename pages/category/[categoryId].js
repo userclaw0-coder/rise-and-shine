@@ -95,6 +95,8 @@ export default function ProjectPage() {
   const [lastAlignedAt, setLastAlignedAt] = useState(null);
   const [nextAction, setNextAction] = useState(null);
   const [refreshMode, setRefreshMode] = useState(false);
+  const [refreshSignal, setRefreshSignal] = useState(0);
+  const [refreshAutoSend, setRefreshAutoSend] = useState(null);
   const [projectOutcomeIds, setProjectOutcomeIds] = useState([]);
   const [projectPrimaryDomain, setProjectPrimaryDomain] = useState(null);
   const [projectLifeDomains, setProjectLifeDomains] = useState([]);
@@ -419,6 +421,8 @@ export default function ProjectPage() {
       scopeHint={category?.name || "Project view"}
       coachPayload={coachPayload}
       coachPayloadReady={!loading && !!category}
+      coachOpenSignal={refreshSignal}
+      coachAutoSend={refreshAutoSend}
     >
       <div className="ps-view">
           <div className="ps-eyebrow pj-breadcrumb">
@@ -601,7 +605,16 @@ export default function ProjectPage() {
                     <button
                       type="button"
                       className="ps-btn ps-btn--primary"
-                      onClick={() => setRefreshMode(true)}
+                      onClick={() => {
+                        setRefreshMode(true);
+                        const nonce = Date.now();
+                        setRefreshSignal(nonce);
+                        setRefreshAutoSend({
+                          nonce,
+                          message:
+                            "Let's run the Project Refresh Interview for this project. Start with step 1 (goal gut-check).",
+                        });
+                      }}
                     >
                       Refresh alignment
                     </button>

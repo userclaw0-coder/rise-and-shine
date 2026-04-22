@@ -33,6 +33,8 @@ export default function PSShell({
   coachPayloadReady = true,
   coachSuggestions,
   coachDisabled = false,
+  coachOpenSignal,
+  coachAutoSend,
   shellHidden = false,
   title,
   children,
@@ -56,6 +58,17 @@ export default function PSShell({
   const [visibilityLoaded, setVisibilityLoaded] = useState(false);
   const [visibilityBusy, setVisibilityBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // Let pages force-open the drawer by incrementing coachOpenSignal.
+  useEffect(() => {
+    if (typeof coachOpenSignal !== "number" || coachOpenSignal <= 0) return;
+    setCoachOpen(true);
+    try {
+      localStorage.setItem("rs-ps-coach", "open");
+    } catch {
+      // noop
+    }
+  }, [coachOpenSignal]);
 
   const toggleCoach = useCallback(() => {
     setCoachOpen((v) => {
@@ -332,6 +345,7 @@ export default function PSShell({
             suggestions={coachSuggestions}
             collapsed={!coachOpen}
             onToggle={toggleCoach}
+            autoSend={coachAutoSend}
           />
         )}
       </div>

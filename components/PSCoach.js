@@ -141,6 +141,7 @@ export default function PSCoach({
   suggestions,
   collapsed,
   onToggle,
+  autoSend,
 }) {
   const meta = ScopeMeta({ scope });
   const [messages, setMessages] = useState(() => loadCachedConvo(scope));
@@ -353,6 +354,23 @@ export default function PSCoach({
     cacheConvo(scope, []);
     await deleteServerConvo(scope);
   }
+
+  // Auto-send a preset message when the page increments autoSend.nonce
+  // (used by Refresh alignment to kick off the interview).
+  const lastAutoNonceRef = useRef(0);
+  useEffect(() => {
+    if (!autoSend || !autoSend.nonce) return;
+    if (autoSend.nonce === lastAutoNonceRef.current) return;
+    lastAutoNonceRef.current = autoSend.nonce;
+    const msg = String(autoSend.message || "").trim();
+    if (!msg) return;
+    // Fire after a tick so any parent scope change lands first.
+    const t = setTimeout(() => {
+      handleSend(msg);
+    }, 50);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSend?.nonce]);
 
   function handleKeyDown(e) {
     if (e.key === "Enter" && !e.shiftKey) {
