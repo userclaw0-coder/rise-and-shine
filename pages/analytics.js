@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import DashboardLayout from "../components/DashboardLayout";
-import PageHeader from "../components/PageHeader";
+import PSShell from "../components/PSShell";
 import { useAuth } from "../hooks/useAuth";
 import {
   getCompletedEventsInRange,
@@ -9,14 +8,10 @@ import {
   getWeeklyReviewWeeks,
   getPlannerRefinementEventsInRange,
   getWeeklyReview,
-  getDailyTemplateTaskIds,
-  getTemplates,
-  getTemplateItems,
   getBacklogTasks,
   getCategoriesWithSubcategories,
   getUserProfile,
   listWeeklyImprovementRuns,
-  setTaskCompletionForDate,
 } from "../lib/db";
 import {
   BarChart,
@@ -24,6 +19,8 @@ import {
   LabelList,
   LineChart,
   Line,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -45,7 +42,6 @@ function dateStr(d) {
   return d.toISOString().slice(0, 10);
 }
 
-/** Local date YYYY-MM-DD for grouping and display. */
 function dateStrLocal(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -59,21 +55,24 @@ function addDays(d, n) {
   return out;
 }
 
-function startOfMonth(d) {
-  return new Date(d.getFullYear(), d.getMonth(), 1);
-}
-
-function endOfMonth(d) {
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0);
-}
-
-/** Monday of the given date's week (YYYY-MM-DD). */
 function getWeekStart(d) {
   const date = new Date(d);
   const day = date.getUTCDay() || 7;
   const monday = new Date(date);
   monday.setUTCDate(date.getUTCDate() - (day - 1));
   return monday.toISOString().slice(0, 10);
+}
+
+function formatWeekLabel(weekStartStr) {
+  if (!weekStartStr) return "";
+  const d = new Date(weekStartStr + "T12:00:00Z");
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function shortenChartLabel(value, max = 26) {
+  const text = String(value || "");
+  if (text.length <= max) return text;
+  return `${text.slice(0, max - 1)}…`;
 }
 
 const HUMAN_NEEDS_KEYS = [
@@ -93,71 +92,14 @@ const HUMAN_NEEDS_LABELS = {
   contribution: "Contribution",
 };
 
-function formatWeekLabel(weekStartStr) {
-  if (!weekStartStr) return "";
-  const d = new Date(weekStartStr + "T12:00:00Z");
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
-function shortenChartLabel(value, max = 26) {
-  const text = String(value || "");
-  if (text.length <= max) return text;
-  return `${text.slice(0, max - 1)}...`;
-}
-
-function clampPercent(value) {
-  return Math.max(0, Math.min(100, Math.round(value || 0)));
-}
-
-function buildDateRange(startDate, endDate) {
-  const days = [];
-  const cursor = new Date(startDate);
-  while (cursor <= endDate) {
-    days.push(dateStrLocal(cursor));
-    cursor.setDate(cursor.getDate() + 1);
-  }
-  return days;
-}
-
-function buildCurrentStreak(completionSet, todayKey) {
-  let streak = 0;
-  let cursor = new Date(`${todayKey}T12:00:00`);
-  while (completionSet.has(dateStrLocal(cursor))) {
-    streak += 1;
-    cursor = addDays(cursor, -1);
-  }
-  return streak;
-}
-
-function buildBestStreak(completionSet, orderedDates) {
-  let best = 0;
-  let current = 0;
-  orderedDates.forEach((day) => {
-    if (completionSet.has(day)) {
-      current += 1;
-      if (current > best) best = current;
-    } else {
-      current = 0;
-    }
-  });
-  return best;
-}
-
-function progressRing(progress, label, valueLabel, accent) {
-  const pct = clampPercent(progress);
-  return {
-    label,
-    valueLabel,
-    progress: pct,
-    accent,
-    gradient: `conic-gradient(${accent} 0 ${pct}%, rgba(255,255,255,0.1) ${pct}% 100%)`,
-  };
-}
-
-function getDefaultTemplate(items) {
-  const templates = Array.isArray(items) ? items : [];
-  return templates.find((item) => item.is_default) || templates[0] || null;
-}
+const SERIES_COLORS = [
+  "var(--ps-accent)",
+  "var(--ps-indigo)",
+  "var(--ps-sage)",
+  "var(--ps-plum)",
+  "var(--ps-gold)",
+  "var(--ps-clay)",
+];
 
 function MeasuredChart({ height = 220, renderChart }) {
   const containerRef = useRef(null);
@@ -165,7 +107,6 @@ function MeasuredChart({ height = 220, renderChart }) {
 
   useEffect(() => {
     if (!containerRef.current) return;
-
     let rafId = 0;
     const update = () => {
       const rect = containerRef.current?.getBoundingClientRect();
@@ -177,16 +118,13 @@ function MeasuredChart({ height = 220, renderChart }) {
         prev.width === next.width && prev.height === next.height ? prev : next
       );
     };
-
     const scheduleUpdate = () => {
       cancelAnimationFrame(rafId);
       rafId = requestAnimationFrame(update);
     };
-
     scheduleUpdate();
     const observer = new ResizeObserver(scheduleUpdate);
     observer.observe(containerRef.current);
-
     return () => {
       cancelAnimationFrame(rafId);
       observer.disconnect();
@@ -194,7 +132,6 @@ function MeasuredChart({ height = 220, renderChart }) {
   }, []);
 
   const ready = size.width > 0 && size.height > 0;
-
   return (
     <div style={{ width: "100%", minWidth: 0, height }} ref={containerRef}>
       {ready ? renderChart(size) : null}
@@ -206,42 +143,46 @@ export default function AnalyticsPage() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [hourHistogram, setHourHistogram] = useState([]);
-  const [lastCompleted, setLastCompleted] = useState([]);
-  const [weeklyStreak, setWeeklyStreak] = useState(0);
-  const [plannerRefinementMetrics, setPlannerRefinementMetrics] = useState({
-    accepted: 0,
-    dismissed: 0,
-    applied: 0,
-  });
-  const [humanNeedsRadarData, setHumanNeedsRadarData] = useState([]);
-  const [humanNeedsWeekLabels, setHumanNeedsWeekLabels] = useState({
-    older: "",
-    newer: "",
-  });
+
   const [summaryMetrics, setSummaryMetrics] = useState({
     daysActive7: 0,
     daysActive30: 0,
     thisWeekTotal: 0,
     lastWeekTotal: 0,
-    dailyHitsRate7: null,
+    weeklyReviewStreak: 0,
+    activeStreakDays: 0,
   });
   const [puttingOff, setPuttingOff] = useState({ overdue: 0, highPriorityOpen: 0 });
+
+  const [weeklyTrend, setWeeklyTrend] = useState([]);
+  const [decisiveRhythm, setDecisiveRhythm] = useState([]);
+  const [outcomeMomentum, setOutcomeMomentum] = useState({ weeks: [], series: [] });
+  const [projectContribution, setProjectContribution] = useState({ weeks: [], series: [] });
+  const [humanNeedsRadarData, setHumanNeedsRadarData] = useState([]);
+  const [humanNeedsWeekLabels, setHumanNeedsWeekLabels] = useState({ older: "", newer: "" });
+
+  const [hourHistogram, setHourHistogram] = useState([]);
   const [completionsByCategory, setCompletionsByCategory] = useState([]);
   const [completionsByOutcome, setCompletionsByOutcome] = useState([]);
   const [completionsByLifeDomain, setCompletionsByLifeDomain] = useState([]);
+
+  const [plannerRefinementMetrics, setPlannerRefinementMetrics] = useState({
+    accepted: 0,
+    dismissed: 0,
+    applied: 0,
+  });
   const [improvementLabReport, setImprovementLabReport] = useState(null);
-  const [habitTracker, setHabitTracker] = useState(null);
-  const [habitEditKey, setHabitEditKey] = useState("");
+  const [lastCompleted, setLastCompleted] = useState([]);
+
   const [refreshNonce, setRefreshNonce] = useState(0);
 
   useEffect(() => {
     function handleWindowFocus() {
-      setRefreshNonce((value) => value + 1);
+      setRefreshNonce((v) => v + 1);
     }
     function handleVisibility() {
       if (document.visibilityState === "visible") {
-        setRefreshNonce((value) => value + 1);
+        setRefreshNonce((v) => v + 1);
       }
     }
     window.addEventListener("focus", handleWindowFocus);
@@ -261,21 +202,16 @@ export default function AnalyticsPage() {
       const today = new Date();
       const start7 = addDays(today, -7);
       const start30 = addDays(today, -30);
-      const monthStart = startOfMonth(today);
-      const monthEnd = endOfMonth(today);
-      const habitHistoryStart = addDays(today, -120);
+      const start84 = addDays(today, -83);
 
       try {
         const [
           range7,
           range30,
-          habitHistoryRes,
+          range84,
           last,
           weeks,
           plannerRefinements,
-          dailyTaskIdsRes,
-          templatesRes,
-          backlogOpen,
           backlogAll,
           categoriesRes,
           profileRes,
@@ -283,35 +219,27 @@ export default function AnalyticsPage() {
         ] = await Promise.all([
           getCompletedEventsInRange(user.id, dateStrLocal(start7), dateStrLocal(today)),
           getCompletedEventsInRange(user.id, dateStrLocal(start30), dateStrLocal(today)),
-          getCompletedEventsInRange(user.id, dateStrLocal(habitHistoryStart), dateStrLocal(today)),
+          getCompletedEventsInRange(user.id, dateStrLocal(start84), dateStrLocal(today)),
           getLastCompletedEventsWithTasks(user.id, 50),
           getWeeklyReviewWeeks(user.id, 52),
           getPlannerRefinementEventsInRange(user.id, dateStr(start30), dateStr(today)),
-          getDailyTemplateTaskIds(user.id),
-          getTemplates(),
-          getBacklogTasks(user.id, { includeArchived: false }),
           getBacklogTasks(user.id, { includeArchived: true }),
           getCategoriesWithSubcategories(user.id),
           getUserProfile(user.id),
           listWeeklyImprovementRuns(user.id, 12),
         ]);
 
-        const dailyTemplateTaskIds = dailyTaskIdsRes.data || new Set();
-        const defaultTemplate = getDefaultTemplate(templatesRes?.data || []);
-        const templateItemsRes = defaultTemplate ? await getTemplateItems(defaultTemplate.id) : { data: [], error: null };
-        if (templateItemsRes.error) setError(templateItemsRes.error.message);
-        const orderedTemplateItems = templateItemsRes.data || [];
-        const todayStr = dateStrLocal(today);
-        const openTasks = backlogOpen.data || [];
-        const allTasks = backlogAll.data || [];
-        const tasksById = new Map((allTasks || []).map((t) => [t.id, t]));
-
         if (range7.error) setError(range7.error.message);
         if (range30.error) setError(range30.error.message);
+        if (range84.error) setError(range84.error.message);
 
-        const allInRange = [...(range7.data || []), ...(range30.data || [])];
+        const allTasks = backlogAll.data || [];
+        const tasksById = new Map((allTasks || []).map((t) => [t.id, t]));
+        const openTasks = allTasks.filter((t) => !t.archived_at && t.status !== "done");
+
+        // Hour-of-day histogram (30d)
         const byHour = Array.from({ length: 24 }, (_, h) => ({ hour: `${h}:00`, count: 0 }));
-        allInRange.forEach((ev) => {
+        (range30.data || []).forEach((ev) => {
           const h = new Date(ev.created_at).getHours();
           byHour[h].count += 1;
         });
@@ -320,36 +248,29 @@ export default function AnalyticsPage() {
         if (last.error) setError(last.error.message);
         else setLastCompleted(last.data || []);
 
+        // Weekly review streak (consecutive weeks with a review)
+        let weeklyReviewStreak = 0;
         if (!weeks.error && weeks.data) {
-          const dates = (weeks.data || [])
-            .map((w) => w.week_start)
-            .filter(Boolean)
-            .sort()
-            .reverse();
-          const seen = new Set(dates);
-          let streak = 0;
-          const todayStrVal = dateStr(today);
-          const todayDate = new Date(todayStrVal);
+          const seen = new Set(
+            (weeks.data || []).map((w) => w.week_start).filter(Boolean)
+          );
+          const todayDate = new Date(dateStr(today));
           for (let i = 0; i < 104; i++) {
             const d = new Date(todayDate);
             d.setUTCDate(d.getUTCDate() - i * 7);
-            const weekStartIso = d.toISOString().slice(0, 10);
-            if (seen.has(weekStartIso)) streak += 1;
+            if (seen.has(d.toISOString().slice(0, 10))) weeklyReviewStreak += 1;
             else break;
           }
-          setWeeklyStreak(streak);
         }
 
         if (plannerRefinements.error) setError(plannerRefinements.error.message);
-        else {
-          const events = plannerRefinements.data || [];
-          setPlannerRefinementMetrics(countRefinementActions(events));
-        }
+        else setPlannerRefinementMetrics(countRefinementActions(plannerRefinements.data || []));
 
         if (!improvementRunsRes.error) {
           setImprovementLabReport(buildImprovementLabReport(improvementRunsRes.data || []));
         }
 
+        // Needs radar (2-week compare)
         const thisWeekMonday = getWeekStart(today);
         const prevWeekStart = dateStr(addDays(new Date(thisWeekMonday + "T12:00:00Z"), -7));
         const twoWeeksAgoStart = dateStr(addDays(new Date(thisWeekMonday + "T12:00:00Z"), -14));
@@ -359,185 +280,185 @@ export default function AnalyticsPage() {
         ]);
         const scoresOlder = (reviewOlder.data && reviewOlder.data.scores) || {};
         const scoresNewer = (reviewNewer.data && reviewNewer.data.scores) || {};
-        const radarData = HUMAN_NEEDS_KEYS.map((key) => ({
-          subject: HUMAN_NEEDS_LABELS[key],
-          key,
-          older: typeof scoresOlder[key] === "number" ? scoresOlder[key] : 0,
-          newer: typeof scoresNewer[key] === "number" ? scoresNewer[key] : 0,
-          fullMark: 10,
-        }));
-        setHumanNeedsRadarData(radarData);
-        setHumanNeedsWeekLabels({
-          older: twoWeeksAgoStart,
-          newer: prevWeekStart,
-        });
+        setHumanNeedsRadarData(
+          HUMAN_NEEDS_KEYS.map((key) => ({
+            subject: HUMAN_NEEDS_LABELS[key],
+            key,
+            older: typeof scoresOlder[key] === "number" ? scoresOlder[key] : 0,
+            newer: typeof scoresNewer[key] === "number" ? scoresNewer[key] : 0,
+            fullMark: 10,
+          }))
+        );
+        setHumanNeedsWeekLabels({ older: twoWeeksAgoStart, newer: prevWeekStart });
 
-        const datesWithCompletions7 = new Set((range7.data || []).map((ev) => dateStrLocal(new Date(ev.created_at))));
-        const datesWithCompletions30 = new Set((range30.data || []).map((ev) => dateStrLocal(new Date(ev.created_at))));
-        const totalThisWeek = (range7.data || []).length;
-        const start14 = addDays(today, -14);
-        const range14Res = await getCompletedEventsInRange(user.id, dateStrLocal(start14), dateStrLocal(today));
+        // Summary KPIs
+        const datesWithCompletions7 = new Set(
+          (range7.data || []).map((ev) => dateStrLocal(new Date(ev.created_at)))
+        );
+        const datesWithCompletions30 = new Set(
+          (range30.data || []).map((ev) => dateStrLocal(new Date(ev.created_at)))
+        );
+        const thisWeekTotal = (range7.data || []).length;
+        const range14Res = await getCompletedEventsInRange(
+          user.id,
+          dateStrLocal(addDays(today, -14)),
+          dateStrLocal(today)
+        );
         const range14 = range14Res.data || [];
         const lastWeekTotal = range14.filter((ev) => {
           const d = dateStrLocal(new Date(ev.created_at));
-          return d >= dateStrLocal(start14) && d < dateStrLocal(start7);
+          return d >= dateStrLocal(addDays(today, -14)) && d < dateStrLocal(start7);
         }).length;
-        const orderedTemplateTasks = orderedTemplateItems
-          .map((item) => item?.task)
-          .filter((task) => task?.id);
-        const orderedTemplateTaskIds = orderedTemplateTasks.map((task) => String(task.id));
-        const habitTaskIdSet = new Set(
-          orderedTemplateTaskIds.length > 0
-            ? orderedTemplateTaskIds
-            : Array.from(dailyTemplateTaskIds).map((taskId) => String(taskId))
+
+        // Active streak days — consecutive days ending today with ≥1 completion
+        let activeStreakDays = 0;
+        let cursor = new Date(`${dateStrLocal(today)}T12:00:00`);
+        const daysWithCompletions = new Set(
+          (range84.data || []).map((ev) => dateStrLocal(new Date(ev.created_at)))
         );
-        const dailySize = habitTaskIdSet.size || 1;
-        const totalDailyIn7 = (range7.data || []).filter((ev) => habitTaskIdSet.has(String(ev.task_id))).length;
-        const maxDailyPossible = dailySize * 7;
+        while (daysWithCompletions.has(dateStrLocal(cursor))) {
+          activeStreakDays += 1;
+          cursor = addDays(cursor, -1);
+        }
+
         setSummaryMetrics({
           daysActive7: datesWithCompletions7.size,
           daysActive30: datesWithCompletions30.size,
-          thisWeekTotal: totalThisWeek,
+          thisWeekTotal,
           lastWeekTotal,
-          dailyHitsRate7: maxDailyPossible > 0 ? Math.round((totalDailyIn7 / maxDailyPossible) * 100) : null,
+          weeklyReviewStreak,
+          activeStreakDays,
         });
 
-        const todayKey = dateStrLocal(today);
-        const monthDays = buildDateRange(monthStart, monthEnd);
-        const visibleMonthDays = monthDays.filter((day) => day <= todayKey);
-        const habitHistoryEvents = habitHistoryRes.data || [];
-        const habitTasks = orderedTemplateTaskIds.length > 0
-          ? orderedTemplateTaskIds.map((taskId) => tasksById.get(taskId)).filter(Boolean)
-          : Array.from(dailyTemplateTaskIds)
-              .map((taskId) => tasksById.get(taskId))
-              .filter(Boolean)
-              .sort((a, b) => String(a.title || "").localeCompare(String(b.title || "")));
-        const habitCompletionsByTask = new Map();
-        habitTasks.forEach((task) => {
-          habitCompletionsByTask.set(String(task.id), new Set());
-        });
-        habitHistoryEvents.forEach((event) => {
-          const taskId = String(event.task_id || "");
-          const bucket = habitCompletionsByTask.get(taskId);
-          if (!bucket) return;
-          bucket.add(dateStrLocal(new Date(event.created_at)));
-        });
+        // --- 12-week weekly completion trend + decisive-action rhythm ---
+        const weeksBack = 12;
+        const anchor = new Date(getWeekStart(today) + "T12:00:00Z");
+        const weekStarts = [];
+        for (let i = weeksBack - 1; i >= 0; i--) {
+          const ws = new Date(anchor);
+          ws.setUTCDate(ws.getUTCDate() - i * 7);
+          weekStarts.push(ws.toISOString().slice(0, 10));
+        }
+        const weekIndex = new Map(weekStarts.map((w, i) => [w, i]));
+        const weeklyTotals = weekStarts.map((w) => ({
+          week: w,
+          label: formatWeekLabel(w),
+          count: 0,
+        }));
+        const decisiveDaysByWeek = weekStarts.map((w) => ({
+          week: w,
+          label: formatWeekLabel(w),
+          days: new Set(),
+        }));
+        const outcomeByWeek = {};
+        const projectByWeek = {};
 
-        const trendData = visibleMonthDays.map((day) => {
-          let completed = 0;
-          habitCompletionsByTask.forEach((completionSet) => {
-            if (completionSet.has(day)) completed += 1;
+        const prefs = profileRes?.data?.profile?.preferences || {};
+        const allCategoriesList = (categoriesRes?.data || []).map((c) => ({
+          id: c.id,
+          name: (c?.name || "Uncategorized").trim() || "Uncategorized",
+        }));
+
+        (range84.data || []).forEach((ev) => {
+          const evDate = new Date(ev.created_at);
+          const ws = getWeekStart(evDate);
+          const idx = weekIndex.get(ws);
+          if (idx == null) return;
+          weeklyTotals[idx].count += 1;
+
+          const task = tasksById.get(ev.task_id);
+          if (!task) return;
+          if (task.priority === "Critical" || task.priority === "High") {
+            decisiveDaysByWeek[idx].days.add(dateStrLocal(evDate));
+          }
+          const outcomeIds = Array.isArray(task.outcome_ids) ? task.outcome_ids : [];
+          outcomeIds.forEach((oid) => {
+            if (!outcomeByWeek[oid]) outcomeByWeek[oid] = Array(weeksBack).fill(0);
+            outcomeByWeek[oid][idx] += 1;
           });
-          const total = habitTasks.length || 1;
-          return {
-            day,
-            label: String(new Date(`${day}T12:00:00`).getDate()),
-            completed,
-            remaining: Math.max(total - completed, 0),
-            rate: clampPercent((completed / total) * 100),
-          };
+          const catName = (task?.category?.name ?? "Uncategorized").trim() || "Uncategorized";
+          if (catName.toLowerCase() === "daily repeat") return;
+          if (!projectByWeek[catName]) projectByWeek[catName] = Array(weeksBack).fill(0);
+          projectByWeek[catName][idx] += 1;
         });
 
-        const habitRows = habitTasks.map((task) => {
-          const completionSet = habitCompletionsByTask.get(String(task.id)) || new Set();
-          const completedThisMonth = visibleMonthDays.filter((day) => completionSet.has(day)).length;
-          const currentStreak = buildCurrentStreak(completionSet, todayKey);
-          const bestStreak = buildBestStreak(completionSet, buildDateRange(habitHistoryStart, today));
-          return {
-            id: task.id,
-            title: task.title || "Untitled habit",
-            dates: completionSet,
-            monthCompleted: completedThisMonth,
-            monthRate: visibleMonthDays.length > 0 ? clampPercent((completedThisMonth / visibleMonthDays.length) * 100) : 0,
-            currentStreak,
-            bestStreak,
-            todayDone: completionSet.has(todayKey),
-          };
+        setWeeklyTrend(weeklyTotals);
+        setDecisiveRhythm(
+          decisiveDaysByWeek.map((row) => ({
+            week: row.week,
+            label: row.label,
+            days: row.days.size,
+          }))
+        );
+
+        // Outcome momentum — top 5 outcomes by total in 12 weeks
+        const profile = profileRes?.data?.profile || {};
+        const desiredOutcomes = profile.desired_outcomes || [];
+        const outcomeLabel = new Map(
+          desiredOutcomes.map((o) => [o.id || o.title, o.title || o.id])
+        );
+        const outcomeRanked = Object.entries(outcomeByWeek)
+          .map(([id, arr]) => ({
+            id,
+            name: outcomeLabel.get(id) || id,
+            total: arr.reduce((a, b) => a + b, 0),
+            arr,
+          }))
+          .sort((a, b) => b.total - a.total)
+          .slice(0, 5);
+        const outcomeRows = weekStarts.map((w, i) => {
+          const row = { week: w, label: formatWeekLabel(w) };
+          outcomeRanked.forEach((o) => {
+            row[o.name] = o.arr[i];
+          });
+          return row;
+        });
+        setOutcomeMomentum({
+          weeks: outcomeRows,
+          series: outcomeRanked.map((o) => o.name),
         });
 
-        const totalHabitGoalsMonth = habitTasks.length * Math.max(visibleMonthDays.length, 1);
-        const totalCompletedMonth = habitRows.reduce((sum, row) => sum + row.monthCompleted, 0);
-        const todayCompletedHabits = habitRows.filter((row) => row.todayDone).length;
-        const sevenDayHabitCompletions = habitRows.reduce((sum, row) => {
-          const recentDays = buildDateRange(addDays(today, -6), today);
-          return sum + recentDays.filter((day) => row.dates.has(day)).length;
-        }, 0);
-        const fourteenDayTrend = trendData.slice(-14);
-        const momentumRate = fourteenDayTrend.length > 0
-          ? clampPercent(
-              (fourteenDayTrend.reduce((sum, row) => sum + row.completed, 0) /
-                (Math.max(habitTasks.length, 1) * fourteenDayTrend.length)) *
-                100
-            )
-          : 0;
-
-        setHabitTracker({
-          monthLabel: today.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
-          templateName: defaultTemplate?.name || "Daily Hits",
-          totalHabits: habitTasks.length,
-          monthDays,
-          visibleMonthDays,
-          trendData,
-          habitRows,
-          topHabits: [...habitRows]
-            .sort((a, b) => {
-              if (b.monthCompleted !== a.monthCompleted) return b.monthCompleted - a.monthCompleted;
-              return String(a.title).localeCompare(String(b.title));
-            })
-            .slice(0, 6),
-          activeStreaks: [...habitRows]
-            .filter((row) => row.currentStreak > 0)
-            .sort((a, b) => {
-              if (b.currentStreak !== a.currentStreak) return b.currentStreak - a.currentStreak;
-              return b.monthCompleted - a.monthCompleted;
-            })
-            .slice(0, 6),
-          progressRings: [
-            progressRing(momentumRate, "Momentum", `${momentumRate}%`, "#2ec5ff"),
-            progressRing(
-              habitTasks.length > 0 ? (todayCompletedHabits / habitTasks.length) * 100 : 0,
-              "Daily progress",
-              `${todayCompletedHabits}/${habitTasks.length || 0}`,
-              "#20d97a"
-            ),
-            progressRing(
-              habitTasks.length > 0 ? (sevenDayHabitCompletions / (habitTasks.length * 7 || 1)) * 100 : 0,
-              "Weekly progress",
-              `${clampPercent((sevenDayHabitCompletions / (habitTasks.length * 7 || 1)) * 100)}%`,
-              "#27e58d"
-            ),
-            progressRing(
-              totalHabitGoalsMonth > 0 ? (totalCompletedMonth / totalHabitGoalsMonth) * 100 : 0,
-              "Monthly progress",
-              `${clampPercent((totalCompletedMonth / totalHabitGoalsMonth) * 100)}%`,
-              "#96f060"
-            ),
-          ],
-          stats: {
-            startDate: visibleMonthDays[0] || todayKey,
-            endDate: visibleMonthDays[visibleMonthDays.length - 1] || todayKey,
-            daysElapsed: visibleMonthDays.length,
-            goalsThisMonth: totalHabitGoalsMonth,
-            completedThisMonth: totalCompletedMonth,
-            remainingThisMonth: Math.max(totalHabitGoalsMonth - totalCompletedMonth, 0),
-            todayCompleted: todayCompletedHabits,
-          },
+        // Project contribution — top 5 projects by total in 12 weeks
+        const projectRanked = Object.entries(projectByWeek)
+          .map(([name, arr]) => ({
+            name,
+            total: arr.reduce((a, b) => a + b, 0),
+            arr,
+          }))
+          .sort((a, b) => b.total - a.total)
+          .slice(0, 5);
+        const projectRows = weekStarts.map((w, i) => {
+          const row = { week: w, label: formatWeekLabel(w) };
+          projectRanked.forEach((p) => {
+            row[p.name] = p.arr[i];
+          });
+          return row;
+        });
+        setProjectContribution({
+          weeks: projectRows,
+          series: projectRanked.map((p) => p.name),
         });
 
-        const openTodoDoing = openTasks.filter((t) => t.status === "todo" || t.status === "doing");
-        const overdue = openTodoDoing.filter((t) => t.due_date && dateStrLocal(new Date(t.due_date)) < todayStr).length;
-        const highPriorityOpen = openTodoDoing.filter((t) => (t.priority === "Critical" || t.priority === "High")).length;
+        // --- Putting off ---
+        const openTodoDoing = openTasks.filter(
+          (t) => t.status === "todo" || t.status === "doing"
+        );
+        const todayStr = dateStrLocal(today);
+        const overdue = openTodoDoing.filter(
+          (t) => t.due_date && dateStrLocal(new Date(t.due_date)) < todayStr
+        ).length;
+        const highPriorityOpen = openTodoDoing.filter(
+          (t) => t.priority === "Critical" || t.priority === "High"
+        ).length;
         setPuttingOff({ overdue, highPriorityOpen });
 
+        // --- 30-day breakdowns (keep, this is net-new versus weekly review) ---
         const categoryCounts = {};
         const projectAlignmentByCategory = {};
-        const prefs = profileRes?.data?.profile?.preferences || {};
-        const allCategories = (categoriesRes?.data || []).map((category) => ({
-          id: category.id,
-          name: (category?.name || "Uncategorized").trim() || "Uncategorized",
-        }));
-        allCategories.forEach((category) => {
-          const catTasks = (allTasks || []).filter((task) => String(task.category_id) === String(category.id));
+        allCategoriesList.forEach((category) => {
+          const catTasks = (allTasks || []).filter(
+            (task) => String(task.category_id) === String(category.id)
+          );
           const rootTasks = catTasks.filter((task) => !task.parent_task_id);
           const workspace = mergeProjectWorkspace(prefs, category.id);
           projectAlignmentByCategory[category.name] = computeProjectAlignment(
@@ -552,60 +473,53 @@ export default function AnalyticsPage() {
           if (name.toLowerCase() === "daily repeat") return;
           categoryCounts[name] = (categoryCounts[name] || 0) + 1;
         });
-        const byCategory = allCategories
-          .filter((category) => category.name.toLowerCase() !== "daily repeat")
-          .map((category) => ({
-            name: category.name,
-            count: categoryCounts[category.name] || 0,
-            alignment: projectAlignmentByCategory[category.name] ?? null,
+        const byCategory = allCategoriesList
+          .filter((c) => c.name.toLowerCase() !== "daily repeat")
+          .map((c) => ({
+            name: c.name,
+            count: categoryCounts[c.name] || 0,
+            alignment: projectAlignmentByCategory[c.name] ?? null,
             alignment_label:
-              typeof projectAlignmentByCategory[category.name] === "number"
-                ? `${projectAlignmentByCategory[category.name]}`
+              typeof projectAlignmentByCategory[c.name] === "number"
+                ? `${projectAlignmentByCategory[c.name]}`
                 : "",
           }))
           .concat(
             Object.entries(categoryCounts)
-              .filter(([name]) => !allCategories.some((category) => category.name === name))
+              .filter(([name]) => !allCategoriesList.some((c) => c.name === name))
               .map(([name, count]) => ({
-            name,
-            count,
-            alignment: projectAlignmentByCategory[name] ?? null,
-            alignment_label:
-              typeof projectAlignmentByCategory[name] === "number"
-                ? `${projectAlignmentByCategory[name]}`
-                : "",
+                name,
+                count,
+                alignment: projectAlignmentByCategory[name] ?? null,
+                alignment_label:
+                  typeof projectAlignmentByCategory[name] === "number"
+                    ? `${projectAlignmentByCategory[name]}`
+                    : "",
               }))
           )
           .sort((a, b) => b.count - a.count)
           .filter((row) => row.name.toLowerCase() !== "daily repeat");
         setCompletionsByCategory(byCategory);
 
-        const profile = profileRes?.data?.profile || {};
-        const desiredOutcomes = profile.desired_outcomes || [];
-        const outcomesById = new Map(desiredOutcomes.map((o) => [o.id || o.title, o.title || o.id]));
         const byOutcomeId = {};
         const byDomain = {};
         (range30.data || []).forEach((ev) => {
           const task = tasksById.get(ev.task_id);
           const outcomeIds = Array.isArray(task?.outcome_ids) ? task.outcome_ids : [];
-          if (outcomeIds.length > 0) {
-            outcomeIds.forEach((oid) => {
-              byOutcomeId[oid] = (byOutcomeId[oid] || 0) + 1;
-            });
-          }
+          outcomeIds.forEach((oid) => {
+            byOutcomeId[oid] = (byOutcomeId[oid] || 0) + 1;
+          });
           const domain = task?.primary_life_domain;
-          if (domain) {
-            byDomain[domain] = (byDomain[domain] || 0) + 1;
-          }
+          if (domain) byDomain[domain] = (byDomain[domain] || 0) + 1;
         });
-        const knownOutcomeRows = desiredOutcomes.map((outcome) => ({
-          id: outcome.id || outcome.title,
-          name: outcome.title || outcome.id || "Outcome",
-          count: byOutcomeId[outcome.id || outcome.title] || 0,
+        const knownOutcomeRows = desiredOutcomes.map((o) => ({
+          id: o.id || o.title,
+          name: o.title || o.id || "Outcome",
+          count: byOutcomeId[o.id || o.title] || 0,
         }));
         const unknownOutcomeRows = Object.entries(byOutcomeId)
-          .filter(([id]) => !knownOutcomeRows.some((row) => String(row.id) === String(id)))
-          .map(([id, count]) => ({ id, name: outcomesById.get(id) || id, count }));
+          .filter(([id]) => !knownOutcomeRows.some((r) => String(r.id) === String(id)))
+          .map(([id, count]) => ({ id, name: outcomeLabel.get(id) || id, count }));
         setCompletionsByOutcome(
           [...knownOutcomeRows, ...unknownOutcomeRows].sort((a, b) => {
             if (b.count !== a.count) return b.count - a.count;
@@ -630,675 +544,321 @@ export default function AnalyticsPage() {
     load();
   }, [user, refreshNonce]);
 
-  if (loading) {
-    return (
-      <DashboardLayout>
-        <p style={{ fontSize: 14, color: "#6b7280" }}>Loading...</p>
-      </DashboardLayout>
-    );
-  }
+  const categoryChartHeight = Math.max(240, completionsByCategory.length * 42);
+  const outcomeChartHeight = Math.max(240, completionsByOutcome.length * 40);
+  const lifeDomainChartHeight = Math.max(220, completionsByLifeDomain.length * 38);
 
-  const categoryChartHeight = Math.max(280, completionsByCategory.length * 46);
-  const outcomeChartHeight = Math.max(280, completionsByOutcome.length * 42);
-  const lifeDomainChartHeight = Math.max(260, completionsByLifeDomain.length * 40);
-  const hasHabitTracker = habitTracker && habitTracker.totalHabits > 0;
-
-  async function handleHabitDateToggle(taskId, day, isCompleted) {
-    if (!user || !taskId || !day) return;
-    const todayKey = dateStrLocal(new Date());
-    if (day > todayKey) return;
-    const editKey = `${taskId}:${day}`;
-    setHabitEditKey(editKey);
-    try {
-      const res = await setTaskCompletionForDate(user.id, taskId, day, !isCompleted);
-      if (res.error) {
-        setError(res.error.message || "Failed to update habit history.");
-        return;
-      }
-      setRefreshNonce((value) => value + 1);
-    } finally {
-      setHabitEditKey("");
-    }
-  }
+  const coachPayload = useMemo(
+    () => ({
+      days_active_30: summaryMetrics.daysActive30,
+      this_week_total: summaryMetrics.thisWeekTotal,
+      last_week_total: summaryMetrics.lastWeekTotal,
+      weekly_review_streak: summaryMetrics.weeklyReviewStreak,
+      active_streak_days: summaryMetrics.activeStreakDays,
+      overdue: puttingOff.overdue,
+      high_pri_open: puttingOff.highPriorityOpen,
+      weekly_trend: weeklyTrend.slice(-8).map((w) => w.count),
+      decisive_rhythm: decisiveRhythm.slice(-8).map((w) => w.days),
+      top_outcomes: outcomeMomentum.series.slice(0, 3),
+      top_projects: projectContribution.series.slice(0, 3),
+      by_category_top: completionsByCategory.slice(0, 5).map((r) => ({
+        name: r.name,
+        count: r.count,
+        alignment: r.alignment,
+      })),
+      by_outcome_top: completionsByOutcome.slice(0, 5).map((r) => ({
+        name: r.name,
+        count: r.count,
+      })),
+    }),
+    [
+      summaryMetrics,
+      puttingOff,
+      weeklyTrend,
+      decisiveRhythm,
+      outcomeMomentum,
+      projectContribution,
+      completionsByCategory,
+      completionsByOutcome,
+    ]
+  );
 
   return (
-    <DashboardLayout>
-      <div>
-        <PageHeader
-          eyebrow="Your momentum"
-          title="Analytics & rhythm"
-          subtitle={
-            weeklyStreak > 0
-              ? `Completion patterns, time-of-day, and reviews. Weekly review streak: ${weeklyStreak} week${weeklyStreak === 1 ? "" : "s"}.`
-              : "Quantifying the vision. Tracking the spirit — completions, time-of-day, and reviews."
-          }
-        />
+    <PSShell
+      scope="analytics"
+      title="Analytics"
+      coachPayload={coachPayload}
+      coachPayloadReady={!loading}
+    >
+      <div className="ps-view an-view">
+        <div className="ps-eyebrow">— · Analytics</div>
+        <h1 className="ps-title">Signal from the noise.</h1>
+        <p className="ps-sub">
+          Trends, momentum, and alignment — the numbers that tell you whether
+          your next best action is pulling you toward the vision.
+        </p>
 
-        {error && (
-          <p style={{ color: "#b91c1c", fontSize: 13, marginTop: 8 }}>{error}</p>
-        )}
+        {error && <div className="an-error">{error}</div>}
 
-        <div className="rs-stat-grid" style={{ marginTop: 8 }}>
-          <div className="rs-stat-tile">
-            <div className="rs-stat-tile__label">Days active</div>
-            <div className="rs-stat-tile__value">{summaryMetrics.daysActive7}</div>
-            <div className="rs-stat-tile__hint">Last 7 days</div>
-          </div>
-          <div className="rs-stat-tile">
-            <div className="rs-stat-tile__label">Days active</div>
-            <div className="rs-stat-tile__value">{summaryMetrics.daysActive30}</div>
-            <div className="rs-stat-tile__hint">Last 30 days</div>
-          </div>
-          <div className="rs-stat-tile rs-stat-tile--gold">
-            <div className="rs-stat-tile__label">This week vs last</div>
-            <div className="rs-stat-tile__value" style={{ fontSize: "1.35rem" }}>
-              {summaryMetrics.thisWeekTotal} / {summaryMetrics.lastWeekTotal}
-            </div>
-            <div className="rs-stat-tile__hint">Task completions</div>
-          </div>
-          {summaryMetrics.dailyHitsRate7 != null && (
-            <div className="rs-stat-tile">
-              <div className="rs-stat-tile__label">Daily hits</div>
-              <div className="rs-stat-tile__value">{summaryMetrics.dailyHitsRate7}%</div>
-              <div className="rs-stat-tile__hint">7-day ritual rate</div>
-            </div>
-          )}
+        <div className="an-kpis">
+          <KpiTile
+            label="Active streak"
+            value={`${summaryMetrics.activeStreakDays}d`}
+            hint="Days in a row with ≥1 completion"
+            accent="var(--ps-accent)"
+          />
+          <KpiTile
+            label="Weekly review streak"
+            value={`${summaryMetrics.weeklyReviewStreak}`}
+            hint={
+              summaryMetrics.weeklyReviewStreak === 1
+                ? "consecutive week"
+                : "consecutive weeks"
+            }
+            accent="var(--ps-sage)"
+          />
+          <KpiTile
+            label="This week vs last"
+            value={`${summaryMetrics.thisWeekTotal} / ${summaryMetrics.lastWeekTotal}`}
+            hint="Task completions"
+            accent="var(--ps-indigo)"
+            delta={summaryMetrics.thisWeekTotal - summaryMetrics.lastWeekTotal}
+          />
+          <KpiTile
+            label="Days active"
+            value={`${summaryMetrics.daysActive30}`}
+            hint="Last 30 days"
+            accent="var(--ps-plum)"
+          />
         </div>
 
         {(puttingOff.overdue > 0 || puttingOff.highPriorityOpen > 0) && (
-          <div
-            style={{
-              marginTop: 12,
-              padding: 14,
-              borderRadius: 12,
-              background: "#fef2f2",
-              border: "1px solid #fecaca",
-            }}
-          >
-            <h3 style={{ fontSize: 14, fontWeight: 600, margin: "0 0 8px", color: "#991b1b" }}>
-              What you might be putting off
-            </h3>
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", fontSize: 13 }}>
+          <div className="an-alert">
+            <span className="an-alert-cap">What you might be putting off</span>
+            <div className="an-alert-row">
               {puttingOff.overdue > 0 && (
-                <Link
-                  href="/backlog?quick=overdue"
-                  style={{ color: "#b91c1c", textDecoration: "underline" }}
-                >
-                  <strong>{puttingOff.overdue}</strong> overdue task{puttingOff.overdue === 1 ? "" : "s"}
+                <Link href="/backlog?quick=overdue" className="an-alert-link">
+                  <strong>{puttingOff.overdue}</strong> overdue
                 </Link>
               )}
               {puttingOff.highPriorityOpen > 0 && (
-                <Link
-                  href="/backlog?quick=critical_high"
-                  style={{ color: "#b91c1c", textDecoration: "underline" }}
-                >
-                  <strong>{puttingOff.highPriorityOpen}</strong> open Critical/High priority
+                <Link href="/backlog?quick=critical_high" className="an-alert-link">
+                  <strong>{puttingOff.highPriorityOpen}</strong> open Critical/High
                 </Link>
               )}
             </div>
           </div>
         )}
 
-        <style>{`
-          .analytics-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-top: 20px; }
-          .analytics-habit-shell {
-            margin-top: 20px;
-            padding: 18px;
-            border-radius: 22px;
-            background: linear-gradient(180deg, #0d2032 0%, #081a2b 100%);
-            color: #f3f8ff;
-            border: 1px solid rgba(98, 139, 182, 0.22);
-            box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
-          }
-          .analytics-habit-header {
-            display: grid;
-            grid-template-columns: minmax(180px, 1.15fr) minmax(0, 3fr) minmax(200px, 1.15fr);
-            gap: 14px;
-            align-items: stretch;
-          }
-          .analytics-habit-titleCard,
-          .analytics-habit-sideCard,
-          .analytics-habit-panel {
-            background: rgba(8, 20, 33, 0.74);
-            border: 1px solid rgba(110, 148, 189, 0.18);
-            border-radius: 16px;
-          }
-          .analytics-habit-titleCard {
-            padding: 18px;
-          }
-          .analytics-habit-titleCard h2 {
-            margin: 0 0 6px;
-            font-size: 1.9rem;
-            letter-spacing: -0.03em;
-          }
-          .analytics-habit-titleCard p {
-            margin: 0;
-            color: rgba(226, 237, 255, 0.74);
-            font-size: 12px;
-          }
-          .analytics-habit-ringRow {
-            display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 12px;
-          }
-          .analytics-habit-ringCard {
-            padding: 14px 10px 12px;
-            text-align: center;
-          }
-          .analytics-habit-ring {
-            width: 76px;
-            height: 76px;
-            border-radius: 999px;
-            margin: 0 auto 8px;
-            display: grid;
-            place-items: center;
-          }
-          .analytics-habit-ringInner {
-            width: 58px;
-            height: 58px;
-            border-radius: 999px;
-            background: #0b1d2e;
-            display: grid;
-            place-items: center;
-            font-size: 12px;
-            font-weight: 700;
-          }
-          .analytics-habit-ringLabel {
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: rgba(220, 233, 255, 0.72);
-          }
-          .analytics-habit-sideCard {
-            padding: 14px;
-          }
-          .analytics-habit-sideTitle {
-            margin: 0 0 10px;
-            font-size: 12px;
-            color: rgba(220, 233, 255, 0.82);
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-          }
-          .analytics-habit-bars {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-          }
-          .analytics-habit-barRow {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) 36px;
-            gap: 10px;
-            align-items: center;
-          }
-          .analytics-habit-barMeta {
-            display: flex;
-            justify-content: space-between;
-            gap: 8px;
-            font-size: 11px;
-            margin-bottom: 3px;
-            color: rgba(228, 238, 255, 0.86);
-          }
-          .analytics-habit-barTrack {
-            height: 10px;
-            border-radius: 999px;
-            overflow: hidden;
-            background: rgba(255,255,255,0.08);
-          }
-          .analytics-habit-barFill {
-            height: 100%;
-            border-radius: 999px;
-          }
-          .analytics-habit-barValue {
-            text-align: right;
-            font-size: 11px;
-            color: rgba(220, 233, 255, 0.78);
-          }
-          .analytics-habit-body {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) 240px;
-            gap: 14px;
-            margin-top: 14px;
-          }
-          .analytics-habit-panel {
-            padding: 16px;
-          }
-          .analytics-habit-metrics {
-            display: grid;
-            grid-template-columns: 160px minmax(160px, 1fr);
-            gap: 14px;
-            margin-bottom: 14px;
-          }
-          .analytics-habit-metricStack {
-            display: grid;
-            gap: 10px;
-          }
-          .analytics-habit-metricBox {
-            padding: 14px;
-            border-radius: 14px;
-            background: rgba(12, 30, 48, 0.86);
-            border: 1px solid rgba(110, 148, 189, 0.14);
-          }
-          .analytics-habit-metricLabel {
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: rgba(220, 233, 255, 0.72);
-          }
-          .analytics-habit-metricValue {
-            margin-top: 4px;
-            font-size: 1.9rem;
-            font-weight: 700;
-            color: #29df83;
-          }
-          .analytics-habit-metricHint {
-            margin-top: 4px;
-            font-size: 12px;
-            color: rgba(220, 233, 255, 0.7);
-          }
-          .analytics-habit-heatmap {
-            display: grid;
-            gap: 4px;
-            align-items: center;
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-          }
-          .analytics-habit-heatmap--mobile {
-            display: none;
-          }
-          .analytics-habit-cell,
-          .analytics-habit-dayCell,
-          .analytics-habit-rowLabel,
-          .analytics-habit-extraCell {
-            min-width: 18px;
-          }
-          .analytics-habit-dayCell {
-            font-size: 10px;
-            color: rgba(218, 232, 255, 0.7);
-            text-align: center;
-            padding-bottom: 4px;
-          }
-          .analytics-habit-rowLabel {
-            padding-right: 8px;
-            font-size: 12px;
-            color: #eef5ff;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-          }
-          .analytics-habit-cell {
-            height: 18px;
-            border-radius: 4px;
-            background: rgba(255,255,255,0.06);
-            border: 1px solid rgba(255,255,255,0.05);
-            padding: 0;
-            appearance: none;
-            -webkit-appearance: none;
-          }
-          .analytics-habit-cell--editable {
-            cursor: pointer;
-            transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
-          }
-          .analytics-habit-cell--editable:hover {
-            transform: translateY(-1px);
-            border-color: rgba(255,255,255,0.24);
-            box-shadow: 0 0 0 1px rgba(255,255,255,0.08);
-          }
-          .analytics-habit-cell--done {
-            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
-          }
-          .analytics-habit-cell--future {
-            opacity: 0.3;
-          }
-          .analytics-habit-cell--saving {
-            opacity: 0.65;
-            cursor: wait;
-          }
-          .analytics-habit-extraCell {
-            font-size: 11px;
-            color: rgba(220, 233, 255, 0.78);
-            text-align: right;
-            padding-left: 6px;
-          }
-          .analytics-habit-mobileDays,
-          .analytics-habit-mobileStrip {
-            display: grid;
-            grid-auto-flow: column;
-            grid-auto-columns: 18px;
-            gap: 4px;
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-          }
-          .analytics-habit-mobileDays {
-            margin-bottom: 8px;
-            padding-bottom: 4px;
-          }
-          .analytics-habit-mobileRow {
-            padding: 10px;
-            border-radius: 12px;
-            background: rgba(12, 30, 48, 0.82);
-            border: 1px solid rgba(110, 148, 189, 0.12);
-          }
-          .analytics-habit-mobileList {
-            display: grid;
-            gap: 8px;
-          }
-          .analytics-habit-mobileRowHead {
-            display: flex;
-            align-items: flex-start;
-            justify-content: space-between;
-            gap: 10px;
-            margin-bottom: 8px;
-          }
-          .analytics-habit-mobileTitle {
-            font-size: 12px;
-            color: #eef5ff;
-            font-weight: 600;
-            min-width: 0;
-          }
-          .analytics-habit-mobileBadges {
-            display: flex;
-            gap: 6px;
-            flex-wrap: wrap;
-            justify-content: flex-end;
-            font-size: 10px;
-            color: rgba(220, 233, 255, 0.82);
-          }
-          .analytics-habit-mobileBadge {
-            padding: 3px 6px;
-            border-radius: 999px;
-            background: rgba(255,255,255,0.08);
-            white-space: nowrap;
-          }
-          @media (max-width: 1100px) {
-            .analytics-habit-header,
-            .analytics-habit-body,
-            .analytics-habit-metrics,
-            .analytics-habit-ringRow { grid-template-columns: 1fr; }
-          }
-          @media (max-width: 768px) {
-            .analytics-grid { grid-template-columns: 1fr; }
-            .analytics-habit-shell { padding: 14px; border-radius: 18px; }
-            .analytics-habit-titleCard,
-            .analytics-habit-sideCard,
-            .analytics-habit-panel { padding: 12px; }
-            .analytics-habit-titleCard h2 { font-size: 1.55rem; }
-            .analytics-habit-ringRow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-            .analytics-habit-metrics { grid-template-columns: 1fr; }
-            .analytics-habit-heatmap--desktop { display: none; }
-            .analytics-habit-heatmap--mobile { display: grid; }
-            .analytics-habit-rowLabel { font-size: 11px; }
-            .analytics-habit-dayCell { font-size: 9px; }
-            .analytics-habit-cell { min-width: 20px; height: 20px; }
-          }
-        `}</style>
-        <section className="analytics-habit-shell">
-          <div className="analytics-habit-header">
-            <div className="analytics-habit-titleCard">
-              <p>{habitTracker?.monthLabel || "Daily habit tracker"} · {habitTracker?.templateName || "Daily Hits"}</p>
-              <h2>Habit Tracker</h2>
-              <p>
-                Daily Hits completions, streaks, and month-to-date progress in one place.
-              </p>
-              <p style={{ marginTop: 10 }}>
-                Click any past or current day square below to correct a Daily Hit after the fact.
-              </p>
-              {hasHabitTracker && (
-                <div style={{ marginTop: 14, fontSize: 12, color: "rgba(220, 233, 255, 0.82)", display: "grid", gap: 4 }}>
-                  <div>Start date: {habitTracker.stats.startDate}</div>
-                  <div>End date: {habitTracker.stats.endDate}</div>
-                  <div>Daily habits: {habitTracker.totalHabits}</div>
-                  <div>Habit goals: {habitTracker.stats.goalsThisMonth}</div>
-                </div>
-              )}
-            </div>
-
-            <div className="analytics-habit-ringRow">
-              {(habitTracker?.progressRings || []).map((ring) => (
-                <div key={ring.label} className="analytics-habit-titleCard analytics-habit-ringCard">
-                  <div className="analytics-habit-ring" style={{ background: ring.gradient }}>
-                    <div className="analytics-habit-ringInner">{ring.valueLabel}</div>
-                  </div>
-                  <div className="analytics-habit-ringLabel">{ring.label}</div>
-                </div>
-              ))}
-            </div>
-
-            <div className="analytics-habit-sideCard">
-              <h3 className="analytics-habit-sideTitle">Top habits</h3>
-              {hasHabitTracker ? (
-                <div className="analytics-habit-bars">
-                  {habitTracker.topHabits.map((row, idx) => (
-                    <div className="analytics-habit-barRow" key={row.id}>
-                      <div>
-                        <div className="analytics-habit-barMeta">
-                          <span>{shortenChartLabel(row.title, 18)}</span>
-                          <span>{row.monthCompleted}</span>
-                        </div>
-                        <div className="analytics-habit-barTrack">
-                          <div
-                            className="analytics-habit-barFill"
-                            style={{
-                              width: `${row.monthRate}%`,
-                              background: ["#2ec5ff", "#2adf86", "#8a74ff", "#f2c94c", "#ff6b8b", "#4dd3a9"][idx % 6],
-                            }}
-                          />
-                        </div>
-                      </div>
-                      <div className="analytics-habit-barValue">{row.monthRate}%</div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p style={{ margin: 0, fontSize: 13, color: "rgba(220, 233, 255, 0.72)" }}>
-                  Add Daily Hits on the `Daily Hits` page to populate the tracker.
-                </p>
-              )}
-            </div>
+        <section className="an-card">
+          <div className="an-card-head">
+            <h2>Weekly momentum</h2>
+            <span className="an-cap">Completions per week · last 12 weeks</span>
           </div>
-
-          <div className="analytics-habit-body">
-            <div className="analytics-habit-panel">
-              {hasHabitTracker ? (
-                <>
-                  <div className="analytics-habit-metrics">
-                    <div className="analytics-habit-metricStack">
-                      <div className="analytics-habit-metricBox">
-                        <div className="analytics-habit-metricLabel">Completed</div>
-                        <div className="analytics-habit-metricValue">{habitTracker.stats.completedThisMonth}</div>
-                        <div className="analytics-habit-metricHint">Month to date</div>
-                      </div>
-                      <div className="analytics-habit-metricBox">
-                        <div className="analytics-habit-metricLabel">Remaining</div>
-                        <div className="analytics-habit-metricValue" style={{ color: "#ff6b8b" }}>
-                          {habitTracker.stats.remainingThisMonth}
-                        </div>
-                        <div className="analytics-habit-metricHint">Open habit reps this month</div>
-                      </div>
-                    </div>
-
-                    <div className="analytics-habit-metricBox">
-                      <div className="analytics-habit-metricLabel">Daily progress trend</div>
-                      <div style={{ height: 180, marginTop: 10 }}>
-                        <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={habitTracker.trendData} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-                            <XAxis dataKey="label" tick={{ fontSize: 10, fill: "rgba(220,233,255,0.68)" }} />
-                            <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "rgba(220,233,255,0.68)" }} />
-                            <Tooltip
-                              contentStyle={{ background: "#0c2134", border: "1px solid rgba(110, 148, 189, 0.24)" }}
-                              labelStyle={{ color: "#eef5ff" }}
-                            />
-                            <Line type="monotone" dataKey="completed" stroke="#2adf86" strokeWidth={2.5} dot={false} name="Daily hits completed" />
-                          </LineChart>
-                        </ResponsiveContainer>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div
-                    className="analytics-habit-heatmap analytics-habit-heatmap--desktop"
-                    style={{
-                      gridTemplateColumns: `190px repeat(${habitTracker.monthDays.length}, minmax(18px, 1fr)) 70px 58px`,
+          {weeklyTrend.length > 0 ? (
+            <MeasuredChart
+              height={220}
+              renderChart={({ width, height }) => (
+                <AreaChart
+                  width={width}
+                  height={height}
+                  data={weeklyTrend}
+                  margin={{ top: 10, right: 16, bottom: 6, left: 0 }}
+                >
+                  <defs>
+                    <linearGradient id="grad-momentum" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#b97316" stopOpacity={0.35} />
+                      <stop offset="95%" stopColor="#b97316" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,24,20,0.06)" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#655e4f" }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#655e4f" }} />
+                  <Tooltip
+                    contentStyle={{
+                      background: "var(--ps-paper-soft)",
+                      border: "1px solid var(--ps-ink-15)",
+                      fontSize: 12,
                     }}
-                  >
-                    <div className="analytics-habit-rowLabel analytics-habit-dayCell">Daily habits</div>
-                    {habitTracker.monthDays.map((day) => (
-                      <div key={`header-${day}`} className="analytics-habit-dayCell">
-                        {new Date(`${day}T12:00:00`).getDate()}
-                      </div>
-                    ))}
-                    <div className="analytics-habit-dayCell">Progress</div>
-                    <div className="analytics-habit-dayCell">Streak</div>
-
-                    {habitTracker.habitRows.map((row, idx) => (
-                      <div key={row.id} style={{ display: "contents" }}>
-                        <div key={`${row.id}-label`} className="analytics-habit-rowLabel" title={row.title}>
-                          {row.title}
-                        </div>
-                        {habitTracker.monthDays.map((day) => {
-                          const isFuture = day > habitTracker.stats.endDate;
-                          const isDone = row.dates.has(day);
-                          const editKey = `${row.id}:${day}`;
-                          const isSaving = habitEditKey === editKey;
-                          const fill = ["#20bdf2", "#24df84", "#8b73ff", "#d8ad2f", "#ff4d7e", "#32c7a0"][idx % 6];
-                          return (
-                            <button
-                              type="button"
-                              key={`${row.id}-${day}`}
-                              className={`analytics-habit-cell${isDone ? " analytics-habit-cell--done" : ""}${isFuture ? " analytics-habit-cell--future" : " analytics-habit-cell--editable"}${isSaving ? " analytics-habit-cell--saving" : ""}`}
-                              style={{ background: isDone ? fill : undefined }}
-                              title={
-                                isFuture
-                                  ? `${row.title} · ${day} (future)`
-                                  : `${row.title} · ${day}${isDone ? " complete" : " incomplete"} · click to toggle`
-                              }
-                              onClick={() => handleHabitDateToggle(row.id, day, isDone)}
-                              disabled={isFuture || isSaving}
-                              aria-label={`${isDone ? "Mark incomplete" : "Mark complete"} for ${row.title} on ${day}`}
-                            />
-                          );
-                        })}
-                        <div key={`${row.id}-progress`} className="analytics-habit-extraCell">
-                          {row.monthCompleted}/{habitTracker.visibleMonthDays.length}
-                        </div>
-                        <div key={`${row.id}-streak`} className="analytics-habit-extraCell">
-                          {row.currentStreak}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="analytics-habit-heatmap--mobile">
-                    <div className="analytics-habit-mobileDays">
-                      {habitTracker.monthDays.map((day) => (
-                        <div key={`mobile-header-${day}`} className="analytics-habit-dayCell">
-                          {new Date(`${day}T12:00:00`).getDate()}
-                        </div>
-                      ))}
-                    </div>
-                    <div className="analytics-habit-mobileList">
-                      {habitTracker.habitRows.map((row, idx) => (
-                        <div key={`mobile-${row.id}`} className="analytics-habit-mobileRow">
-                          <div className="analytics-habit-mobileRowHead">
-                            <div className="analytics-habit-mobileTitle">{row.title}</div>
-                            <div className="analytics-habit-mobileBadges">
-                              <span className="analytics-habit-mobileBadge">
-                                {row.monthCompleted}/{habitTracker.visibleMonthDays.length}
-                              </span>
-                              <span className="analytics-habit-mobileBadge">
-                                {row.currentStreak}d
-                              </span>
-                            </div>
-                          </div>
-                          <div className="analytics-habit-mobileStrip">
-                            {habitTracker.monthDays.map((day) => {
-                              const isFuture = day > habitTracker.stats.endDate;
-                              const isDone = row.dates.has(day);
-                              const editKey = `${row.id}:${day}`;
-                              const isSaving = habitEditKey === editKey;
-                              const fill = ["#20bdf2", "#24df84", "#8b73ff", "#d8ad2f", "#ff4d7e", "#32c7a0"][idx % 6];
-                              return (
-                                <button
-                                  type="button"
-                                  key={`mobile-${row.id}-${day}`}
-                                  className={`analytics-habit-cell${isDone ? " analytics-habit-cell--done" : ""}${isFuture ? " analytics-habit-cell--future" : " analytics-habit-cell--editable"}${isSaving ? " analytics-habit-cell--saving" : ""}`}
-                                  style={{ background: isDone ? fill : undefined }}
-                                  title={
-                                    isFuture
-                                      ? `${row.title} · ${day} (future)`
-                                      : `${row.title} · ${day}${isDone ? " complete" : " incomplete"} · tap to toggle`
-                                  }
-                                  onClick={() => handleHabitDateToggle(row.id, day, isDone)}
-                                  disabled={isFuture || isSaving}
-                                  aria-label={`${isDone ? "Mark incomplete" : "Mark complete"} for ${row.title} on ${day}`}
-                                />
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <p style={{ margin: 0, fontSize: 13, color: "rgba(220, 233, 255, 0.72)" }}>
-                  No Daily Hits are configured yet. Add them on the `Daily Hits` page and they will appear here automatically.
-                </p>
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="count"
+                    stroke="#b97316"
+                    strokeWidth={2}
+                    fill="url(#grad-momentum)"
+                    name="Completions"
+                  />
+                </AreaChart>
               )}
-            </div>
-
-            <div className="analytics-habit-sideCard">
-              <h3 className="analytics-habit-sideTitle">Active streaks</h3>
-              {hasHabitTracker && habitTracker.activeStreaks.length > 0 ? (
-                <div className="analytics-habit-bars">
-                  {habitTracker.activeStreaks.map((row, idx) => (
-                    <div className="analytics-habit-barRow" key={row.id}>
-                      <div>
-                        <div className="analytics-habit-barMeta">
-                          <span>{shortenChartLabel(row.title, 18)}</span>
-                          <span>{row.currentStreak}d</span>
-                        </div>
-                        <div className="analytics-habit-barTrack">
-                          <div
-                            className="analytics-habit-barFill"
-                            style={{
-                              width: `${Math.min(row.currentStreak * 10, 100)}%`,
-                              background: ["#2ec5ff", "#2adf86", "#8a74ff", "#f2c94c", "#ff6b8b", "#4dd3a9"][idx % 6],
-                            }}
-                          />
-                        </div>
-                      </div>
-                      <div className="analytics-habit-barValue">{row.currentStreak}</div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p style={{ margin: 0, fontSize: 13, color: "rgba(220, 233, 255, 0.72)" }}>
-                  Complete a Daily Hit today to start a visible streak.
-                </p>
-              )}
-            </div>
-          </div>
+            />
+          ) : (
+            <p className="an-empty">Complete tasks to build a momentum trend.</p>
+          )}
         </section>
-        <div className="analytics-grid">
-        <section className="rs-section-card">
-          <h2 className="rs-section-card__title" style={{ marginBottom: 4 }}>
-            Six human needs — change over time
-          </h2>
-          <p className="rs-section-card__subtitle" style={{ marginBottom: 12 }}>
-            Your needs scores from the two previous weeks (1–10). Overlap shows where scores stayed similar.
-          </p>
+
+        <section className="an-card">
+          <div className="an-card-head">
+            <h2>Decisive-action rhythm</h2>
+            <span className="an-cap">
+              Days/week with ≥1 Critical or High completion · last 12 weeks
+            </span>
+          </div>
+          {decisiveRhythm.length > 0 ? (
+            <MeasuredChart
+              height={200}
+              renderChart={({ width, height }) => (
+                <BarChart
+                  width={width}
+                  height={height}
+                  data={decisiveRhythm}
+                  margin={{ top: 10, right: 16, bottom: 6, left: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,24,20,0.06)" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#655e4f" }} />
+                  <YAxis
+                    allowDecimals={false}
+                    domain={[0, 7]}
+                    tick={{ fontSize: 11, fill: "#655e4f" }}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "var(--ps-paper-soft)",
+                      border: "1px solid var(--ps-ink-15)",
+                      fontSize: 12,
+                    }}
+                  />
+                  <Bar
+                    dataKey="days"
+                    fill="#b85c3e"
+                    radius={[4, 4, 0, 0]}
+                    name="Decisive days"
+                  />
+                </BarChart>
+              )}
+            />
+          ) : (
+            <p className="an-empty">
+              Completing a Critical or High task lights up a day. Ship one.
+            </p>
+          )}
+        </section>
+
+        <section className="an-card">
+          <div className="an-card-head">
+            <h2>Outcome momentum</h2>
+            <span className="an-cap">
+              Completions per week by outcome · top 5 · last 12 weeks
+            </span>
+          </div>
+          {outcomeMomentum.series.length > 0 ? (
+            <MeasuredChart
+              height={260}
+              renderChart={({ width, height }) => (
+                <LineChart
+                  width={width}
+                  height={height}
+                  data={outcomeMomentum.weeks}
+                  margin={{ top: 10, right: 16, bottom: 6, left: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,24,20,0.06)" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#655e4f" }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#655e4f" }} />
+                  <Tooltip
+                    contentStyle={{
+                      background: "var(--ps-paper-soft)",
+                      border: "1px solid var(--ps-ink-15)",
+                      fontSize: 12,
+                    }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  {outcomeMomentum.series.map((name, i) => (
+                    <Line
+                      key={name}
+                      type="monotone"
+                      dataKey={name}
+                      stroke={`var(--ps-${["accent", "indigo", "sage", "plum", "gold"][i % 5]})`}
+                      strokeWidth={2}
+                      dot={{ r: 2.5 }}
+                      name={shortenChartLabel(name, 28)}
+                    />
+                  ))}
+                </LineChart>
+              )}
+            />
+          ) : (
+            <p className="an-empty">
+              Link tasks to outcomes (Action Items · Outcome column) so effort
+              shows up here.
+            </p>
+          )}
+        </section>
+
+        <section className="an-card">
+          <div className="an-card-head">
+            <h2>Project contribution</h2>
+            <span className="an-cap">
+              Weekly completions by project · top 5 · last 12 weeks
+            </span>
+          </div>
+          {projectContribution.series.length > 0 ? (
+            <MeasuredChart
+              height={260}
+              renderChart={({ width, height }) => (
+                <AreaChart
+                  width={width}
+                  height={height}
+                  data={projectContribution.weeks}
+                  margin={{ top: 10, right: 16, bottom: 6, left: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,24,20,0.06)" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#655e4f" }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#655e4f" }} />
+                  <Tooltip
+                    contentStyle={{
+                      background: "var(--ps-paper-soft)",
+                      border: "1px solid var(--ps-ink-15)",
+                      fontSize: 12,
+                    }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  {projectContribution.series.map((name, i) => (
+                    <Area
+                      key={name}
+                      type="monotone"
+                      dataKey={name}
+                      stackId="1"
+                      stroke={`var(--ps-${["accent", "indigo", "sage", "plum", "gold"][i % 5]})`}
+                      fill={`var(--ps-${["accent", "indigo", "sage", "plum", "gold"][i % 5]}-soft)`}
+                      name={shortenChartLabel(name, 28)}
+                    />
+                  ))}
+                </AreaChart>
+              )}
+            />
+          ) : (
+            <p className="an-empty">
+              Portfolio trend will fill in as projects produce completions.
+            </p>
+          )}
+        </section>
+
+        <section className="an-card">
+          <div className="an-card-head">
+            <h2>Six human needs — drift</h2>
+            <span className="an-cap">Self-scores from the two previous weekly reviews (1–10)</span>
+          </div>
           {humanNeedsRadarData.some((d) => d.older > 0 || d.newer > 0) ? (
-            <div style={{ width: "100%", height: 340 }}>
+            <div style={{ width: "100%", height: 320 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <RadarChart
                   cx="50%"
                   cy="50%"
-                  outerRadius="70%"
+                  outerRadius="72%"
                   data={humanNeedsRadarData}
-                  margin={{ top: 24, right: 24, bottom: 24, left: 24 }}
+                  margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
                 >
-                  <PolarGrid stroke="rgba(186, 177, 159, 0.35)" strokeOpacity={0.9} />
+                  <PolarGrid stroke="rgba(26,24,20,0.12)" />
                   <PolarAngleAxis
                     dataKey="subject"
                     tick={{ fontSize: 12, fill: "#655e4f" }}
@@ -1307,308 +867,242 @@ export default function AnalyticsPage() {
                   <PolarRadiusAxis
                     angle={90}
                     domain={[0, 10]}
-                    tick={{ fontSize: 10, fill: "#9a9285" }}
+                    tick={{ fontSize: 10, fill: "#a39a89" }}
                     tickCount={6}
                   />
                   <Radar
-                    name={humanNeedsWeekLabels.older ? `Week of ${formatWeekLabel(humanNeedsWeekLabels.older)}` : "2 weeks ago"}
+                    name={
+                      humanNeedsWeekLabels.older
+                        ? `Week of ${formatWeekLabel(humanNeedsWeekLabels.older)}`
+                        : "2 weeks ago"
+                    }
                     dataKey="older"
-                    stroke="#a89880"
+                    stroke="#8a7a60"
                     fill="#c4b5a0"
-                    fillOpacity={0.4}
+                    fillOpacity={0.35}
                     strokeWidth={1.5}
                   />
                   <Radar
-                    name={humanNeedsWeekLabels.newer ? `Week of ${formatWeekLabel(humanNeedsWeekLabels.newer)}` : "Last week"}
+                    name={
+                      humanNeedsWeekLabels.newer
+                        ? `Week of ${formatWeekLabel(humanNeedsWeekLabels.newer)}`
+                        : "Last week"
+                    }
                     dataKey="newer"
-                    stroke="#8a7020"
-                    fill="#d4af37"
-                    fillOpacity={0.5}
+                    stroke="#b97316"
+                    fill="#b97316"
+                    fillOpacity={0.28}
                     strokeWidth={2}
                   />
                   <Legend
                     wrapperStyle={{ fontSize: 12 }}
-                    formatter={(value) => <span style={{ color: "#37322a" }}>{value}</span>}
+                    formatter={(value) => <span style={{ color: "#3d362a" }}>{value}</span>}
                   />
                 </RadarChart>
               </ResponsiveContainer>
             </div>
           ) : (
-            <p style={{ fontSize: 13, color: "var(--rs-on-surface-variant)", margin: 0 }}>
-              Complete at least one weekly review (with needs scores) to see your chart here.
+            <p className="an-empty">
+              Complete at least one weekly review with needs scores to see
+              drift here.
             </p>
           )}
         </section>
 
-        <section className="rs-section-card">
-          <h2 className="rs-section-card__title" style={{ fontSize: "1rem", marginBottom: 10 }}>
-            Planner refinement (30 days)
-          </h2>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <div
-              style={{
-                padding: "8px 12px",
-                borderRadius: "var(--rs-radius-md)",
-                background: "rgba(85, 93, 30, 0.1)",
-                color: "var(--rs-olive)",
-                fontSize: 13,
-                fontWeight: 600,
-              }}
-            >
-              Accepted: <strong>{plannerRefinementMetrics.accepted}</strong>
+        <div className="an-grid">
+          <section className="an-card">
+            <div className="an-card-head">
+              <h2>Project completions</h2>
+              <span className="an-cap">Last 30 days · alignment on right</span>
             </div>
-            <div
-              style={{
-                padding: "8px 12px",
-                borderRadius: "var(--rs-radius-md)",
-                background: "rgba(245, 206, 83, 0.2)",
-                color: "var(--rs-primary-strong)",
-                fontSize: 13,
-                fontWeight: 600,
-              }}
-            >
-              Applied: <strong>{plannerRefinementMetrics.applied}</strong>
+            {completionsByCategory.length > 0 ? (
+              <MeasuredChart
+                height={categoryChartHeight}
+                renderChart={({ width, height }) => (
+                  <BarChart
+                    width={width}
+                    height={height}
+                    data={completionsByCategory}
+                    layout="vertical"
+                    margin={{ top: 8, right: 48, bottom: 8, left: 120 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,24,20,0.06)" />
+                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      width={112}
+                      interval={0}
+                      tick={{ fontSize: 12 }}
+                      tickFormatter={(value) => shortenChartLabel(value, 22)}
+                    />
+                    <Tooltip />
+                    <Bar dataKey="count" fill="#4a6b8f" radius={[0, 4, 4, 0]} name="Completions">
+                      <LabelList
+                        dataKey="alignment_label"
+                        position="right"
+                        offset={10}
+                        fill="#4a6b8f"
+                        fontSize={11}
+                        formatter={(value) => (value ? `${value}` : "")}
+                      />
+                    </Bar>
+                  </BarChart>
+                )}
+              />
+            ) : (
+              <p className="an-empty">No project completions yet.</p>
+            )}
+          </section>
+
+          <section className="an-card">
+            <div className="an-card-head">
+              <h2>By outcome</h2>
+              <span className="an-cap">Last 30 days</span>
             </div>
-            <div
-              style={{
-                padding: "8px 12px",
-                borderRadius: "var(--rs-radius-md)",
-                background: "var(--rs-surface-low)",
-                color: "var(--rs-on-surface-variant)",
-                fontSize: 13,
-              }}
-            >
-              Dismissed: <strong>{plannerRefinementMetrics.dismissed}</strong>
+            {completionsByOutcome.length > 0 ? (
+              <MeasuredChart
+                height={outcomeChartHeight}
+                renderChart={({ width, height }) => (
+                  <BarChart
+                    width={width}
+                    height={height}
+                    data={completionsByOutcome}
+                    layout="vertical"
+                    margin={{ top: 8, right: 20, bottom: 8, left: 140 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,24,20,0.06)" />
+                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      width={132}
+                      interval={0}
+                      tick={{ fontSize: 12 }}
+                      tickFormatter={(value) => shortenChartLabel(value, 28)}
+                    />
+                    <Tooltip />
+                    <Bar dataKey="count" fill="#b97316" radius={[0, 4, 4, 0]} name="Completions" />
+                  </BarChart>
+                )}
+              />
+            ) : (
+              <p className="an-empty">
+                Link tasks to outcomes on Action Items to see distribution.
+              </p>
+            )}
+          </section>
+
+          <section className="an-card">
+            <div className="an-card-head">
+              <h2>Human need spread</h2>
+              <span className="an-cap">Where your effort landed · last 30 days</span>
             </div>
+            {completionsByLifeDomain.length > 0 ? (
+              <MeasuredChart
+                height={lifeDomainChartHeight}
+                renderChart={({ width, height }) => (
+                  <BarChart
+                    width={width}
+                    height={height}
+                    data={completionsByLifeDomain}
+                    layout="vertical"
+                    margin={{ top: 8, right: 20, bottom: 8, left: 120 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,24,20,0.06)" />
+                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      width={112}
+                      interval={0}
+                      tick={{ fontSize: 12 }}
+                      tickFormatter={(value) => shortenChartLabel(value, 24)}
+                    />
+                    <Tooltip />
+                    <Bar dataKey="count" fill="#6b8f71" radius={[0, 4, 4, 0]} name="Completions" />
+                  </BarChart>
+                )}
+              />
+            ) : (
+              <p className="an-empty">
+                Tag tasks with a human need on Action Items to see the spread.
+              </p>
+            )}
+          </section>
+
+          <section className="an-card">
+            <div className="an-card-head">
+              <h2>Time of day</h2>
+              <span className="an-cap">When you ship · last 30 days</span>
+            </div>
+            <MeasuredChart
+              height={220}
+              renderChart={({ width, height }) => (
+                <BarChart width={width} height={height} data={hourHistogram}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,24,20,0.06)" />
+                  <XAxis dataKey="hour" tick={{ fontSize: 10 }} interval={1} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Bar dataKey="count" fill="#8a5a7a" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              )}
+            />
+          </section>
+        </div>
+
+        <section className="an-card">
+          <div className="an-card-head">
+            <h2>Coach refinement</h2>
+            <span className="an-cap">How often you take AI suggestions</span>
+          </div>
+          <div className="an-chips">
+            <span className="an-chip an-chip--ok">
+              Accepted <strong>{plannerRefinementMetrics.accepted}</strong>
+            </span>
+            <span className="an-chip an-chip--gold">
+              Applied <strong>{plannerRefinementMetrics.applied}</strong>
+            </span>
+            <span className="an-chip">
+              Dismissed <strong>{plannerRefinementMetrics.dismissed}</strong>
+            </span>
+            {improvementLabReport && (
+              <>
+                <span className="an-chip an-chip--gold">
+                  Lab runs <strong>{improvementLabReport.total_runs}</strong>
+                </span>
+                <span className="an-chip an-chip--ok">
+                  Acceptance <strong>{improvementLabReport.acceptance_rate}%</strong>
+                </span>
+                <span className="an-chip">
+                  Application <strong>{improvementLabReport.application_rate}%</strong>
+                </span>
+              </>
+            )}
           </div>
         </section>
 
-        <section className="rs-section-card">
-          <h2 className="rs-section-card__title" style={{ fontSize: "1rem", marginBottom: 10 }}>
-            Recursive improvement lab
-          </h2>
-          {improvementLabReport ? (
-            <>
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
-                <div style={{ padding: "8px 12px", borderRadius: "var(--rs-radius-md)", background: "rgba(212, 175, 55, 0.16)", color: "var(--rs-primary-strong)", fontSize: 13, fontWeight: 600 }}>
-                  Runs: <strong>{improvementLabReport.total_runs}</strong>
-                </div>
-                <div style={{ padding: "8px 12px", borderRadius: "var(--rs-radius-md)", background: "rgba(85, 93, 30, 0.1)", color: "var(--rs-olive)", fontSize: 13, fontWeight: 600 }}>
-                  Acceptance: <strong>{improvementLabReport.acceptance_rate}%</strong>
-                </div>
-                <div style={{ padding: "8px 12px", borderRadius: "var(--rs-radius-md)", background: "var(--rs-surface-low)", color: "var(--rs-on-surface-variant)", fontSize: 13, fontWeight: 600 }}>
-                  Application: <strong>{improvementLabReport.application_rate}%</strong>
-                </div>
-              </div>
-              {improvementLabReport.by_prompt_version?.length > 0 && (
-                <p style={{ margin: "0 0 6px", fontSize: 12, color: "var(--rs-on-surface-variant)" }}>
-                  Prompt versions:{" "}
-                  {improvementLabReport.by_prompt_version.map((row) => `${row.key} (${row.count})`).join(" · ")}
-                </p>
-              )}
-              {improvementLabReport.by_model?.length > 0 && (
-                <p style={{ margin: 0, fontSize: 12, color: "var(--rs-on-surface-variant)" }}>
-                  Models: {improvementLabReport.by_model.map((row) => `${row.key} (${row.count})`).join(" · ")}
-                </p>
-              )}
-            </>
-          ) : (
-            <p style={{ fontSize: 13, color: "var(--rs-on-surface-variant)", margin: 0 }}>
-              Generate a weekly improvement coach run to start measuring acceptance and application quality.
-            </p>
-          )}
-        </section>
-
-        <section className="rs-section-card">
-          <h2 className="rs-section-card__title" style={{ fontSize: "1rem", marginBottom: 10 }}>
-            Completion time of day
-          </h2>
-          <MeasuredChart
-            renderChart={({ width, height }) => (
-              <BarChart width={width} height={height} data={hourHistogram}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="hour" tick={{ fontSize: 10 }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Bar dataKey="count" fill="#6b5500" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            )}
-          />
-        </section>
-
-        <section className="rs-section-card">
-          <h2 className="rs-section-card__title" style={{ fontSize: "1rem", marginBottom: 4 }}>
-            Progress by category (30 days)
-          </h2>
-          <p className="rs-section-card__subtitle" style={{ marginBottom: 8, fontSize: 12 }}>
-            Where your completions landed. Numbers at the right edge show each project's alignment score.
-          </p>
-          {completionsByCategory.length > 0 ? (
-            <MeasuredChart
-              height={categoryChartHeight}
-              renderChart={({ width, height }) => (
-                <BarChart
-                  width={width}
-                  height={height}
-                  data={completionsByCategory}
-                  layout="vertical"
-                  margin={{ top: 8, right: 42, bottom: 8, left: 120 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
-                  <YAxis
-                    type="category"
-                    dataKey="name"
-                    width={112}
-                    interval={0}
-                    tick={{ fontSize: 12 }}
-                    tickFormatter={(value) => shortenChartLabel(value, 22)}
-                  />
-                  <Tooltip
-                    formatter={(value, name, payload) => {
-                      if (name === "Alignment") return [`${value}`, name];
-                      return [value, name];
-                    }}
-                    labelFormatter={(label) => label}
-                  />
-                  <Bar dataKey="count" fill="#555d1e" radius={[0, 4, 4, 0]} name="Completions">
-                    <LabelList
-                      dataKey="alignment_label"
-                      position="right"
-                      offset={10}
-                      fill="#555d1e"
-                      fontSize={12}
-                      formatter={(value) => (value ? `${value}` : "")}
-                    />
-                  </Bar>
-                </BarChart>
-              )}
-            />
-          ) : (
-            <p style={{ fontSize: 13, color: "var(--rs-on-surface-variant)", margin: 0 }}>
-              Complete tasks to see breakdown by category.
-            </p>
-          )}
-        </section>
-
-        <section
-          className="rs-section-card"
-          style={{
-            background: "linear-gradient(180deg, rgba(212, 175, 55, 0.08) 0%, var(--rs-surface-raised) 100%)",
-            borderColor: "rgba(212, 175, 55, 0.22)",
-          }}
-        >
-          <h2
-            className="rs-section-card__title"
-            style={{ fontSize: "1rem", marginBottom: 4, color: "var(--rs-primary-strong)" }}
-          >
-            Completions by outcome (30 days)
-          </h2>
-          <p className="rs-section-card__subtitle" style={{ marginBottom: 8, fontSize: 12 }}>
-            Tasks linked to your Vision outcomes — assign on Action Items or use AI Enrich.
-          </p>
-          {completionsByOutcome.length > 0 ? (
-            <MeasuredChart
-              height={outcomeChartHeight}
-              renderChart={({ width, height }) => (
-                <BarChart
-                  width={width}
-                  height={height}
-                  data={completionsByOutcome}
-                  layout="vertical"
-                  margin={{ top: 8, right: 20, bottom: 8, left: 140 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(186, 177, 159, 0.25)" />
-                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
-                  <YAxis
-                    type="category"
-                    dataKey="name"
-                    width={132}
-                    interval={0}
-                    tick={{ fontSize: 12 }}
-                    tickFormatter={(value) => shortenChartLabel(value, 28)}
-                  />
-                  <Tooltip />
-                  <Bar dataKey="count" fill="#b8860b" radius={[0, 4, 4, 0]} name="Completions" />
-                </BarChart>
-              )}
-            />
-          ) : (
-            <p style={{ fontSize: 13, color: "var(--rs-on-surface-variant)", margin: 0 }}>
-              Link tasks to outcomes on the Action Items page (Outcome column) or run Apply enrichment to see distribution here.
-            </p>
-          )}
-        </section>
-
-        <section
-          className="rs-section-card"
-          style={{
-            background: "linear-gradient(180deg, var(--rs-surface-low) 0%, var(--rs-surface-raised) 100%)",
-          }}
-        >
-          <h2 className="rs-section-card__title" style={{ fontSize: "1rem", marginBottom: 4 }}>
-            Completions by human need strategy (30 days)
-          </h2>
-          <p className="rs-section-card__subtitle" style={{ marginBottom: 8, fontSize: 12 }}>
-            Effort by human need strategy — set it on Action Items or via AI Enrich.
-          </p>
-          {completionsByLifeDomain.length > 0 ? (
-            <MeasuredChart
-              height={lifeDomainChartHeight}
-              renderChart={({ width, height }) => (
-                <BarChart
-                  width={width}
-                  height={height}
-                  data={completionsByLifeDomain}
-                  layout="vertical"
-                  margin={{ top: 8, right: 20, bottom: 8, left: 120 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(186, 177, 159, 0.25)" />
-                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
-                  <YAxis
-                    type="category"
-                    dataKey="name"
-                    width={112}
-                    interval={0}
-                    tick={{ fontSize: 12 }}
-                    tickFormatter={(value) => shortenChartLabel(value, 24)}
-                  />
-                  <Tooltip />
-                  <Bar dataKey="count" fill="#7f5c53" radius={[0, 4, 4, 0]} name="Completions" />
-                </BarChart>
-              )}
-            />
-          ) : (
-            <p style={{ fontSize: 13, color: "var(--rs-on-surface-variant)", margin: 0 }}>
-              Set a human need strategy on Action Items or run Apply enrichment to see effort here.
-            </p>
-          )}
-        </section>
-
-        <section className="rs-section-card" style={{ gridColumn: "1 / -1" }}>
-          <h2 className="rs-section-card__title" style={{ fontSize: "1rem", marginBottom: 10 }}>
-            Completed tasks with timestamps (last 50)
-          </h2>
+        <section className="an-card">
+          <div className="an-card-head">
+            <h2>Recent completions</h2>
+            <span className="an-cap">Last 50</span>
+          </div>
           {lastCompleted.length === 0 ? (
-            <p style={{ fontSize: 13, color: "var(--rs-on-surface-variant)", margin: 0 }}>
-              No completed events yet.
-            </p>
+            <p className="an-empty">No completions yet.</p>
           ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
+            <div className="an-table-wrap">
+              <table className="an-table">
                 <thead>
-                  <tr style={{ color: "#6b7280", borderBottom: "1px solid #e5e7eb" }}>
-                    <th style={{ textAlign: "left", padding: "8px 8px 6px" }}>Task</th>
-                    <th style={{ textAlign: "left", padding: "8px 8px 6px" }}>Completed at</th>
+                  <tr>
+                    <th>Task</th>
+                    <th>Completed</th>
                   </tr>
                 </thead>
                 <tbody>
                   {lastCompleted.map((ev) => (
-                    <tr key={ev.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
-                      <td style={{ padding: "6px 8px" }}>
-                        {ev.task?.title ?? ev.task_id}
-                      </td>
-                      <td style={{ padding: "6px 8px", color: "#6b7280" }}>
+                    <tr key={ev.id}>
+                      <td>{ev.task?.title ?? ev.task_id}</td>
+                      <td className="an-muted">
                         {ev.created_at ? new Date(ev.created_at).toLocaleString() : "—"}
                       </td>
                     </tr>
@@ -1618,8 +1112,235 @@ export default function AnalyticsPage() {
             </div>
           )}
         </section>
-        </div>
+
+        {loading && <p className="an-muted" style={{ marginTop: 14 }}>Loading…</p>}
       </div>
-    </DashboardLayout>
+
+      <style jsx global>{`
+        .an-view {
+          padding-bottom: 40px;
+        }
+        .an-error {
+          margin-top: 14px;
+          padding: 10px 14px;
+          border-radius: 10px;
+          background: rgba(184, 92, 62, 0.08);
+          border: 1px solid rgba(184, 92, 62, 0.25);
+          color: var(--ps-clay);
+          font-size: 13px;
+        }
+        .an-kpis {
+          margin-top: 20px;
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+          gap: 12px;
+        }
+        .an-kpi {
+          padding: 14px 16px;
+          background: var(--ps-paper-soft);
+          border: 1px solid var(--ps-ink-08);
+          border-radius: 12px;
+          position: relative;
+          overflow: hidden;
+        }
+        .an-kpi::before {
+          content: "";
+          position: absolute;
+          left: 0;
+          top: 0;
+          bottom: 0;
+          width: 3px;
+          background: var(--ps-ink-30);
+        }
+        .an-kpi-lab {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+        }
+        .an-kpi-val {
+          font-family: var(--ps-serif);
+          font-size: 28px;
+          letter-spacing: -0.02em;
+          color: var(--ps-ink);
+          margin-top: 4px;
+          line-height: 1.1;
+        }
+        .an-kpi-hint {
+          margin-top: 2px;
+          font-size: 11px;
+          color: var(--ps-ink-60);
+        }
+        .an-kpi-delta {
+          margin-left: 6px;
+          font-size: 12px;
+          font-family: var(--ps-mono);
+        }
+        .an-kpi-delta--up { color: var(--ps-sage); }
+        .an-kpi-delta--down { color: var(--ps-clay); }
+        .an-alert {
+          margin-top: 14px;
+          padding: 12px 14px;
+          border-radius: 10px;
+          background: var(--ps-clay-soft);
+          border: 1px solid rgba(184, 92, 62, 0.25);
+        }
+        .an-alert-cap {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: var(--ps-clay);
+        }
+        .an-alert-row {
+          display: flex;
+          gap: 14px;
+          margin-top: 6px;
+          flex-wrap: wrap;
+          font-size: 13px;
+        }
+        .an-alert-link {
+          color: var(--ps-clay);
+          text-decoration: underline;
+        }
+        .an-card {
+          margin-top: 18px;
+          padding: 18px 20px;
+          background: var(--ps-paper-soft);
+          border: 1px solid var(--ps-ink-08);
+          border-radius: 14px;
+        }
+        .an-card-head {
+          display: flex;
+          align-items: baseline;
+          justify-content: space-between;
+          gap: 14px;
+          flex-wrap: wrap;
+          margin-bottom: 12px;
+        }
+        .an-card-head h2 {
+          font-family: var(--ps-serif);
+          font-size: 18px;
+          letter-spacing: -0.01em;
+          color: var(--ps-ink);
+          margin: 0;
+        }
+        .an-cap {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+        }
+        .an-empty {
+          margin: 0;
+          font-size: 13px;
+          color: var(--ps-ink-60);
+        }
+        .an-grid {
+          margin-top: 18px;
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 18px;
+        }
+        .an-grid .an-card {
+          margin-top: 0;
+        }
+        @media (max-width: 900px) {
+          .an-grid { grid-template-columns: 1fr; }
+        }
+        .an-chips {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+        .an-chip {
+          padding: 6px 12px;
+          border-radius: 999px;
+          background: var(--ps-ink-05);
+          color: var(--ps-ink-70);
+          font-size: 12px;
+          font-family: var(--ps-mono);
+        }
+        .an-chip strong {
+          color: var(--ps-ink);
+          margin-left: 4px;
+        }
+        .an-chip--ok {
+          background: var(--ps-sage-soft);
+          color: var(--ps-sage);
+        }
+        .an-chip--ok strong { color: var(--ps-sage); }
+        .an-chip--gold {
+          background: var(--ps-gold-soft);
+          color: var(--ps-gold);
+        }
+        .an-chip--gold strong { color: var(--ps-gold); }
+        .an-table-wrap {
+          overflow-x: auto;
+        }
+        .an-table {
+          width: 100%;
+          font-size: 13px;
+          border-collapse: collapse;
+        }
+        .an-table thead tr {
+          color: var(--ps-ink-60);
+          border-bottom: 1px solid var(--ps-ink-10);
+        }
+        .an-table th {
+          text-align: left;
+          padding: 8px 8px 6px;
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          font-weight: 500;
+        }
+        .an-table tbody tr {
+          border-bottom: 1px solid var(--ps-ink-05);
+        }
+        .an-table td {
+          padding: 7px 8px;
+          color: var(--ps-ink-80);
+        }
+        .an-muted {
+          color: var(--ps-ink-50);
+        }
+      `}</style>
+    </PSShell>
+  );
+}
+
+function KpiTile({ label, value, hint, accent, delta }) {
+  const showDelta = typeof delta === "number" && !Number.isNaN(delta);
+  return (
+    <div className="an-kpi" style={{ "--kpi-accent": accent || "var(--ps-ink-30)" }}>
+      <span
+        style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: 3,
+          background: accent || "var(--ps-ink-30)",
+        }}
+      />
+      <div className="an-kpi-lab">{label}</div>
+      <div className="an-kpi-val">
+        {value}
+        {showDelta && delta !== 0 && (
+          <span
+            className={
+              "an-kpi-delta " + (delta > 0 ? "an-kpi-delta--up" : "an-kpi-delta--down")
+            }
+          >
+            {delta > 0 ? `+${delta}` : delta}
+          </span>
+        )}
+      </div>
+      <div className="an-kpi-hint">{hint}</div>
+    </div>
   );
 }

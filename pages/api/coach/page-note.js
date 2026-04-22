@@ -51,6 +51,10 @@ const SCOPE_PROMPTS = {
     "You are on the Action Items page. One paragraph (2-3 sentences). Spot imbalance: too many P0s (P0 = today only), projects with stalled tasks, urgent/important mismatches. Recommend pulling one high-leverage item to today or demoting stale P0s. Plain prose, no markdown.",
   notes:
     "You are on the Notes page. One paragraph (2-3 sentences). Notice patterns across notes — a theme the user keeps re-writing, pinned notes worth surfacing, or a topic that would benefit from a pinned entry. End with a concrete nudge. Plain prose, no markdown.",
+  analytics:
+    "You are on the Analytics page. One paragraph (2-3 sentences). Read the numbers the user is staring at — weekly momentum trend, outcome momentum, project alignment, human-need spread, time-of-day pattern. Call out the single pattern that should change a next best action this week (an outcome starving for effort, a trend that's slipping, a high-leverage project hiding in the data). Plain prose, no markdown.",
+  account:
+    "You are on the Account page. One short paragraph (1-2 sentences). This page is just credentials — email and password. Keep it light: confirm the user can change their login here, remind them a password change signs other devices out, and end. Plain prose, no markdown.",
 };
 
 // Resolve a scope name into its canonical form and its prompt-bucket.

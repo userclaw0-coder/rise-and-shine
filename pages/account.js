@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import DashboardLayout from "../components/DashboardLayout";
+import PSShell from "../components/PSShell";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabaseClient";
 
@@ -53,7 +53,6 @@ export default function AccountPage() {
     setError("");
     setMsg("Re-authenticating…");
 
-    // Re-authenticate to ensure the user truly knows the current password
     const { error: reauthError } = await supabase.auth.signInWithPassword({
       email: currentEmail,
       password: currentPassword,
@@ -79,144 +78,248 @@ export default function AccountPage() {
     setConfirmPassword("");
   }
 
+  const coachPayload = {
+    has_email: !!currentEmail,
+    note:
+      "Account page — credentials only (login email + password). No planning data here.",
+  };
+
   if (isCheckingAuth || !user) {
     return (
-      <DashboardLayout>
-        <p style={{ fontSize: 14, color: "#6b7280" }}>Loading…</p>
-      </DashboardLayout>
+      <PSShell scope="account" title="Account" coachDisabled>
+        <div className="ps-view">
+          <div className="ps-eyebrow">— · Account</div>
+          <h1 className="ps-title">Account.</h1>
+          <p className="ps-sub">Loading…</p>
+        </div>
+      </PSShell>
     );
   }
 
   return (
-    <DashboardLayout>
-      <div style={{ maxWidth: 720, margin: "0 auto" }}>
-        <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0, letterSpacing: "-0.02em" }}>
-          Account
-        </h1>
-        <p style={{ margin: "6px 0 0", fontSize: 13, color: "#6b7280" }}>
-          Manage your login email (“username”) and password.
+    <PSShell
+      scope="account"
+      title="Account"
+      coachPayload={coachPayload}
+      coachPayloadReady
+    >
+      <div className="ps-view account-view">
+        <div className="ps-eyebrow">— · Account</div>
+        <h1 className="ps-title">Account.</h1>
+        <p className="ps-sub">
+          Your login email and password. Everything else — projects, outcomes,
+          vision — lives on the other pages.
         </p>
 
         {(error || msg) && (
-          <p style={{ marginTop: 10, fontSize: 13, color: error ? "#b91c1c" : "#059669" }}>
+          <div className={"ac-banner " + (error ? "ac-banner--err" : "ac-banner--ok")}>
             {error || msg}
-          </p>
+          </div>
         )}
 
-        <section
-          style={{
-            marginTop: 18,
-            padding: 16,
-            background: "#fff",
-            borderRadius: 16,
-            border: "1px solid #e5e7eb",
-          }}
-        >
-          <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
-            Change login email
-          </h2>
-          <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 12px" }}>
-            Current: <span style={{ color: "#111827" }}>{currentEmail || "—"}</span>
-          </p>
-
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <section className="ac-card">
+          <div className="ac-card-head">
+            <h2>Login email</h2>
+            <span className="ac-cap">The address you sign in with.</span>
+          </div>
+          <div className="ac-current">
+            <span className="ac-current-lab">Current</span>
+            <span className="ac-current-val">{currentEmail || "—"}</span>
+          </div>
+          <div className="ac-row">
             <input
               type="email"
+              className="ac-input"
               placeholder="New email"
               value={newEmail}
               onChange={(e) => setNewEmail(e.target.value)}
               disabled={!canChangeEmail}
-              style={{
-                flex: "1 1 220px",
-                minWidth: 0,
-                padding: "8px 10px",
-                borderRadius: 8,
-                border: "1px solid #e5e7eb",
-              }}
             />
             <button
               type="button"
+              className="ac-btn"
               onClick={handleChangeEmail}
               disabled={!canChangeEmail || !String(newEmail || "").trim()}
-              style={{
-                padding: "8px 14px",
-                borderRadius: 999,
-                border: "1px solid #111827",
-                background: "#111827",
-                color: "#fff",
-                fontSize: 13,
-                cursor: canChangeEmail && String(newEmail || "").trim() ? "pointer" : "not-allowed",
-                opacity: canChangeEmail && String(newEmail || "").trim() ? 1 : 0.7,
-              }}
             >
               Update email
             </button>
           </div>
-          <p style={{ fontSize: 12, color: "#6b7280", margin: "10px 0 0" }}>
-            You may need to confirm this change via email depending on your Supabase auth settings.
+          <p className="ac-hint">
+            You may need to confirm this change from a link sent to your new
+            address.
           </p>
         </section>
 
-        <section
-          style={{
-            marginTop: 18,
-            padding: 16,
-            background: "#fff",
-            borderRadius: 16,
-            border: "1px solid #e5e7eb",
-          }}
-        >
-          <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>
-            Change password
-          </h2>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 10 }}>
+        <section className="ac-card">
+          <div className="ac-card-head">
+            <h2>Password</h2>
+            <span className="ac-cap">
+              We verify your current password before changing it.
+            </span>
+          </div>
+          <div className="ac-stack">
             <input
               type="password"
+              className="ac-input"
               placeholder="Current password"
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
-              style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #e5e7eb" }}
             />
             <input
               type="password"
+              className="ac-input"
               placeholder="New password (min 8 chars)"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #e5e7eb" }}
             />
             <input
               type="password"
+              className="ac-input"
               placeholder="Confirm new password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #e5e7eb" }}
             />
             <div>
               <button
                 type="button"
+                className="ac-btn"
                 onClick={handleChangePassword}
                 disabled={!currentPassword || !newPassword || !confirmPassword}
-                style={{
-                  padding: "8px 14px",
-                  borderRadius: 999,
-                  border: "1px solid #111827",
-                  background: "#111827",
-                  color: "#fff",
-                  fontSize: 13,
-                  cursor: currentPassword && newPassword && confirmPassword ? "pointer" : "not-allowed",
-                  opacity: currentPassword && newPassword && confirmPassword ? 1 : 0.7,
-                }}
               >
                 Update password
               </button>
             </div>
-            <p style={{ fontSize: 12, color: "#6b7280", margin: 0 }}>
-              For safety, we first verify your current password before updating.
-            </p>
           </div>
+          <p className="ac-hint">
+            Changing your password will sign you out of other devices.
+          </p>
         </section>
       </div>
-    </DashboardLayout>
+
+      <style jsx global>{`
+        .account-view {
+          max-width: 640px;
+        }
+        .ac-banner {
+          margin-top: 14px;
+          padding: 10px 14px;
+          border-radius: 10px;
+          font-size: 13px;
+          line-height: 1.45;
+          border: 1px solid transparent;
+        }
+        .ac-banner--ok {
+          background: rgba(100, 140, 90, 0.08);
+          border-color: rgba(100, 140, 90, 0.25);
+          color: var(--ps-sage, #3f6a3a);
+        }
+        .ac-banner--err {
+          background: rgba(170, 70, 55, 0.08);
+          border-color: rgba(170, 70, 55, 0.25);
+          color: var(--ps-clay);
+        }
+        .ac-card {
+          margin-top: 18px;
+          padding: 22px 22px 20px;
+          background: var(--ps-paper-soft);
+          border: 1px solid var(--ps-ink-08);
+          border-radius: 14px;
+        }
+        .ac-card-head {
+          display: flex;
+          align-items: baseline;
+          justify-content: space-between;
+          gap: 16px;
+          flex-wrap: wrap;
+          margin-bottom: 14px;
+        }
+        .ac-card-head h2 {
+          font-family: var(--ps-serif);
+          font-size: 20px;
+          letter-spacing: -0.01em;
+          color: var(--ps-ink);
+          margin: 0;
+        }
+        .ac-cap {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+        }
+        .ac-current {
+          display: flex;
+          align-items: baseline;
+          gap: 10px;
+          margin-bottom: 12px;
+          padding: 10px 12px;
+          background: #fff;
+          border: 1px dashed var(--ps-ink-10);
+          border-radius: 8px;
+          font-size: 13px;
+        }
+        .ac-current-lab {
+          font-family: var(--ps-mono);
+          font-size: 9px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+        }
+        .ac-current-val {
+          color: var(--ps-ink);
+          font-size: 14px;
+        }
+        .ac-row {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+          align-items: center;
+        }
+        .ac-stack {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 10px;
+        }
+        .ac-input {
+          flex: 1 1 220px;
+          min-width: 0;
+          padding: 10px 12px;
+          border-radius: 8px;
+          border: 1px solid var(--ps-ink-15);
+          background: #fff;
+          font-size: 14px;
+          color: var(--ps-ink);
+          font-family: inherit;
+        }
+        .ac-input:focus {
+          outline: none;
+          border-color: var(--ps-accent);
+          box-shadow: 0 0 0 3px rgba(196, 100, 72, 0.12);
+        }
+        .ac-btn {
+          padding: 10px 16px;
+          border-radius: 999px;
+          border: 1px solid var(--ps-ink);
+          background: var(--ps-ink);
+          color: var(--ps-paper);
+          font-size: 13px;
+          font-family: inherit;
+          cursor: pointer;
+          transition: opacity 120ms;
+        }
+        .ac-btn:disabled {
+          cursor: not-allowed;
+          opacity: 0.45;
+        }
+        .ac-btn:not(:disabled):hover {
+          opacity: 0.88;
+        }
+        .ac-hint {
+          margin: 10px 0 0;
+          font-size: 12px;
+          color: var(--ps-ink-60);
+        }
+      `}</style>
+    </PSShell>
   );
 }
-
