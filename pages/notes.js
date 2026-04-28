@@ -310,7 +310,10 @@ export default function NotesPage() {
       }
     }
     const reload = await getNotes(user.id);
-    if (!reload.error) {
+    if (reload.error) {
+      console.error("[notes] capture reload failed:", reload.error);
+      setError(reload.error.message || "Note saved, but failed to refresh list.");
+    } else {
       const list = (reload.data || []).map(normaliseNote);
       setNotes(list);
       setSelectedId(noteId);

@@ -247,16 +247,26 @@ export default function WeeklyReviewPage() {
         .gte("created_at", `${weekStart}T00:00:00Z`)
         .lt("created_at", `${weekEnd}T00:00:00Z`),
     ]);
+    if (cats.error || events.error) {
+      console.error("[weekly-review] loadMovement failed:", cats.error || events.error);
+      setError((cats.error || events.error)?.message || "Failed to load project movement.");
+      return;
+    }
     const catList = cats.data || [];
     const taskIds = [...new Set((events.data || []).map((e) => e.task_id))];
     if (taskIds.length === 0) {
       setProjectMovement(catList.map((c) => ({ id: c.id, label: c.name, moved: 0 })));
       return;
     }
-    const { data: taskRows } = await supabase
+    const { data: taskRows, error: taskErr } = await supabase
       .from("tasks")
       .select("id, category_id")
       .in("id", taskIds);
+    if (taskErr) {
+      console.error("[weekly-review] loadMovement tasks lookup failed:", taskErr);
+      setError(taskErr.message || "Failed to load project movement.");
+      return;
+    }
     const counts = {};
     for (const ev of events.data || []) {
       const t = (taskRows || []).find((tr) => tr.id === ev.task_id);
@@ -288,6 +298,13 @@ export default function WeeklyReviewPage() {
         .eq("user_id", user.id)
         .like("tags.name", "ctx:%"),
     ]);
+    const ctxErr =
+      notesRes?.error || profileRes?.error || taggedTasksRes?.error;
+    if (ctxErr) {
+      console.error("[weekly-review] loadWeekContext failed:", ctxErr);
+      setError(ctxErr.message || "Failed to load week context.");
+      return;
+    }
     const notesMap = {};
     for (const n of notesRes?.data || []) {
       notesMap[n.date] = n;
