@@ -25,6 +25,7 @@ import {
   getOrCreateDailyRepeatCategory,
   createTask,
   setTaskCompletionForDate,
+  updateTask,
 } from "../lib/db";
 import { supabase } from "../lib/supabaseClient";
 
@@ -42,12 +43,25 @@ const PRIO_META = {
   Low: { label: "Low", color: "var(--ps-ink-40)" },
 };
 
+const BUCKET_PREFIX_RE = /^\s*\[\s*(morning|midday|evening|anytime)\s*\]\s*/i;
+
+function stripBucketPrefix(title) {
+  return (title || "").replace(BUCKET_PREFIX_RE, "");
+}
+
 function bucketFor(title) {
+  const m = (title || "").match(BUCKET_PREFIX_RE);
+  if (m) return m[1].toLowerCase();
   const lower = (title || "").toLowerCase();
-  if (/morning|wake|am\b|6am|7am|8am|rise/.test(lower)) return "morning";
+  if (/morning|wake|\bam\b|6am|7am|8am|rise/.test(lower)) return "morning";
   if (/midday|noon|lunch|afternoon/.test(lower)) return "midday";
-  if (/evening|night|pm\b|bed|wind|sleep/.test(lower)) return "evening";
+  if (/evening|night|\bpm\b|bed|wind|sleep/.test(lower)) return "evening";
   return "anytime";
+}
+
+function retitleWithBucket(title, newBucket) {
+  const clean = stripBucketPrefix(title);
+  return newBucket === "anytime" ? clean : `[${newBucket}] ${clean}`;
 }
 
 function todayStr() {
@@ -55,7 +69,7 @@ function todayStr() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function SortableRow({ item, done, onToggle, onRemove }) {
+function SortableRow({ item, done, bucket, onToggle, onRemove, onChangeBucket }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: item.id });
   const style = {
@@ -65,6 +79,7 @@ function SortableRow({ item, done, onToggle, onRemove }) {
   };
   const t = item.task || {};
   const pri = PRIO_META[t.priority] || PRIO_META.Medium;
+  const displayTitle = stripBucketPrefix(t.title) || "(untitled)";
   return (
     <div
       ref={setNodeRef}
@@ -96,7 +111,7 @@ function SortableRow({ item, done, onToggle, onRemove }) {
         </span>
       </button>
       <div className="dh-row-body">
-        <div className="dh-row-name">{t.title || "(untitled)"}</div>
+        <div className="dh-row-name">{displayTitle}</div>
         <div className="dh-row-meta">
           <span className="dh-pill" style={{ color: pri.color, borderColor: pri.color + "40" }}>
             {pri.label}
@@ -106,6 +121,18 @@ function SortableRow({ item, done, onToggle, onRemove }) {
           )}
         </div>
       </div>
+      <select
+        className="dh-row-bucket"
+        value={bucket}
+        onChange={(e) => onChangeBucket(e.target.value)}
+        onPointerDown={(e) => e.stopPropagation()}
+        title="Time of day"
+      >
+        <option value="morning">Morning</option>
+        <option value="midday">Midday</option>
+        <option value="evening">Evening</option>
+        <option value="anytime">Anytime</option>
+      </select>
       <button
         type="button"
         className="dh-remove"
@@ -246,7 +273,31 @@ export default function TemplatesPage() {
       sort_order: idx,
     }));
     setItems(next);
-    await updateTemplateOrder(next.map((it) => ({ id: it.id, sort_order: it.sort_order })));
+    const { error: orderErr } = await updateTemplateOrder(
+      next.map((it) => ({ id: it.id, sort_order: it.sort_order }))
+    );
+    if (orderErr) {
+      setError(orderErr.message || "Failed to save new order.");
+      load();
+    }
+  }
+
+  async function changeBucket(item, newBucket) {
+    if (!user || !item?.task) return;
+    const newTitle = retitleWithBucket(item.task.title, newBucket);
+    if (newTitle === item.task.title) return;
+    setItems((list) =>
+      list.map((it) =>
+        it.id === item.id ? { ...it, task: { ...it.task, title: newTitle } } : it
+      )
+    );
+    const { error: upErr } = await updateTask(user.id, item.task.id, {
+      title: newTitle,
+    });
+    if (upErr) {
+      setError(upErr.message || "Failed to change bucket.");
+      load();
+    }
   }
 
   async function toggleDone(taskId) {
@@ -436,8 +487,10 @@ export default function TemplatesPage() {
                           key={item.id}
                           item={item}
                           done={!!done[item.task.id]}
+                          bucket={bucketFor(item.task?.title)}
                           onToggle={() => toggleDone(item.task.id)}
                           onRemove={() => handleRemove(item.id)}
+                          onChangeBucket={(b) => changeBucket(item, b)}
                         />
                       ))}
                     </div>
@@ -487,7 +540,7 @@ export default function TemplatesPage() {
                           className="dh-heat-rowlabel"
                           title={it.task.title}
                         >
-                          {it.task.title}
+                          {stripBucketPrefix(it.task.title)}
                         </div>
                         {recentDates.map((d) => {
                           const filled = !!heatByTask[it.task.id]?.[d];
@@ -647,7 +700,7 @@ export default function TemplatesPage() {
         .dh-bucket-items { display: flex; flex-direction: column; gap: 4px; }
         .dh-row {
           display: grid;
-          grid-template-columns: 18px 22px 1fr 22px;
+          grid-template-columns: 18px 22px 1fr auto 22px;
           gap: 10px;
           align-items: center;
           background: #fff;
@@ -656,6 +709,19 @@ export default function TemplatesPage() {
           padding: 10px 14px;
           transition: border-color 100ms, opacity 200ms;
         }
+        .dh-row-bucket {
+          appearance: none;
+          border: 1px solid var(--ps-ink-10);
+          background: var(--ps-paper);
+          padding: 4px 8px;
+          border-radius: 6px;
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.04em;
+          color: var(--ps-ink-70);
+          cursor: pointer;
+        }
+        .dh-row-bucket:hover { border-color: var(--ps-ink-30); }
         .dh-row.done { opacity: 0.55; }
         .dh-row:hover { border-color: var(--ps-ink-30); }
         .dh-drag {

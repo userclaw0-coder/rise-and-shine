@@ -36,7 +36,7 @@ begin
 
   update daily_template_items d
   set sort_order = (v.sort_order)::int
-  from jsonb_to_recordset(p_items) as v(id bigint, sort_order int)
+  from jsonb_to_recordset(p_items) as v(id uuid, sort_order int)
   where d.id = v.id
     and d.user_id = p_user_id;
 end;
