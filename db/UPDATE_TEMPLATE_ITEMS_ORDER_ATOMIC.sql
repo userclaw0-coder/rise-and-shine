@@ -11,22 +11,13 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare
-  v_auth_user uuid;
 begin
   if p_user_id is null then
     raise exception 'p_user_id is required';
   end if;
 
-  -- Verify caller matches p_user_id based on JWT subject
-  begin
-    v_auth_user := nullif(current_setting('request.jwt.claim.sub', true), '');
-  exception
-    when others then
-      v_auth_user := null;
-  end;
-
-  if v_auth_user is null or v_auth_user <> p_user_id then
+  -- Verify caller matches p_user_id (auth.uid() is the canonical Supabase helper)
+  if auth.uid() is null or auth.uid() <> p_user_id then
     raise exception 'update_daily_template_items_order: unauthorized for this user';
   end if;
 
