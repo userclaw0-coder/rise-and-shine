@@ -296,10 +296,18 @@ export default function NotesPage() {
     const noteId = res.data.id;
     const tagNames = parseTags(draftTags);
     if (tagNames.length > 0) {
-      await setNoteTags(user.id, noteId, tagNames);
+      const tagRes = await setNoteTags(user.id, noteId, tagNames);
+      if (tagRes?.error) {
+        console.error("[notes] capture setNoteTags failed:", tagRes.error);
+        setError(tagRes.error.message || "Failed to save tags.");
+      }
     }
     if (draftFeedJarvis) {
-      await toggleNoteJarvisFeed(user.id, noteId, true);
+      const jRes = await toggleNoteJarvisFeed(user.id, noteId, true);
+      if (jRes?.error) {
+        console.error("[notes] capture toggleNoteJarvisFeed failed:", jRes.error);
+        setError(jRes.error.message || "Failed to feed Jarvis.");
+      }
     }
     const reload = await getNotes(user.id);
     if (!reload.error) {
@@ -370,7 +378,11 @@ export default function NotesPage() {
       return;
     }
     const names = parseTags(editTags);
-    await setNoteTags(user.id, note.id, names);
+    const tagRes = await setNoteTags(user.id, note.id, names);
+    if (tagRes?.error) {
+      console.error("[notes] edit setNoteTags failed:", tagRes.error);
+      setError(tagRes.error.message || "Failed to save tags.");
+    }
     const reload = await getNotes(user.id);
     if (!reload.error) {
       setNotes((reload.data || []).map(normaliseNote));

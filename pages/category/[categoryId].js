@@ -324,11 +324,18 @@ export default function ProjectPage() {
   }
 
   async function toggleTask(t) {
-    const nextStatus = t.status === "done" ? "todo" : "done";
+    const prevStatus = t.status;
+    const nextStatus = prevStatus === "done" ? "todo" : "done";
     setTasks((ts) =>
       ts.map((x) => (x.id === t.id ? { ...x, status: nextStatus } : x))
     );
-    await updateTaskStatusWithEvent(user.id, t.id, nextStatus);
+    const res = await updateTaskStatusWithEvent(user.id, t.id, nextStatus);
+    if (res?.error) {
+      console.error("[category] toggleTask failed:", res.error);
+      setTasks((ts) =>
+        ts.map((x) => (x.id === t.id ? { ...x, status: prevStatus } : x))
+      );
+    }
   }
 
   const groups = useMemo(() => {

@@ -258,8 +258,15 @@ export default function HealthPage() {
     e.preventDefault();
     if (!user || !addWeight) return;
     setAddingWeight(true);
+    setError("");
     const dateStr = new Date().toISOString().slice(0, 10);
-    await insertBodyWeightLog(user.id, dateStr, Number(addWeight), "lb");
+    const res = await insertBodyWeightLog(user.id, dateStr, Number(addWeight), "lb");
+    if (res?.error) {
+      console.error("[health] insertBodyWeightLog failed:", res.error);
+      setError(res.error.message || "Failed to save weight.");
+      setAddingWeight(false);
+      return;
+    }
     setAddWeight("");
     setAddingWeight(false);
     load();

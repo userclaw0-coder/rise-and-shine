@@ -178,6 +178,7 @@ export default function IdeasPage() {
     );
     const res = await updateIdea(user.id, idea.id, { status: nextStatus });
     if (res.error) {
+      console.error("[ideas] setStatus failed:", res.error);
       setIdeas((l) =>
         l.map((x) => (x.id === idea.id ? { ...x, status: prevStatus } : x))
       );
@@ -199,6 +200,7 @@ export default function IdeasPage() {
     );
     const res = await archiveIdea(user.id, idea.id);
     if (res.error) {
+      console.error("[ideas] archive failed:", res.error);
       setIdeas((l) =>
         l.map((x) => (x.id === idea.id ? { ...x, status: prevStatus } : x))
       );
@@ -209,24 +211,39 @@ export default function IdeasPage() {
 
   async function handlePromoteToProject(idea) {
     setBusy(idea.id);
+    setError("");
+    const prevStatus = idea.status;
+    setIdeas((l) =>
+      l.map((x) => (x.id === idea.id ? { ...x, status: "promoted" } : x))
+    );
     const res = await promoteIdeaToProject(user.id, idea.id);
-    if (!res.error && res.data?.category?.id) {
+    if (res.error || !res.data?.category?.id) {
+      console.error("[ideas] promote-to-project failed:", res.error);
       setIdeas((l) =>
-        l.map((x) => (x.id === idea.id ? { ...x, status: "promoted" } : x))
+        l.map((x) => (x.id === idea.id ? { ...x, status: prevStatus } : x))
       );
-      router.push(`/category/${res.data.category.id}`);
+      setError(res.error?.message || "Promote to project failed.");
+      setBusy("");
+      return;
     }
+    router.push(`/category/${res.data.category.id}`);
     setBusy("");
   }
 
   async function handlePromoteToTask(idea) {
     setBusy(idea.id);
+    setError("");
+    const prevStatus = idea.status;
+    setIdeas((l) =>
+      l.map((x) => (x.id === idea.id ? { ...x, status: "promoted" } : x))
+    );
     const res = await promoteIdeaToTask(user.id, idea.id);
-    if (!res.error) {
-      await updateIdea(user.id, idea.id, { status: "promoted" });
+    if (res.error) {
+      console.error("[ideas] promote-to-task failed:", res.error);
       setIdeas((l) =>
-        l.map((x) => (x.id === idea.id ? { ...x, status: "promoted" } : x))
+        l.map((x) => (x.id === idea.id ? { ...x, status: prevStatus } : x))
       );
+      setError(res.error.message || "Promote to task failed.");
     }
     setBusy("");
   }
