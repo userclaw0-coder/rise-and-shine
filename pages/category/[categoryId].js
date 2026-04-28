@@ -331,7 +331,20 @@ export default function ProjectPage() {
     await updateTaskStatusWithEvent(user.id, t.id, nextStatus);
   }
 
-  const groups = useMemo(() => groupTasks(tasks), [tasks]);
+  const groups = useMemo(() => {
+    const base = groupTasks(tasks);
+    if (!nextAction?.task_id) return base;
+    // Find the group containing the next-action task and move it to the top
+    for (const g of base) {
+      const idx = g.items.findIndex((t) => t.id === nextAction.task_id);
+      if (idx !== -1) {
+        const [item] = g.items.splice(idx, 1);
+        g.items.unshift({ ...item, _isNextAction: true });
+        break;
+      }
+    }
+    return base;
+  }, [tasks, nextAction]);
   const overall = useMemo(() => {
     const active = tasks.filter((t) => t.status !== "done");
     if (active.length === 0 && tasks.length === 0) return 0;
@@ -715,6 +728,11 @@ export default function ProjectPage() {
                             {t.title}
                           </div>
                           <div className="pj-item-tags">
+                            {t._isNextAction && (
+                              <span className="ps-tag" style={{ background: "var(--ps-accent-soft)", color: "var(--ps-accent)", fontWeight: 600 }}>
+                                ▶ Next
+                              </span>
+                            )}
                             {t.priority && (
                               <span className="ps-tag">{t.priority}</span>
                             )}

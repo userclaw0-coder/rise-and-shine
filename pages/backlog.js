@@ -60,13 +60,14 @@ export default function BacklogPage() {
   const [priError, setPriError] = useState("");
   const [applying, setApplying] = useState(false);
   const [desiredOutcomes, setDesiredOutcomes] = useState([]);
+  const [nextActionIds, setNextActionIds] = useState(new Set());
 
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     setError("");
     try {
-      const [catRes, taskRes] = await Promise.all([
+      const [catRes, taskRes, wsRes] = await Promise.all([
         supabase
           .from("categories")
           .select("id, name")
@@ -82,11 +83,23 @@ export default function BacklogPage() {
           .order("priority", { ascending: false })
           .order("due_date", { ascending: true, nullsFirst: false })
           .order("created_at", { ascending: true }),
+        supabase
+          .from("shared_project_workspaces")
+          .select("category_id, workspace")
+          .eq("user_id", user.id),
       ]);
       if (catRes.error) throw new Error(catRes.error.message);
       if (taskRes.error) throw new Error(taskRes.error.message);
       setCategories(catRes.data || []);
       setTasks(taskRes.data || []);
+
+      // Collect next-action task IDs from all workspaces
+      const ids = new Set();
+      for (const row of wsRes.data || []) {
+        const taskId = row?.workspace?.next_action?.task_id;
+        if (taskId) ids.add(taskId);
+      }
+      setNextActionIds(ids);
 
       // Desired outcomes from user profile — needed so the DNA editor
       // can resolve outcome_ids into titles for the inspector.
@@ -148,8 +161,15 @@ export default function BacklogPage() {
       list = list.filter((t) => priorityFilter.includes(toCode(t.priority)));
     if (projectFilter.length > 0)
       list = list.filter((t) => projectFilter.includes(t.category_id));
+    // Next-action tasks first
+    list.sort((a, b) => {
+      const aNext = nextActionIds.has(a.id) ? 1 : 0;
+      const bNext = nextActionIds.has(b.id) ? 1 : 0;
+      if (aNext !== bNext) return bNext - aNext;
+      return 0;
+    });
     return list;
-  }, [tasks, priorityFilter, projectFilter, hideDone]);
+  }, [tasks, priorityFilter, projectFilter, hideDone, nextActionIds]);
 
   const selected = tasks.find((t) => t.id === selectedId) || null;
 
@@ -281,10 +301,11 @@ export default function BacklogPage() {
   function TaskRow({ t }) {
     const code = toCode(t.priority);
     const isDone = t.status === "done";
+    const isNext = nextActionIds.has(t.id);
     return (
       <button
         type="button"
-        className={`act-row${isDone ? " done" : ""}${selectedId === t.id ? " selected" : ""}`}
+        className={`act-row${isDone ? " done" : ""}${selectedId === t.id ? " selected" : ""}${isNext ? " next-action" : ""}`}
         onClick={() => setSelectedId(t.id)}
       >
         <span
@@ -299,7 +320,14 @@ export default function BacklogPage() {
           style={{ background: colorMap[t.category_id] || "var(--ps-ink-30)" }}
         />
         <div className="act-row-body">
-          <div className="act-row-title">{t.title}</div>
+          <div className="act-row-title">
+            {isNext && (
+              <span className="act-row-next" title="Next best action">
+                ▶{" "}
+              </span>
+            )}
+            {t.title}
+          </div>
           <div className="act-row-meta">
             <span className="act-row-proj">
               {catMap[t.category_id]?.name || "—"}
@@ -999,7 +1027,9 @@ export default function BacklogPage() {
         }
         .act-row:hover { border-color: var(--ps-ink-30); }
         .act-row.selected { border-color: var(--ps-accent); box-shadow: 0 0 0 3px var(--ps-accent-soft); }
+        .act-row.next-action { border-left: 3px solid var(--ps-accent); background: var(--ps-accent-soft); }
         .act-row.done { opacity: 0.5; }
+        .act-row-next { color: var(--ps-accent); font-size: 11px; }
         .act-row-pri {
           font-family: var(--ps-mono);
           font-size: 9px;
