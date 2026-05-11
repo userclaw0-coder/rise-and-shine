@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/memory/extract?user_id=ALL",
+      "schedule": "0 9 * * *"
+    }
+  ]
+}

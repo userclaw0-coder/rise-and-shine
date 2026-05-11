@@ -79,10 +79,11 @@ export default async function handler(req, res) {
     // Add the current user message to the conversation (not yet persisted)
     messages.push({ role: "user", content: userMessage });
 
-    // 2. Build system prompt with live context (with timeout protection)
+    // 2. Build system prompt with live context + memory retrieval
+    //    (timeout-protected; memory retrieval is best-effort).
     let system;
     try {
-      system = await buildSystemPrompt(userId);
+      system = await buildSystemPrompt(userId, { query: userMessage });
     } catch (promptErr) {
       console.warn("[jarvis] System prompt build failed, using fallback:", promptErr.message);
       system = "You are Jarvis, the Rise & Shine execution coach. Help the user with their tasks and projects. Use your tools to look up data before answering.";

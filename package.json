@@ -13,6 +13,7 @@
     "verify:refinement-events": "node scripts/verify-refinement-events.mjs",
     "verify:task-enrichment": "node scripts/verify-task-enrichment.mjs",
     "verify:local-inference": "node scripts/verify-local-inference.mjs",
+    "verify:memory-layer": "node --env-file=.env.local scripts/verify-memory-layer.mjs",
     "verify:release": "npm run verify:scoring && npm run verify:queue && npm run verify:planner && npm run verify:refinement-events && npm run verify:task-enrichment && npm run lint && npm run build",
     "ingest:projects": "node scripts/ingest-project-folders.mjs",
     "ingest:projects:dry": "node scripts/ingest-project-folders.mjs --dry-run",
