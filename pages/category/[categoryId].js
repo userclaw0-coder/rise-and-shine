@@ -94,9 +94,6 @@ export default function ProjectPage() {
   const [narrative, setNarrative] = useState("");
   const [lastAlignedAt, setLastAlignedAt] = useState(null);
   const [nextAction, setNextAction] = useState(null);
-  const [refreshMode, setRefreshMode] = useState(false);
-  const [refreshSignal, setRefreshSignal] = useState(0);
-  const [refreshAutoSend, setRefreshAutoSend] = useState(null);
   const [projectOutcomeIds, setProjectOutcomeIds] = useState([]);
   const [projectPrimaryDomain, setProjectPrimaryDomain] = useState(null);
   const [projectLifeDomains, setProjectLifeDomains] = useState([]);
@@ -126,7 +123,7 @@ export default function ProjectPage() {
         supabase
           .from("tasks")
           .select(
-            "id, title, status, priority, effort_hours, due_date, parent_task_id, outcome_ids, primary_life_domain, created_at, updated_at, tags:task_tags(tag:tags(id, name))"
+            "id, title, status, priority, effort_hours, due_date, parent_task_id, outcome_ids, primary_life_domain, phase, created_at, updated_at, tags:task_tags(tag:tags(id, name))"
           )
           .eq("user_id", user.id)
           .eq("category_id", categoryId)
@@ -429,7 +426,7 @@ export default function ProjectPage() {
     days_since_aligned: daysSinceAligned,
     alignment_score: alignmentScore,
     current_next_action: nextAction,
-    refresh_mode: refreshMode ? "interview" : null,
+    refresh_mode: null,
   };
 
   const coachScope = categoryId ? `project:${categoryId}` : "project";
@@ -441,8 +438,6 @@ export default function ProjectPage() {
       scopeHint={category?.name || "Project view"}
       coachPayload={coachPayload}
       coachPayloadReady={!loading && !!category}
-      coachOpenSignal={refreshSignal}
-      coachAutoSend={refreshAutoSend}
     >
       <div className="ps-view">
           <div className="ps-eyebrow pj-breadcrumb">
@@ -610,35 +605,12 @@ export default function ProjectPage() {
                   </span>
                 </div>
                 <div className="pj-align-actions">
-                  {refreshMode ? (
-                    <>
-                      <span className="pj-align-badge">Refresh in progress</span>
-                      <button
-                        type="button"
-                        className="ps-btn"
-                        onClick={() => setRefreshMode(false)}
-                      >
-                        End refresh
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      type="button"
-                      className="ps-btn ps-btn--primary"
-                      onClick={() => {
-                        setRefreshMode(true);
-                        const nonce = Date.now();
-                        setRefreshSignal(nonce);
-                        setRefreshAutoSend({
-                          nonce,
-                          message:
-                            "Let's run the Project Refresh Interview for this project. Start with step 1 (goal gut-check).",
-                        });
-                      }}
-                    >
-                      Refresh alignment
-                    </button>
-                  )}
+                  <Link
+                    href={`/reorient/${categoryId}`}
+                    className="ps-btn ps-btn--primary"
+                  >
+                    Reorient this project
+                  </Link>
                 </div>
               </div>
 
@@ -752,6 +724,11 @@ export default function ProjectPage() {
                               <span className="ps-tag pj-tag-need">
                                 {HUMAN_NEED_STRATEGY_LABELS[t.primary_life_domain] ||
                                   t.primary_life_domain}
+                              </span>
+                            )}
+                            {t.phase && (
+                              <span className="ps-tag pj-tag-phase">
+                                {t.phase.replace(/_/g, " ")}
                               </span>
                             )}
                             {(t.outcome_ids || []).length > 0 && (
@@ -1475,6 +1452,7 @@ export default function ProjectPage() {
         .pj-tag-type { background: var(--ps-sage-soft); color: var(--ps-sage); }
         .pj-tag-need { background: var(--ps-indigo-soft); color: var(--ps-indigo); }
         .pj-tag-outcome { background: var(--ps-gold-soft); color: var(--ps-gold); }
+        .pj-tag-phase { background: var(--ps-plum-soft); color: var(--ps-plum); font-family: var(--ps-mono); font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; }
         .pj-item-size {
           font-family: var(--ps-mono);
           font-size: 10px;

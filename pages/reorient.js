@@ -66,6 +66,33 @@ export default function ReorientPage() {
         "rs-reorient-just-completed",
         new Date().toISOString()
       );
+
+      // Build the per-project queue: stale or never-reoriented projects,
+      // in priority order. If any exist, kick off Phase B by routing to
+      // /reorient/<first> with the rest seeded into sessionStorage.
+      try {
+        const { data: sessionData } = await import("../lib/supabaseClient").then((m) =>
+          m.supabase.auth.getSession()
+        );
+        const token = sessionData?.session?.access_token;
+        const qRes = await fetch("/api/reorient/queue", {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (qRes.ok) {
+          const body = await qRes.json();
+          const queue = (body?.queue || [])
+            .filter((p) => p.is_active && (p.is_stale || p.last_reorient_at == null))
+            .map((p) => p.category_id);
+          if (queue.length > 0) {
+            window.sessionStorage.setItem("rs-reorient-queue", JSON.stringify(queue));
+            window.location.href = `/reorient/${queue[0]}`;
+            return { error: null };
+          }
+        }
+      } catch {
+        // Best-effort; on failure fall through to /today.
+      }
+
       window.location.href = "/today";
     }
     return { error: null };
