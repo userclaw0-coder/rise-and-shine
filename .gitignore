@@ -62,3 +62,4 @@ n8n_data/*.sqlite-shm
 background/
 n8n/.env
 docs/USER_PHOTOS_STORAGE_RLS.sql
+.env*.local
