@@ -21,6 +21,7 @@ export const PS_NAV_ALSO = [
   { id: "actions", href: "/backlog", label: "Action items" },
   { id: "notes", href: "/notes", label: "Notes" },
   { id: "analytics", href: "/analytics", label: "Analytics" },
+  { id: "reorient", href: "/reorient", label: "Reorient" },
   { id: "account", href: "/account", label: "Account" },
 ];
 

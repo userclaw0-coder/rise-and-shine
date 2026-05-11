@@ -55,7 +55,7 @@ function pickOnboardingFields(profile) {
 
 function deepEqual(a, b) {
   if (a === b) return true;
-  if (a == null || b == null) return a == b; // eslint-disable-line eqeqeq
+  if (a == null || b == null) return a == b;
   if (typeof a !== typeof b) return false;
   if (typeof a !== "object") return a === b;
   if (Array.isArray(a) !== Array.isArray(b)) return false;
