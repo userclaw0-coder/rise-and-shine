@@ -90,6 +90,7 @@ export default function ProjectPage() {
   const [insertingTask, setInsertingTask] = useState(null);
   const [knowledgeBase, setKnowledgeBase] = useState("");
   const [resources, setResources] = useState([]);
+  const [driveFolderUrl, setDriveFolderUrl] = useState("");
   const [mantra, setMantra] = useState("");
   const [narrative, setNarrative] = useState("");
   const [lastAlignedAt, setLastAlignedAt] = useState(null);
@@ -168,6 +169,7 @@ export default function ProjectPage() {
         setKnowledgeBase(ws?.knowledge_base || "");
         const wsObj = ws?.workspace || {};
         setResources(wsObj.resources || []);
+        setDriveFolderUrl(wsObj.drive_folder_url || "");
         setMantra(wsObj.mantra || "");
         setNarrative(wsObj.narrative || "");
         setLastAlignedAt(wsObj.last_aligned_at || null);
@@ -251,6 +253,7 @@ export default function ProjectPage() {
       await saveCollaborativeProjectWorkspace(categoryId, {
         knowledge_base: knowledgeBase,
         resources,
+        drive_folder_url: driveFolderUrl || null,
       });
     } catch (err) {
       setKbError(err.message || "Save failed.");
@@ -897,6 +900,8 @@ export default function ProjectPage() {
               onKnowledgeBaseChange={setKnowledgeBase}
               resources={resources}
               onResourcesChange={setResources}
+              driveFolderUrl={driveFolderUrl}
+              onDriveFolderUrlChange={setDriveFolderUrl}
               projectName={category?.name || "Project"}
               mantra={mantra}
               onSave={saveKb}

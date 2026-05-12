@@ -38,6 +38,7 @@ export default function ReorientProjectWizard({ userId, categoryId, onComplete, 
   const [kb, setKb] = useState("");
   const [resources, setResources] = useState([]);
   const [mode, setMode] = useState(null);
+  const [driveFolderUrl, setDriveFolderUrl] = useState("");
   const [lastReorientAt, setLastReorientAt] = useState(null);
   const [tasks, setTasks] = useState([]);
   // decisions[taskId] = { action: 'done'|'archive'|'keep', phase?: text }
@@ -85,6 +86,7 @@ export default function ReorientProjectWizard({ userId, categoryId, onComplete, 
       setKb(wsRes.data?.knowledge_base || "");
       setResources(Array.isArray(ws.resources) ? ws.resources : []);
       setMode(ws.mode || null);
+      setDriveFolderUrl(ws.drive_folder_url || "");
       setLastReorientAt(ws.last_reorient_at || ws.last_aligned_at || null);
       // Sort tasks: top-level first (no parent_task_id), then by priority, then by updated_at.
       const sorted = (tasksRes.data || []).sort((a, b) => {
@@ -167,6 +169,7 @@ export default function ReorientProjectWizard({ userId, categoryId, onComplete, 
           knowledge_base: kb,
           resources,
           mode,
+          drive_folder_url: driveFolderUrl,
           decisions: decisionsArr,
         }),
       });
@@ -252,6 +255,8 @@ export default function ReorientProjectWizard({ userId, categoryId, onComplete, 
             setResources={setResources}
             newResource={newResource}
             setNewResource={setNewResource}
+            driveFolderUrl={driveFolderUrl}
+            setDriveFolderUrl={setDriveFolderUrl}
           />
         )}
         {step === 3 && (
@@ -597,12 +602,30 @@ function TriageRow({ task, decision, setDecision, clearDecision }) {
 
 // --- step 3 -----------------------------------------------------------------
 
-function KnowledgeStep({ kb, setKb, resources, setResources, newResource, setNewResource }) {
+function isDriveUrl(url) {
+  return /^https?:\/\/(drive|docs)\.google\.com\//i.test(url || "");
+}
+
+function KnowledgeStep({
+  kb,
+  setKb,
+  resources,
+  setResources,
+  newResource,
+  setNewResource,
+  driveFolderUrl,
+  setDriveFolderUrl,
+}) {
   function addResource() {
     if (!newResource?.label?.trim()) return;
+    const kind = isDriveUrl(newResource.url)
+      ? newResource.url.includes("/folders/")
+        ? "folder"
+        : "document"
+      : newResource.kind || "document";
     setResources([
       ...(resources || []),
-      { ...newResource, id: `r_${Date.now()}` },
+      { ...newResource, kind, id: `r_${Date.now()}` },
     ]);
     setNewResource(null);
   }
@@ -613,6 +636,28 @@ function KnowledgeStep({ kb, setKb, resources, setResources, newResource, setNew
   }
   return (
     <div>
+      <div className="rw-field-label">Google Drive folder for this project</div>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 18 }}>
+        <input
+          className="rw-input"
+          type="url"
+          placeholder="https://drive.google.com/drive/folders/..."
+          value={driveFolderUrl}
+          onChange={(e) => setDriveFolderUrl(e.target.value)}
+          style={{ flex: 1 }}
+        />
+        {driveFolderUrl && isDriveUrl(driveFolderUrl) && (
+          <a
+            href={driveFolderUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ps-btn"
+            style={{ whiteSpace: "nowrap" }}
+          >
+            Open ↗
+          </a>
+        )}
+      </div>
       <div className="rw-field-label">Knowledge base — append or refine</div>
       <textarea
         className="rw-textarea"
@@ -628,7 +673,14 @@ function KnowledgeStep({ kb, setKb, resources, setResources, newResource, setNew
         {(resources || []).map((r, i) => (
           <div className="rw-resource-row" key={r.id || i}>
             <div>
-              <div style={{ fontSize: 13, color: "var(--ps-ink)" }}>{r.label}</div>
+              <div style={{ fontSize: 13, color: "var(--ps-ink)" }}>
+                {isDriveUrl(r.url) && (
+                  <span style={{ marginRight: 6 }} title="Google Drive">
+                    📁
+                  </span>
+                )}
+                {r.label}
+              </div>
               {r.notes && (
                 <div style={{ fontSize: 11, color: "var(--ps-ink-60)" }}>{r.notes}</div>
               )}

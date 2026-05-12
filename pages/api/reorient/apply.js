@@ -24,6 +24,7 @@ export default async function handler(req, res) {
     knowledge_base,
     resources,
     mode,
+    drive_folder_url,
     decisions,
   } = req.body || {};
 
@@ -38,6 +39,7 @@ export default async function handler(req, res) {
       knowledge_base,
       resources,
       mode,
+      drive_folder_url,
       decisions: Array.isArray(decisions) ? decisions : [],
     });
     return res.status(200).json({ ok: true, ...result });

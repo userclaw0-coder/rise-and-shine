@@ -4,11 +4,17 @@ import { useState, useCallback } from "react";
  * ProjectKnowledgeBase — Knowledge Base editor + KB Prompt copy + Resource Links
  * Used on the individual project page.
  */
+function isDriveUrl(url) {
+  return /^https?:\/\/(drive|docs)\.google\.com\//i.test(url || "");
+}
+
 export default function ProjectKnowledgeBase({
   knowledgeBase,
   onKnowledgeBaseChange,
   resources,
   onResourcesChange,
+  driveFolderUrl,
+  onDriveFolderUrlChange,
   projectName,
   mantra,
   onSave,
@@ -53,6 +59,48 @@ export default function ProjectKnowledgeBase({
 
   return (
     <div className="pkb">
+      {/* Drive folder (Phase 1 KB integration — link-only) */}
+      {onDriveFolderUrlChange && (
+        <div className="pkb__section" style={{ paddingBottom: 8 }}>
+          <div className="pkb__drive-row">
+            <span className="material-symbols-outlined" style={{ fontSize: 18, color: "var(--ps-ink-60)" }}>
+              folder_shared
+            </span>
+            <label
+              style={{
+                fontFamily: "var(--ps-mono)",
+                fontSize: 10,
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                color: "var(--ps-ink-60)",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Drive folder
+            </label>
+            <input
+              type="url"
+              value={driveFolderUrl || ""}
+              onChange={(e) => onDriveFolderUrlChange(e.target.value)}
+              placeholder="https://drive.google.com/drive/folders/..."
+              className="pkb__input"
+              style={{ flex: 1, minWidth: 0 }}
+            />
+            {driveFolderUrl && isDriveUrl(driveFolderUrl) && (
+              <a
+                href={driveFolderUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="pkb__action-btn"
+                style={{ whiteSpace: "nowrap" }}
+              >
+                Open ↗
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Knowledge Base Section */}
       <div className="pkb__section">
         <button
