@@ -18,6 +18,7 @@ import PSShell from "../components/PSShell";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabaseClient";
 import { getUserProfile, upsertUserProfile } from "../lib/db";
+import { outcomesByIds, outcomesProgress } from "../lib/iscProgress";
 
 const COLORS = [
   "var(--ps-clay)",
@@ -139,6 +140,11 @@ export default function ProjectsPage() {
     [categories]
   );
 
+  const allOutcomes = useMemo(
+    () => profile?.profile?.desired_outcomes || [],
+    [profile]
+  );
+
   const tiles = useMemo(() => {
     const priorityOrder = { Critical: 0, High: 1, Medium: 2, Low: 3 };
     return order
@@ -173,6 +179,8 @@ export default function ProjectsPage() {
           ? Math.round((Date.now() - new Date(ws.last_aligned_at).getTime()) / 86400000)
           : null;
         const stale = lastAligned == null || lastAligned > 30;
+        const linkedOutcomes = outcomesByIds(allOutcomes, ws.outcome_ids || []);
+        const isc = outcomesProgress(linkedOutcomes);
         return {
           id: c.id,
           name: c.name,
@@ -186,10 +194,11 @@ export default function ProjectsPage() {
           lastAlignedDays: lastAligned,
           stale,
           rank: i + 1,
+          isc, // {total, met, percent, outcome_count, outcome_count_with_criteria}
         };
       })
       .filter(Boolean);
-  }, [order, catById, tasks, workspaces]);
+  }, [order, catById, tasks, workspaces, allOutcomes]);
 
   const coachPayload = {
     total_projects: tiles.length,
@@ -409,6 +418,33 @@ export default function ProjectsPage() {
           overflow: hidden;
         }
         .pj-tile-bar-fill { height: 100%; transition: width 300ms; }
+        .pj-tile-isc {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-top: 4px;
+        }
+        .pj-tile-isc-bar {
+          flex: 1;
+          height: 3px;
+          background: var(--ps-ink-08);
+          border-radius: 2px;
+          overflow: hidden;
+        }
+        .pj-tile-isc-fill {
+          height: 100%;
+          background: var(--ps-plum);
+          transition: width 300ms;
+        }
+        .pj-tile-isc-label {
+          font-family: var(--ps-mono);
+          font-size: 9px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: var(--ps-ink-60);
+          white-space: nowrap;
+        }
+        .pj-tile-isc-label strong { color: var(--ps-ink); }
       `}</style>
     </PSShell>
   );
@@ -495,6 +531,20 @@ function SortableProjectRow({ t }) {
             }}
           />
         </div>
+        {t.isc.total > 0 && (
+          <div className="pj-tile-isc">
+            <div className="pj-tile-isc-bar">
+              <div
+                className="pj-tile-isc-fill"
+                style={{ width: t.isc.percent + "%" }}
+              />
+            </div>
+            <span className="pj-tile-isc-label">
+              <strong>{t.isc.met}</strong>/{t.isc.total} ISCs ·{" "}
+              {t.isc.percent}%
+            </span>
+          </div>
+        )}
       </Link>
     </div>
   );

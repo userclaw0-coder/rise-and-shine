@@ -7,9 +7,14 @@ import {
   useState,
 } from "react";
 import PSShell from "../components/PSShell";
+import OutcomeISCEditor from "../components/OutcomeISCEditor";
 import { useAuth } from "../hooks/useAuth";
 import { getUserProfile, upsertUserProfile } from "../lib/db";
 import { supabase } from "../lib/supabaseClient";
+import {
+  normalizeOutcomes as normalizeOutcomesWithCriteria,
+  outcomeProgress,
+} from "../lib/iscProgress";
 
 const UPGRADE_FRAMEWORKS = [
   { id: "smart", label: "SMART" },
@@ -59,14 +64,8 @@ function AutoTextarea({ value, onChange, minRows = 2, style, ...rest }) {
   );
 }
 
-function normalizeOutcomes(list) {
-  return (list || []).map((o, i) => ({
-    id: o.id || `vision-${i}`,
-    title: typeof o === "string" ? o : o.title || "",
-    progress: o.progress ?? null,
-  }));
-}
-
+// progressRing kept for the Compose/Immerse view; outcome ISC progress now
+// flows through lib/iscProgress.js + components/OutcomeISCEditor.
 function progressRing(pct) {
   const size = 120;
   const stroke = 8;
@@ -82,6 +81,11 @@ export default function VisionPage() {
   const [profile, setProfile] = useState(null);
   const [identity, setIdentity] = useState("");
   const [outcomes, setOutcomes] = useState("");
+  // criteriaArr is position-aligned to the outcomes text lines.
+  // Each entry: array of {id, statement, met, met_at}. Stays in sync via
+  // the × remove handler; text edits that change line count are best-
+  // effort. Outcome ids in the saved profile are still `vision-${idx}`.
+  const [criteriaArr, setCriteriaArr] = useState([]);
   const [leverage, setLeverage] = useState("");
   const [quarterFocus, setQuarterFocus] = useState("");
   const [immediateStep, setImmediateStep] = useState("");
@@ -132,8 +136,21 @@ export default function VisionPage() {
       const p = res?.data?.profile || {};
       setProfile(p);
       setIdentity((p.identity_attributes || []).join(", "));
-      setOutcomes(
-        (p.desired_outcomes || []).map((o) => o.title || "").filter(Boolean).join("\n")
+      const loadedOutcomes = (p.desired_outcomes || []).filter((o) =>
+        Boolean(o?.title)
+      );
+      setOutcomes(loadedOutcomes.map((o) => o.title).join("\n"));
+      setCriteriaArr(
+        loadedOutcomes.map((o) =>
+          Array.isArray(o.criteria)
+            ? o.criteria.map((c, i) => ({
+                id: c.id || `c_${Date.now().toString(36)}${i}`,
+                statement: c.statement || "",
+                met: !!c.met,
+                met_at: c.met_at || null,
+              }))
+            : []
+        )
       );
       setLeverage((p.leverage_focus || []).join("\n"));
       setQuarterFocus((p.quarter_focus || []).join(", "));
@@ -162,11 +179,20 @@ export default function VisionPage() {
 
   const buildProfile = useCallback(() => {
     const identities = identity.split(",").map((s) => s.trim()).filter(Boolean);
-    const outList = outcomes
-      .split("\n")
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .map((title, idx) => ({ id: `vision-${idx}`, title }));
+    // Pair each non-empty outcome line with its position-aligned criteria.
+    // Empty lines are dropped (collapsing positions); this matches the
+    // pre-ISC behavior of treating "outcomes" as a non-empty list.
+    const rawLines = outcomes.split("\n");
+    const outList = [];
+    rawLines.forEach((raw, idx) => {
+      const title = raw.trim();
+      if (!title) return;
+      outList.push({
+        id: `vision-${outList.length}`,
+        title,
+        criteria: criteriaArr[idx] || [],
+      });
+    });
     return {
       ...(profile || {}),
       identity_attributes: identities,
@@ -194,6 +220,7 @@ export default function VisionPage() {
     fieldImages,
     needsStrategies,
     needsRisks,
+    criteriaArr,
   ]);
 
   useEffect(() => {
@@ -226,12 +253,30 @@ export default function VisionPage() {
     fieldImages,
     needsStrategies,
     needsRisks,
+    criteriaArr,
   ]);
 
-  const outcomeList = useMemo(
-    () => normalizeOutcomes((profile?.desired_outcomes || []).length ? profile.desired_outcomes : outcomes.split("\n").map((t, i) => ({ id: `v${i}`, title: t }))),
-    [profile, outcomes]
-  );
+  const outcomeList = useMemo(() => {
+    // Build a structured outcome list from the current text + criteria.
+    // criteriaArr is position-aligned to non-empty outcome lines (after the
+    // legacy normalizeOutcomes step preserved title/progress shape).
+    const lines = outcomes
+      .split("\n")
+      .map((t, i) => ({ raw: t, idx: i }))
+      .filter((x) => x.raw.trim());
+    const built = lines.map((x, displayIdx) => ({
+      id: `vision-${displayIdx}`,
+      title: x.raw.trim(),
+      progress: null,
+      criteria: criteriaArr[x.idx] || [],
+    }));
+    // If no outcomes loaded from the text, fall back to whatever the
+    // profile already had (read-only safety for very-first-render).
+    if (built.length === 0 && (profile?.desired_outcomes || []).length) {
+      return normalizeOutcomesWithCriteria(profile.desired_outcomes);
+    }
+    return built;
+  }, [profile, outcomes, criteriaArr]);
   const thriveList = thriveGoals.split("\n").map((s) => s.trim()).filter(Boolean);
   const leverageList = leverage.split("\n").map((s) => s.trim()).filter(Boolean);
   const quarterList = quarterFocus.split(",").map((s) => s.trim()).filter(Boolean);
@@ -843,50 +888,72 @@ export default function VisionPage() {
                   on tasks.
                 </div>
                 <div className="vis-outcomes">
-                  {outcomes.split("\n").map((line, i) => (
-                    <div key={i} className="vis-outcome">
-                      <div className="vis-outcome-row">
-                        <AutoTextarea
-                          className="vis-outcome-input"
-                          value={line}
-                          onChange={(e) =>
-                            setOutcomes((prev) => {
-                              const lines = prev.split("\n");
-                              lines[i] = e.target.value;
-                              return lines.join("\n");
-                            })
-                          }
-                          placeholder="An outcome this quarter"
-                          minRows={1}
-                        />
-                        <button
-                          type="button"
-                          className="vis-row-remove"
-                          aria-label="Remove"
-                          onClick={() =>
-                            setOutcomes((prev) =>
-                              prev
-                                .split("\n")
-                                .filter((_, idx) => idx !== i)
-                                .join("\n")
-                            )
-                          }
-                        >
-                          ×
-                        </button>
+                  {outcomes.split("\n").map((line, i) => {
+                    const outcomeId = `vision-${i}`;
+                    const criteria = criteriaArr[i] || [];
+                    const prog = outcomeProgress({ criteria });
+                    const fillWidth =
+                      prog.total > 0 ? prog.percent : line.trim() ? 8 : 0;
+                    return (
+                      <div key={i} className="vis-outcome">
+                        <div className="vis-outcome-row">
+                          <AutoTextarea
+                            className="vis-outcome-input"
+                            value={line}
+                            onChange={(e) =>
+                              setOutcomes((prev) => {
+                                const lines = prev.split("\n");
+                                lines[i] = e.target.value;
+                                return lines.join("\n");
+                              })
+                            }
+                            placeholder="An outcome this quarter"
+                            minRows={1}
+                          />
+                          <button
+                            type="button"
+                            className="vis-row-remove"
+                            aria-label="Remove"
+                            onClick={() => {
+                              setOutcomes((prev) =>
+                                prev
+                                  .split("\n")
+                                  .filter((_, idx) => idx !== i)
+                                  .join("\n")
+                              );
+                              setCriteriaArr((prev) =>
+                                prev.filter((_, idx) => idx !== i)
+                              );
+                            }}
+                          >
+                            ×
+                          </button>
+                        </div>
+                        <div className="vis-outcome-bar">
+                          <div
+                            className="vis-outcome-fill"
+                            style={{
+                              width: fillWidth + "%",
+                              background: "var(--ps-accent)",
+                            }}
+                          />
+                        </div>
+                        {line.trim() && (
+                          <OutcomeISCEditor
+                            outcome={{ id: outcomeId, title: line, criteria }}
+                            onChange={(nextCriteria) =>
+                              setCriteriaArr((prev) => {
+                                const next = [...prev];
+                                while (next.length <= i) next.push([]);
+                                next[i] = nextCriteria;
+                                return next;
+                              })
+                            }
+                          />
+                        )}
                       </div>
-                      <div className="vis-outcome-bar">
-                        <div
-                          className="vis-outcome-fill"
-                          style={{
-                            width:
-                              (outcomeList[i]?.progress ?? 30) + "%",
-                            background: "var(--ps-accent)",
-                          }}
-                        />
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 <button
                   type="button"

@@ -38,6 +38,8 @@ import {
   createTask,
 } from "../../lib/db";
 import { computeProjectAlignment } from "../../lib/projectWorkspace";
+import OutcomeISCEditor from "../../components/OutcomeISCEditor";
+import { outcomesProgress } from "../../lib/iscProgress";
 
 const PROJECT_COLORS = [
   "var(--ps-clay)",
@@ -159,7 +161,12 @@ export default function ProjectPage() {
         );
         const done = subset.filter((t) => t.status === "done").length;
         const progress = subset.length > 0 ? done / subset.length : 0;
-        return { ...o, progress, taskCount: subset.length };
+        return {
+          ...o,
+          progress,
+          taskCount: subset.length,
+          criteria: Array.isArray(o.criteria) ? o.criteria : [],
+        };
       });
       setOutcomes(withProgress);
 
@@ -634,7 +641,29 @@ export default function ProjectPage() {
                     Last touched <strong>{lastTouched}</strong>
                   </div>
                 )}
+                {(() => {
+                  const isc = outcomesProgress(outcomes);
+                  return isc.total > 0 ? (
+                    <div>
+                      <strong>{isc.met}</strong>/{isc.total} ISCs ({isc.percent}%)
+                    </div>
+                  ) : null;
+                })()}
               </div>
+
+              {outcomes.length > 0 && outcomes.some((o) => (o.criteria || []).length > 0) && (
+                <div className="pj-outcomes-isc">
+                  <div className="pj-outcomes-isc-cap">Outcome progress</div>
+                  {outcomes
+                    .filter((o) => (o.criteria || []).length > 0)
+                    .map((o) => (
+                      <div key={o.id} className="pj-outcomes-isc-row">
+                        <div className="pj-outcomes-isc-title">{o.title}</div>
+                        <OutcomeISCEditor outcome={o} readOnly />
+                      </div>
+                    ))}
+                </div>
+              )}
             </div>
             <div className="pj-progress">
               <div className="pj-progress-num">
@@ -1085,6 +1114,28 @@ export default function ProjectPage() {
           margin-top: 10px;
         }
         .pj-meta strong { color: var(--ps-ink); font-weight: 600; }
+        .pj-outcomes-isc {
+          margin-top: 16px;
+          padding: 12px 14px;
+          background: var(--ps-paper-soft);
+          border: 1px solid var(--ps-ink-08);
+          border-radius: 10px;
+        }
+        .pj-outcomes-isc-cap {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+          margin-bottom: 10px;
+        }
+        .pj-outcomes-isc-row { margin-bottom: 10px; }
+        .pj-outcomes-isc-row:last-child { margin-bottom: 0; }
+        .pj-outcomes-isc-title {
+          font-size: 13px;
+          color: var(--ps-ink-80);
+          margin-bottom: 4px;
+        }
         .pj-mantra {
           margin-top: 14px;
           padding: 12px 14px;
