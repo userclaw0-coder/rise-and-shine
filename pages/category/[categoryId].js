@@ -143,14 +143,14 @@ function groupTasks(tasks) {
       const ag = hasGate(a, "gate:launch") ? 0 : 1;
       const bg = hasGate(b, "gate:launch") ? 0 : 1;
       if (ag !== bg) return ag - bg;
-      // then by effort (small wins first)
-      const ae = a.effort_hours || 0;
-      const be = b.effort_hours || 0;
-      if (ae !== be) return ae - be;
-      // then by priority (Critical → Low)
+      // then by priority (Critical → Low) — highest priority on top
       const ap = PRIORITY_RANK[a.priority] ?? 2;
       const bp = PRIORITY_RANK[b.priority] ?? 2;
-      return ap - bp;
+      if (ap !== bp) return ap - bp;
+      // then by effort ascending (small wins surface first within a priority tier)
+      const ae = a.effort_hours || 0;
+      const be = b.effort_hours || 0;
+      return ae - be;
     });
   }
 
