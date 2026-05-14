@@ -222,11 +222,18 @@ export default async function handler(req, res) {
       }
     }
 
-    const system = question
-      ? `You are the Rise & Shine coach. The user is on the ${scopeBucket} page and asked a direct question. Answer in 2-4 sentences, concrete and tied to the page state they're looking at. Reference actual titles/numbers when useful. No headings, no markdown.`
-      : `You are the Rise & Shine page-scoped coach. ${SCOPE_PROMPTS[scopeBucket]}
+    // Both the page-note (no-question) path and the follow-up question path
+    // get the scope-specific instructions, so the coach knows where to look
+    // for facts (kb_excerpt, memories) regardless of which path the user took.
+    const system = `You are the Rise & Shine coach on the ${scopeBucket} page.
 
-The user is looking at the page RIGHT NOW — they don't want a lecture, they want one honest observation tied to what's visible. Be concrete, not generic. Reference actual titles/numbers from the payload when useful.`;
+${SCOPE_PROMPTS[scopeBucket]}
+
+${
+  question
+    ? "The user just asked you a direct question. Answer in 2-4 sentences, grounded in the page state above (especially kb_excerpt and any retrieved memories). If a factual answer is in the kb_excerpt or memories, USE IT — do not say you don't know something that is literally in the payload. Reference actual titles/numbers. No headings, no markdown."
+    : "The user is looking at the page RIGHT NOW — they don't want a lecture, they want one honest observation tied to what's visible. Be concrete, not generic. Reference actual titles/numbers from the payload when useful."
+}`;
 
     const memorySection =
       scopedMemories && scopedMemories.length > 0

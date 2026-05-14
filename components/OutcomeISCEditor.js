@@ -1,10 +1,12 @@
 // OutcomeISCEditor — per-outcome list of Ideal State Criteria.
-// Used on /vision and (read-only) on /category/[id].
+// Used on /vision (editable) and /category/[id] (read-only + collapsed).
 //
 // Props:
-//   outcome    { id, title, criteria: [{id, statement, met, met_at}] }
-//   readOnly   suppress add / edit / delete affordances (still shows progress)
-//   onChange(nextCriteria)   called with the full updated criteria array
+//   outcome            { id, title, criteria: [{id, statement, met, met_at}] }
+//   readOnly           suppress add / edit / delete affordances (still shows progress)
+//   defaultCollapsed   start collapsed; shows progress bar + next unmet ISC only;
+//                      user clicks to expand the full criteria list
+//   onChange(criteria) called with the full updated criteria array
 
 import { useState } from "react";
 import {
@@ -15,11 +17,19 @@ import {
   outcomeProgress,
 } from "../lib/iscProgress";
 
-export default function OutcomeISCEditor({ outcome, readOnly = false, onChange }) {
+export default function OutcomeISCEditor({
+  outcome,
+  readOnly = false,
+  defaultCollapsed = false,
+  onChange,
+}) {
   const [drafting, setDrafting] = useState(false);
   const [draft, setDraft] = useState("");
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const criteria = Array.isArray(outcome?.criteria) ? outcome.criteria : [];
   const prog = outcomeProgress(outcome);
+  const nextUnmet = criteria.find((c) => !c.met) || null;
+  const showCollapsed = collapsed && criteria.length > 0;
 
   function mutate(transform) {
     if (readOnly || !onChange) return;
@@ -54,9 +64,33 @@ export default function OutcomeISCEditor({ outcome, readOnly = false, onChange }
             </>
           )}
         </div>
+        {criteria.length > 0 && (
+          <button
+            type="button"
+            className="isc-collapse-toggle"
+            onClick={() => setCollapsed((v) => !v)}
+            aria-expanded={!collapsed}
+            title={collapsed ? "Show all criteria" : "Collapse criteria"}
+          >
+            {collapsed ? `▸ Show ${criteria.length}` : "▾ Collapse"}
+          </button>
+        )}
       </div>
 
-      {criteria.length > 0 && (
+      {showCollapsed && (
+        <div className="isc-collapsed-summary">
+          {nextUnmet ? (
+            <>
+              <span className="isc-collapsed-cap">Next:</span>
+              <span className="isc-collapsed-text">{nextUnmet.statement}</span>
+            </>
+          ) : (
+            <span className="isc-collapsed-done">All {prog.total} criteria met ✓</span>
+          )}
+        </div>
+      )}
+
+      {!collapsed && criteria.length > 0 && (
         <ul className="isc-list">
           {criteria.map((c) => (
             <li key={c.id} className={"isc-item" + (c.met ? " met" : "")}>
@@ -103,7 +137,7 @@ export default function OutcomeISCEditor({ outcome, readOnly = false, onChange }
         </ul>
       )}
 
-      {!readOnly && (
+      {!collapsed && !readOnly && (
         <div className="isc-add">
           {drafting ? (
             <>
@@ -188,6 +222,51 @@ export default function OutcomeISCEditor({ outcome, readOnly = false, onChange }
           font-style: italic;
           font-family: inherit;
           font-size: 11px;
+        }
+        .isc-collapse-toggle {
+          appearance: none;
+          background: transparent;
+          border: 1px solid transparent;
+          color: var(--ps-ink-50);
+          font-family: var(--ps-mono);
+          font-size: 9px;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          padding: 2px 8px;
+          border-radius: 4px;
+          cursor: pointer;
+          white-space: nowrap;
+        }
+        .isc-collapse-toggle:hover {
+          color: var(--ps-ink);
+          border-color: var(--ps-ink-15);
+        }
+        .isc-collapsed-summary {
+          display: flex;
+          gap: 8px;
+          align-items: baseline;
+          padding: 4px 0 8px 2px;
+          font-size: 13px;
+          color: var(--ps-ink-80);
+        }
+        .isc-collapsed-cap {
+          font-family: var(--ps-mono);
+          font-size: 9px;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+          flex-shrink: 0;
+        }
+        .isc-collapsed-text {
+          font-style: italic;
+          line-height: 1.4;
+        }
+        .isc-collapsed-done {
+          font-size: 12px;
+          color: var(--ps-sage);
+          font-family: var(--ps-mono);
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
         }
         .isc-list {
           list-style: none;

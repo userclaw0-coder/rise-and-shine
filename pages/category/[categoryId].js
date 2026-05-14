@@ -187,6 +187,9 @@ export default function ProjectPage() {
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState(null);
   const [collapsedGroups, setCollapsedGroups] = useState({});
+  const [filterLocations, setFilterLocations] = useState([]);
+  const [filterWorkstreams, setFilterWorkstreams] = useState([]);
+  const [filterGates, setFilterGates] = useState([]);
   const [subtasks, setSubtasks] = useState({});
   const [breakdowns, setBreakdowns] = useState({});
   const [breakingDown, setBreakingDown] = useState(null);
@@ -446,8 +449,32 @@ export default function ProjectPage() {
     }
   }
 
+  const hasAnyFilter =
+    filterLocations.length > 0 ||
+    filterWorkstreams.length > 0 ||
+    filterGates.length > 0;
+
+  const filteredTasks = useMemo(() => {
+    if (!hasAnyFilter) return tasks;
+    return tasks.filter((t) => {
+      if (filterLocations.length) {
+        const loc = locationOf(t); // e.g. "@home"
+        if (!loc || !filterLocations.includes(loc)) return false;
+      }
+      if (filterWorkstreams.length) {
+        const ws = workstreamOf(t);
+        if (!ws || !filterWorkstreams.includes(ws)) return false;
+      }
+      if (filterGates.length) {
+        const gates = gatesOf(t);
+        if (!filterGates.every((g) => gates.includes(g))) return false;
+      }
+      return true;
+    });
+  }, [tasks, filterLocations, filterWorkstreams, filterGates, hasAnyFilter]);
+
   const groups = useMemo(() => {
-    const base = groupTasks(tasks);
+    const base = groupTasks(filteredTasks);
     if (!nextAction?.task_id) return base;
     // Find the group containing the next-action task and move it to the top
     for (const g of base) {
@@ -459,7 +486,40 @@ export default function ProjectPage() {
       }
     }
     return base;
-  }, [tasks, nextAction]);
+  }, [filteredTasks, nextAction]);
+
+  // Pre-compute which workstreams / locations / gates actually exist in this
+  // project's open tasks — only render chips that match real data.
+  const availableFilters = useMemo(() => {
+    const ws = new Set();
+    const loc = new Set();
+    const gates = new Set();
+    for (const t of tasks) {
+      if (t.status === "done") continue;
+      const w = workstreamOf(t);
+      if (w) ws.add(w);
+      const l = locationOf(t);
+      if (l) loc.add(l);
+      for (const g of gatesOf(t)) gates.add(g);
+    }
+    return {
+      workstreams: Array.from(ws).sort(),
+      locations: Array.from(loc).sort(),
+      gates: Array.from(gates).sort(),
+    };
+  }, [tasks]);
+
+  function toggleInList(setter, value) {
+    setter((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
+    );
+  }
+
+  function clearAllFilters() {
+    setFilterLocations([]);
+    setFilterWorkstreams([]);
+    setFilterGates([]);
+  }
   const overall = useMemo(() => {
     const active = tasks.filter((t) => t.status !== "done");
     if (active.length === 0 && tasks.length === 0) return 0;
@@ -803,7 +863,7 @@ export default function ProjectPage() {
                     .map((o) => (
                       <div key={o.id} className="pj-outcomes-isc-row">
                         <div className="pj-outcomes-isc-title">{o.title}</div>
-                        <OutcomeISCEditor outcome={o} readOnly />
+                        <OutcomeISCEditor outcome={o} readOnly defaultCollapsed />
                       </div>
                     ))}
                 </div>
@@ -837,7 +897,8 @@ export default function ProjectPage() {
               <div>
                 <div className="pj-ladder-title">Task ladder</div>
                 <div className="pj-ladder-sub">
-                  Coach-ordered. Anything over 30 min gets flagged for breakdown.
+                  Grouped by phase. Within each phase: gate:launch tasks first,
+                  then smallest effort, then priority.
                 </div>
               </div>
               <Link href="/backlog" className="ps-btn ps-btn--primary">
@@ -845,11 +906,94 @@ export default function ProjectPage() {
               </Link>
             </div>
 
+            {(availableFilters.locations.length > 0 ||
+              availableFilters.workstreams.length > 0 ||
+              availableFilters.gates.length > 0) && (
+              <div className="pj-filters">
+                {availableFilters.locations.length > 0 && (
+                  <div className="pj-filter-row">
+                    <span className="pj-filter-cap">Location</span>
+                    {availableFilters.locations.map((loc) => (
+                      <button
+                        key={loc}
+                        type="button"
+                        className={
+                          "pj-filter-chip pj-filter-chip--loc" +
+                          (filterLocations.includes(loc) ? " active" : "")
+                        }
+                        onClick={() => toggleInList(setFilterLocations, loc)}
+                      >
+                        {loc}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {availableFilters.workstreams.length > 0 && (
+                  <div className="pj-filter-row">
+                    <span className="pj-filter-cap">Workstream</span>
+                    {availableFilters.workstreams.map((ws) => (
+                      <button
+                        key={ws}
+                        type="button"
+                        className={
+                          "pj-filter-chip pj-filter-chip--ws" +
+                          (filterWorkstreams.includes(ws) ? " active" : "")
+                        }
+                        onClick={() => toggleInList(setFilterWorkstreams, ws)}
+                      >
+                        {ws}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {availableFilters.gates.length > 0 && (
+                  <div className="pj-filter-row">
+                    <span className="pj-filter-cap">Gate</span>
+                    {availableFilters.gates.map((g) => (
+                      <button
+                        key={g}
+                        type="button"
+                        className={
+                          "pj-filter-chip pj-filter-chip--gate" +
+                          (filterGates.includes(g) ? " active" : "")
+                        }
+                        onClick={() => toggleInList(setFilterGates, g)}
+                      >
+                        ⚑ {g}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {hasAnyFilter && (
+                  <div className="pj-filter-row pj-filter-row--meta">
+                    <span className="pj-filter-summary">
+                      Showing{" "}
+                      <strong>{filteredTasks.filter((t) => t.status !== "done").length}</strong>{" "}
+                      of {tasks.filter((t) => t.status !== "done").length} open tasks
+                    </span>
+                    <button
+                      type="button"
+                      className="pj-filter-clear"
+                      onClick={clearAllFilters}
+                    >
+                      ✕ Clear all
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {loading && <div className="pj-empty">Loading…</div>}
             {!loading && groups.length === 0 && (
               <div className="pj-empty">
-                No active tasks yet. Capture some in{" "}
-                <Link href="/backlog">Action items</Link>.
+                {hasAnyFilter
+                  ? "No tasks match the current filters."
+                  : (
+                    <>
+                      No active tasks yet. Capture some in{" "}
+                      <Link href="/backlog">Action items</Link>.
+                    </>
+                  )}
               </div>
             )}
 
@@ -1603,6 +1747,84 @@ export default function ProjectPage() {
           font-size: 12px;
           color: var(--ps-ink-60);
           margin-top: 2px;
+        }
+        .pj-filters {
+          background: var(--ps-paper-soft);
+          border: 1px solid var(--ps-ink-08);
+          border-radius: 10px;
+          padding: 10px 14px;
+          margin-bottom: 14px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .pj-filter-row {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          align-items: center;
+        }
+        .pj-filter-row--meta {
+          border-top: 1px solid var(--ps-ink-08);
+          padding-top: 8px;
+          margin-top: 2px;
+          justify-content: space-between;
+        }
+        .pj-filter-cap {
+          font-family: var(--ps-mono);
+          font-size: 9px;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+          width: 80px;
+          flex-shrink: 0;
+        }
+        .pj-filter-chip {
+          appearance: none;
+          background: #fff;
+          border: 1px solid var(--ps-ink-15);
+          color: var(--ps-ink-70);
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.06em;
+          padding: 3px 8px;
+          border-radius: 6px;
+          cursor: pointer;
+          transition: all 120ms;
+        }
+        .pj-filter-chip:hover {
+          border-color: var(--ps-ink-40);
+          color: var(--ps-ink);
+        }
+        .pj-filter-chip.active {
+          background: var(--ps-ink);
+          color: var(--ps-bg);
+          border-color: var(--ps-ink);
+        }
+        .pj-filter-chip--gate.active {
+          background: var(--ps-clay);
+          border-color: var(--ps-clay);
+        }
+        .pj-filter-summary {
+          font-size: 12px;
+          color: var(--ps-ink-60);
+        }
+        .pj-filter-summary strong { color: var(--ps-ink); }
+        .pj-filter-clear {
+          appearance: none;
+          background: transparent;
+          border: 1px solid var(--ps-ink-15);
+          color: var(--ps-ink-60);
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.06em;
+          padding: 3px 8px;
+          border-radius: 6px;
+          cursor: pointer;
+        }
+        .pj-filter-clear:hover {
+          color: var(--ps-clay);
+          border-color: var(--ps-clay);
         }
         .pj-empty {
           background: var(--ps-paper);
