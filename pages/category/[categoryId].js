@@ -203,6 +203,8 @@ export default function ProjectPage() {
   const [lastAlignedAt, setLastAlignedAt] = useState(null);
   const [nextAction, setNextAction] = useState(null);
   const [projectOutcomeIds, setProjectOutcomeIds] = useState([]);
+  const [workingStyleTraits, setWorkingStyleTraits] = useState([]);
+  const [traitChipDismissed, setTraitChipDismissed] = useState(false);
   const [projectPrimaryDomain, setProjectPrimaryDomain] = useState(null);
   const [projectLifeDomains, setProjectLifeDomains] = useState([]);
   const [kbSaving, setKbSaving] = useState(false);
@@ -254,6 +256,10 @@ export default function ProjectPage() {
       setCategoryIndex(idx === -1 ? 0 : idx);
 
       const profile = profileRes?.data?.profile || {};
+      const traits = Array.isArray(profile.working_style?.traits)
+        ? profile.working_style.traits.filter((t) => t && t.label)
+        : [];
+      setWorkingStyleTraits(traits);
       const visionOutcomes = profile.desired_outcomes || [];
       const linked = new Set();
       for (const t of listRes.data || []) {
@@ -669,6 +675,12 @@ export default function ProjectPage() {
                 <span className="pj-dot" style={{ background: color }} />
                 <span>Active project</span>
               </div>
+              <WorkingStyleStrip
+                traits={workingStyleTraits}
+                tasks={tasks}
+                dismissed={traitChipDismissed}
+                onDismiss={() => setTraitChipDismissed(true)}
+              />
               <h1 className="ps-title">{category?.name || "Project"}</h1>
 
               <div className="pj-mantra">
@@ -2017,5 +2029,130 @@ export default function ProjectPage() {
         }
       `}</style>
     </PSShell>
+  );
+}
+
+
+// ─── WorkingStyleStrip ────────────────────────────────────────────────
+// Top-of-page reminder of the user's load-bearing working-style traits.
+// Pulls the next "GATHER/FIND/ORGANIZE" task on this project so the
+// chip is concrete, not abstract.
+function WorkingStyleStrip({ traits, tasks, dismissed, onDismiss }) {
+  if (!Array.isArray(traits) || traits.length === 0) return null;
+  if (dismissed) return null;
+  const open = (tasks || []).filter((t) => t.status !== "done");
+  const LOGISTICS_RE = /^(GATHER|FIND|ORGANIZE|LOCATE|BRING|SORT)\b[: -]/i;
+  const logisticsNext = open
+    .filter((t) => LOGISTICS_RE.test(String(t.title || "")))
+    .sort((a, b) => (a.effort_hours || 0) - (b.effort_hours || 0))[0];
+
+  return (
+    <div className="pj-trait-strip">
+      <div className="pj-trait-cap">Working style</div>
+      <div className="pj-trait-body">
+        {traits.slice(0, 2).map((t) => (
+          <span key={t.label} className="pj-trait-chip" title={t.description}>
+            {t.label}
+          </span>
+        ))}
+        {logisticsNext ? (
+          <span className="pj-trait-next">
+            <span className="pj-trait-arrow">→</span>
+            <span className="pj-trait-next-text">
+              Next bite-size: {logisticsNext.title.slice(0, 90)}
+              {logisticsNext.title.length > 90 ? "…" : ""}
+            </span>
+          </span>
+        ) : (
+          <span className="pj-trait-next pj-trait-next--muted">
+            No logistics quick-wins queued — propose one via Jarvis if parts feel scattered.
+          </span>
+        )}
+      </div>
+      <button
+        type="button"
+        className="pj-trait-dismiss"
+        onClick={onDismiss}
+        aria-label="Hide for this session"
+        title="Hide for this session"
+      >
+        ✕
+      </button>
+      <style jsx>{`
+        .pj-trait-strip {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 8px 12px;
+          margin: 4px 0 10px;
+          border-radius: 8px;
+          background: var(--ps-paper-soft, #f4ebe0);
+          border: 1px solid var(--ps-clay-15, #e6d4bd);
+          font-size: 12px;
+          color: var(--ps-ink-80);
+        }
+        .pj-trait-cap {
+          font-family: var(--ps-mono);
+          font-size: 9px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--ps-ink-50);
+          flex-shrink: 0;
+        }
+        .pj-trait-body {
+          display: flex;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 8px;
+          flex: 1;
+          min-width: 0;
+        }
+        .pj-trait-chip {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.06em;
+          padding: 2px 8px;
+          border-radius: 4px;
+          background: var(--ps-clay-08, #e0c9aa);
+          color: var(--ps-clay-dark, #6a4520);
+          cursor: help;
+          flex-shrink: 0;
+        }
+        .pj-trait-next {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          color: var(--ps-ink-80);
+          min-width: 0;
+        }
+        .pj-trait-next--muted {
+          color: var(--ps-ink-50);
+          font-style: italic;
+        }
+        .pj-trait-arrow {
+          color: var(--ps-ink-40);
+          flex-shrink: 0;
+        }
+        .pj-trait-next-text {
+          font-weight: 500;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .pj-trait-dismiss {
+          appearance: none;
+          background: transparent;
+          border: none;
+          color: var(--ps-ink-40);
+          font-size: 13px;
+          cursor: pointer;
+          padding: 2px 4px;
+          flex-shrink: 0;
+        }
+        .pj-trait-dismiss:hover {
+          color: var(--ps-clay);
+        }
+      `}</style>
+    </div>
   );
 }
