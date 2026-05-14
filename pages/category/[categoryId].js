@@ -27,6 +27,29 @@ function typeTagOf(row) {
   }
   return null;
 }
+
+// Workstream code from "ws:XX" tags (added by the Reorient triage flow).
+function workstreamOf(row) {
+  const names = extractTagNames(row);
+  const ws = names.find((n) => n.startsWith("ws:"));
+  return ws ? ws.slice(3) : null;
+}
+
+// Location label from "@home" / "@longterm" / "@workyard" / "@onthewater".
+function locationOf(row) {
+  const names = extractTagNames(row);
+  const loc = names.find((n) => n.startsWith("@"));
+  return loc || null;
+}
+
+// All "gate:*" tags on the task (gate:launch / gate:workyard / etc.).
+function gatesOf(row) {
+  return extractTagNames(row).filter((n) => n.startsWith("gate:"));
+}
+
+function hasGate(row, gate) {
+  return gatesOf(row).includes(gate);
+}
 import {
   loadCollaborativeProject,
   saveCollaborativeProjectWorkspace,
@@ -51,28 +74,105 @@ const PROJECT_COLORS = [
   "var(--ps-ink)",
 ];
 
+// Phase-based grouping. Drives the task ladder once `tasks.phase` is populated
+// by the Reorient triage flow. Tasks without a phase fall into "Unphased" so
+// they're visible until they get triaged.
+const PHASE_ORDER = [
+  "immediate",
+  "this_week",
+  "next_2w",
+  "next_30d",
+  "ongoing",
+  "blocked",
+  "someday",
+];
+const PHASE_LABELS = {
+  immediate: "Immediate — today",
+  this_week: "This week",
+  next_2w: "Next 2 weeks",
+  next_30d: "Next 30 days",
+  ongoing: "Ongoing / recurring",
+  blocked: "Blocked",
+  someday: "Someday",
+  _unphased: "Unphased",
+};
+const PHASE_COLLAPSED_BY_DEFAULT = new Set(["blocked", "someday", "_unphased"]);
+const PRIORITY_RANK = { Critical: 0, High: 1, Medium: 2, Low: 3 };
+
 function groupTasks(tasks) {
-  const active = [];
-  const backlog = [];
-  const needsBreak = [];
-  for (const t of tasks) {
-    if (t.status === "done") continue;
-    const tooBig = (t.effort_hours || 0) > 0.5;
-    const priority = t.priority;
-    if (priority === "Critical" || priority === "High") {
-      if (tooBig) needsBreak.push(t);
-      else active.push(t);
-    } else if (tooBig) {
-      needsBreak.push(t);
-    } else {
-      backlog.push(t);
+  // Anchor: if any open task has a phase, we're in phase-mode. Otherwise
+  // fall back to the legacy priority/effort split so projects that haven't
+  // been Reoriented yet still render reasonably.
+  const open = tasks.filter((t) => t.status !== "done");
+  const anyPhase = open.some((t) => t.phase);
+
+  if (!anyPhase) {
+    const active = [];
+    const backlog = [];
+    const needsBreak = [];
+    for (const t of open) {
+      const tooBig = (t.effort_hours || 0) > 0.5;
+      const priority = t.priority;
+      if (priority === "Critical" || priority === "High") {
+        if (tooBig) needsBreak.push(t);
+        else active.push(t);
+      } else if (tooBig) {
+        needsBreak.push(t);
+      } else {
+        backlog.push(t);
+      }
+    }
+    return [
+      { label: "This week — active", items: active },
+      { label: "Ordered backlog", items: backlog },
+      { label: "Needs breakdown — too big", items: needsBreak, flag: true },
+    ].filter((g) => g.items.length > 0);
+  }
+
+  // Phase-mode: bucket by phase, then sort within each bucket.
+  const buckets = {};
+  for (const t of open) {
+    const key = t.phase || "_unphased";
+    if (!buckets[key]) buckets[key] = [];
+    buckets[key].push(t);
+  }
+  for (const key of Object.keys(buckets)) {
+    buckets[key].sort((a, b) => {
+      // gate:launch first within phase (high stakes)
+      const ag = hasGate(a, "gate:launch") ? 0 : 1;
+      const bg = hasGate(b, "gate:launch") ? 0 : 1;
+      if (ag !== bg) return ag - bg;
+      // then by effort (small wins first)
+      const ae = a.effort_hours || 0;
+      const be = b.effort_hours || 0;
+      if (ae !== be) return ae - be;
+      // then by priority (Critical → Low)
+      const ap = PRIORITY_RANK[a.priority] ?? 2;
+      const bp = PRIORITY_RANK[b.priority] ?? 2;
+      return ap - bp;
+    });
+  }
+
+  const result = [];
+  for (const phase of PHASE_ORDER) {
+    if (buckets[phase]?.length) {
+      result.push({
+        phase,
+        label: PHASE_LABELS[phase],
+        items: buckets[phase],
+        collapsedByDefault: PHASE_COLLAPSED_BY_DEFAULT.has(phase),
+      });
     }
   }
-  return [
-    { label: "This week — active", items: active },
-    { label: "Ordered backlog", items: backlog },
-    { label: "Needs breakdown — too big", items: needsBreak, flag: true },
-  ].filter((g) => g.items.length > 0);
+  if (buckets._unphased?.length) {
+    result.push({
+      phase: "_unphased",
+      label: PHASE_LABELS._unphased,
+      items: buckets._unphased,
+      collapsedByDefault: PHASE_COLLAPSED_BY_DEFAULT.has("_unphased"),
+    });
+  }
+  return result;
 }
 
 export default function ProjectPage() {
@@ -86,6 +186,7 @@ export default function ProjectPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState(null);
+  const [collapsedGroups, setCollapsedGroups] = useState({});
   const [subtasks, setSubtasks] = useState({});
   const [breakdowns, setBreakdowns] = useState({});
   const [breakingDown, setBreakingDown] = useState(null);
@@ -415,27 +516,70 @@ export default function ProjectPage() {
       ? "gold"
       : "clay";
 
-  const coachPayload = {
-    project: category?.name || null,
-    category_id: categoryId,
-    linked_outcomes: outcomes.map((o) => ({
-      title: o.title,
-      progress: o.progress,
-    })),
-    open_task_titles: tasks
-      .filter((t) => t.status !== "done")
-      .slice(0, 12)
+  // Phase-aware task summaries — the page-note coach should base its
+  // "next action" suggestions on these, not on the open_task_titles list
+  // alone (which is updated_at-sorted and doesn't reflect phase).
+  const openTasks = tasks.filter((t) => t.status !== "done");
+  const phaseBucket = (phase) =>
+    openTasks
+      .filter((t) => t.phase === phase)
       .map((t) => ({
         id: t.id,
         title: t.title,
         priority: t.priority,
         minutes: Math.round((t.effort_hours || 0) * 60),
-      })),
+        ws: workstreamOf(t),
+        loc: locationOf(t),
+        gates: gatesOf(t),
+      }));
+  const phaseCounts = {
+    immediate: phaseBucket("immediate").length,
+    this_week: phaseBucket("this_week").length,
+    next_2w: phaseBucket("next_2w").length,
+    next_30d: phaseBucket("next_30d").length,
+    ongoing: phaseBucket("ongoing").length,
+    blocked: phaseBucket("blocked").length,
+    someday: phaseBucket("someday").length,
+    unphased: openTasks.filter((t) => !t.phase).length,
+  };
+  const gateLaunchOpen = openTasks.filter((t) => hasGate(t, "gate:launch")).length;
+  const gateWorkyardOpen = openTasks.filter((t) => hasGate(t, "gate:workyard")).length;
+
+  const coachPayload = {
+    project: category?.name || null,
+    category_id: categoryId,
+    mantra: mantra || null,
+    narrative_excerpt: (narrative || "").slice(0, 800),
+    kb_excerpt: (knowledgeBase || "").slice(0, 2000),
+    linked_outcomes: outcomes.map((o) => ({
+      id: o.id,
+      title: o.title,
+      progress: o.progress,
+      isc_total: Array.isArray(o.criteria) ? o.criteria.length : 0,
+      isc_met: Array.isArray(o.criteria)
+        ? o.criteria.filter((c) => c.met).length
+        : 0,
+    })),
+    immediate_tasks: phaseBucket("immediate").slice(0, 8),
+    this_week_tasks: phaseBucket("this_week").slice(0, 8),
+    blocked_tasks: phaseBucket("blocked").slice(0, 5),
+    phase_counts: phaseCounts,
+    gate_launch_open: gateLaunchOpen,
+    gate_workyard_open: gateWorkyardOpen,
+    open_task_titles: openTasks.slice(0, 12).map((t) => ({
+      id: t.id,
+      title: t.title,
+      priority: t.priority,
+      minutes: Math.round((t.effort_hours || 0) * 60),
+      phase: t.phase || null,
+    })),
     done_this_week: doneThisWeek,
     last_aligned_at: lastAlignedAt,
     days_since_aligned: daysSinceAligned,
     alignment_score: alignmentScore,
     current_next_action: nextAction,
+    drive_folder_url: driveFolderUrl || null,
+    mode: null,
     refresh_mode: null,
   };
 
@@ -709,13 +853,38 @@ export default function ProjectPage() {
               </div>
             )}
 
-            {groups.map((g) => (
-              <div key={g.label} className="pj-group">
-                <div className="pj-group-head">
+            {groups.map((g) => {
+              const groupKey = g.phase || g.label;
+              const isCollapsed =
+                collapsedGroups[groupKey] === undefined
+                  ? !!g.collapsedByDefault
+                  : !!collapsedGroups[groupKey];
+              const toggle = () =>
+                setCollapsedGroups((prev) => ({
+                  ...prev,
+                  [groupKey]: !isCollapsed,
+                }));
+              const gateLaunchCount = g.items.filter((t) =>
+                hasGate(t, "gate:launch")
+              ).length;
+              return (
+              <div key={groupKey} className="pj-group">
+                <button
+                  type="button"
+                  className="pj-group-head pj-group-head--btn"
+                  onClick={toggle}
+                  aria-expanded={!isCollapsed}
+                >
+                  <span className="pj-group-chev">{isCollapsed ? "▸" : "▾"}</span>
                   <span className="pj-group-label">{g.label}</span>
                   <span className="pj-group-count">{g.items.length}</span>
-                </div>
-                {g.items.map((t) => {
+                  {gateLaunchCount > 0 && (
+                    <span className="pj-group-gate" title="Tasks gated to launch">
+                      ⚑ {gateLaunchCount} launch-gate
+                    </span>
+                  )}
+                </button>
+                {!isCollapsed && g.items.map((t) => {
                   const mins = Math.round((t.effort_hours || 0) * 60);
                   const isOpen = expanded === t.id;
                   const subs = subtasks[t.id] || [];
@@ -758,6 +927,21 @@ export default function ProjectPage() {
                                   t.primary_life_domain}
                               </span>
                             )}
+                            {workstreamOf(t) && (
+                              <span className="ps-tag pj-tag-ws">
+                                {workstreamOf(t)}
+                              </span>
+                            )}
+                            {locationOf(t) && (
+                              <span className="ps-tag pj-tag-loc">
+                                {locationOf(t)}
+                              </span>
+                            )}
+                            {gatesOf(t).map((gate) => (
+                              <span key={gate} className="ps-tag pj-tag-gate">
+                                {gate}
+                              </span>
+                            ))}
                             {t.phase && (
                               <span className="ps-tag pj-tag-phase">
                                 {t.phase.replace(/_/g, " ")}
@@ -871,7 +1055,8 @@ export default function ProjectPage() {
                   );
                 })}
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {nextAction ? (
@@ -1438,6 +1623,22 @@ export default function ProjectPage() {
           padding: 6px 0;
           margin-bottom: 6px;
         }
+        .pj-group-head--btn {
+          appearance: none;
+          background: transparent;
+          border: none;
+          width: 100%;
+          text-align: left;
+          cursor: pointer;
+          color: inherit;
+        }
+        .pj-group-head--btn:hover .pj-group-label { color: var(--ps-accent); }
+        .pj-group-chev {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          color: var(--ps-ink-50);
+          width: 10px;
+        }
         .pj-group-label {
           font-family: var(--ps-serif);
           font-size: 14px;
@@ -1448,6 +1649,16 @@ export default function ProjectPage() {
           font-family: var(--ps-mono);
           font-size: 10px;
           color: var(--ps-ink-50);
+        }
+        .pj-group-gate {
+          font-family: var(--ps-mono);
+          font-size: 9px;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          color: var(--ps-clay);
+          background: var(--ps-clay-soft);
+          border-radius: 999px;
+          padding: 2px 8px;
         }
         .pj-item {
           background: #fff;
@@ -1509,6 +1720,9 @@ export default function ProjectPage() {
         .pj-tag-need { background: var(--ps-indigo-soft); color: var(--ps-indigo); }
         .pj-tag-outcome { background: var(--ps-gold-soft); color: var(--ps-gold); }
         .pj-tag-phase { background: var(--ps-plum-soft); color: var(--ps-plum); font-family: var(--ps-mono); font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; }
+        .pj-tag-ws { background: var(--ps-ink-08); color: var(--ps-ink-80); font-family: var(--ps-mono); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; }
+        .pj-tag-loc { background: var(--ps-sage-soft, #eaf0e3); color: var(--ps-sage, #5a7a4a); font-family: var(--ps-mono); font-size: 9px; letter-spacing: 0.06em; }
+        .pj-tag-gate { background: var(--ps-clay-soft); color: var(--ps-clay); font-family: var(--ps-mono); font-size: 9px; letter-spacing: 0.06em; font-weight: 600; }
         .pj-item-size {
           font-family: var(--ps-mono);
           font-size: 10px;

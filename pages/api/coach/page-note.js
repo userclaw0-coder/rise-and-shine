@@ -8,6 +8,7 @@ import { createClient } from "@supabase/supabase-js";
 import { getAuthenticatedUserId } from "../../../lib/api-auth";
 import { chatCompletion } from "../../../lib/ai-provider";
 import { getToolDefinitions, executeTool } from "../../../lib/jarvis-tools";
+import { searchMemories } from "../../../lib/memories.js";
 
 const MAX_TOOL_ROUNDS = 5;
 
@@ -38,7 +39,7 @@ const SCOPE_PROMPTS = {
   projects:
     "You are on the Projects list page — the user is looking at their whole portfolio of projects. One paragraph (2-3 sentences). Call out the project that hasn't moved in longest, the one with the most overdue work, or the one worth opening next. Don't list — name the single thing that matters. Plain prose, no markdown.",
   project:
-    "You are on a single Project's page. Default behavior (no refresh_mode in the payload): one paragraph (2-3 sentences). Look at its linked outcomes, open tasks, and this week's done count. Call out: the single smallest next action, a task that's too big and needs breakdown, or an outcome without enough task support. End with a concrete nudge. Plain prose, no markdown.\n\n" +
+    "You are on a single Project's page. The payload includes the live project state: `mantra`, `narrative_excerpt`, `kb_excerpt` (up to 2KB of the project's knowledge base — READ THIS for factual lookups before claiming you don't know something), `linked_outcomes` (with isc_total + isc_met for progress), `phase_counts` (immediate / this_week / next_2w / next_30d / ongoing / blocked / someday / unphased counts), `immediate_tasks` (the tasks the user should attack NOW), `this_week_tasks`, `blocked_tasks`, `gate_launch_open` (count of tasks that must complete before a launch milestone), `gate_workyard_open` (count of tasks batched for the work-yard session), `drive_folder_url`, `mode`, `current_next_action`. Default behavior (no refresh_mode in the payload): one paragraph (2-3 sentences). Recommend a NEXT ACTION from `immediate_tasks` (or `this_week_tasks` if immediate is empty) — NEVER pick from `ongoing` or `someday` as a 'next' suggestion. If the user asks a factual question (vessel docs, contacts, specs, dates), CHECK kb_excerpt FIRST. End with a concrete nudge. Plain prose, no markdown.\n\n" +
     "IF the payload includes `refresh_mode: \"interview\"`, switch to Project Refresh Interview mode. You are running a short guided refresh. Keep each message ≤3 sentences + one question. Walk through these steps in order — between steps use tools to read current state before asking, don't make the user tell you what the DB already knows:\n" +
     "  1. GOAL — call get_project_details. Confirm the one-line mantra still reflects the real goal. If not, propose a revision via update_project_workspace({mantra}).\n" +
     "  2. OUTCOMES — ask which desired outcomes this project feeds. Update via update_project_workspace({outcome_ids, life_domains}).\n" +
@@ -200,11 +201,42 @@ export default async function handler(req, res) {
       thrive_goals: (profile.thrive_goals || []).slice(0, 4),
     };
 
+    // For project-scoped coaches, retrieve project + person-scoped memories
+    // so factual questions (USCG doc #, contact names, decisions, constraints)
+    // are grounded instead of hallucinated. Best-effort; silent on failure.
+    let scopedMemories = [];
+    if (scopeBucket === "project" && payload?.category_id) {
+      try {
+        const memQuery =
+          (question && question.trim()) ||
+          (payload?.mantra || payload?.project || "project context");
+        scopedMemories = await searchMemories(userId, {
+          query: memQuery,
+          scope_type: "project",
+          scope_id: payload.category_id,
+          top_k: 6,
+          markUsed: true,
+        });
+      } catch {
+        /* silent */
+      }
+    }
+
     const system = question
       ? `You are the Rise & Shine coach. The user is on the ${scopeBucket} page and asked a direct question. Answer in 2-4 sentences, concrete and tied to the page state they're looking at. Reference actual titles/numbers when useful. No headings, no markdown.`
       : `You are the Rise & Shine page-scoped coach. ${SCOPE_PROMPTS[scopeBucket]}
 
 The user is looking at the page RIGHT NOW — they don't want a lecture, they want one honest observation tied to what's visible. Be concrete, not generic. Reference actual titles/numbers from the payload when useful.`;
+
+    const memorySection =
+      scopedMemories && scopedMemories.length > 0
+        ? `\n\nDurable memories for this project (retrieved by relevance — use these for factual lookups; do not repeat verbatim):\n${scopedMemories
+            .map(
+              (m) =>
+                `- (${m.kind}, importance ${m.importance}) ${m.content}`
+            )
+            .join("\n")}`
+        : "";
 
     const userPromptBase = `Page scope: ${scope}
 
@@ -212,7 +244,7 @@ User context (JSON):
 ${JSON.stringify(userContext, null, 2)}
 
 Page state (JSON):
-${JSON.stringify(payload, null, 2)}`;
+${JSON.stringify(payload, null, 2)}${memorySection}`;
 
     const messages = [];
     // Replay short recent history (user/assistant pairs) for continuity
