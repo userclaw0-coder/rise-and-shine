@@ -62,6 +62,7 @@ import {
 } from "../../lib/db";
 import { computeProjectAlignment } from "../../lib/projectWorkspace";
 import OutcomeISCEditor from "../../components/OutcomeISCEditor";
+import ProjectPartsPanel from "../../components/ProjectPartsPanel";
 import { outcomesProgress } from "../../lib/iscProgress";
 
 const PROJECT_COLORS = [
@@ -1231,6 +1232,8 @@ export default function ProjectPage() {
               </div>
             </div>
           ) : null}
+
+          <ProjectPartsPanel categoryId={categoryId} supabase={supabase} />
 
           <div className="pj-kb-wrap">
             <div className="pj-kb-head">
