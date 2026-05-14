@@ -47,17 +47,34 @@ function formatToolResult(result) {
   };
 }
 
+// Public origin used to build the resource_metadata URL in WWW-Authenticate.
+// Must match MCP_OAUTH_ISSUER (the OAuth authorization server).
+const MCP_RESOURCE_BASE =
+  process.env.MCP_OAUTH_ISSUER || "https://rise-and-shine-hazel.vercel.app";
+
 function unauthorized(reason = "invalid_token") {
+  // Per MCP 2025-11-25 + RFC 9728: include resource_metadata so the client
+  // can discover the protected resource document and from there the auth
+  // server. Without this, Anthropic's Custom Connector flow surfaces a
+  // generic "Couldn't reach the MCP server" because it can't begin OAuth.
+  const wwwAuth = [
+    'Bearer realm="rise-mcp"',
+    `error="${reason}"`,
+    `resource_metadata="${MCP_RESOURCE_BASE}/.well-known/oauth-protected-resource"`,
+  ].join(", ");
   return new Response(
+    // JSON-RPC error responses MUST include id (null when request id was
+    // absent / unparseable). Some strict clients reject the body otherwise.
     JSON.stringify({
       jsonrpc: "2.0",
+      id: null,
       error: { code: -32001, message: `Unauthorized: ${reason}` },
     }),
     {
       status: 401,
       headers: {
         "Content-Type": "application/json",
-        "WWW-Authenticate": `Bearer realm="rise-mcp", error="${reason}"`,
+        "WWW-Authenticate": wwwAuth,
       },
     }
   );
