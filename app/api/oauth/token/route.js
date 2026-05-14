@@ -66,7 +66,7 @@ export async function POST(req) {
         refresh: true,
       })
         .setProtectedHeader({ alg: "HS256" })
-        .setIssuer(process.env.MCP_OAUTH_ISSUER || "https://rise-and-shine.vercel.app")
+        .setIssuer(process.env.MCP_OAUTH_ISSUER || "https://rise-and-shine-hazel.vercel.app")
         .setSubject(consumed.userId)
         .setIssuedAt()
         .setExpirationTime("180d")
@@ -93,7 +93,7 @@ export async function POST(req) {
         const verified = await jwtVerify(
           refresh_token,
           new TextEncoder().encode(process.env.MCP_JWT_SECRET),
-          { issuer: process.env.MCP_OAUTH_ISSUER || "https://rise-and-shine.vercel.app" }
+          { issuer: process.env.MCP_OAUTH_ISSUER || "https://rise-and-shine-hazel.vercel.app" }
         );
         payload = verified.payload;
       } catch (e) {

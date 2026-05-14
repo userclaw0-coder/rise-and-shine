@@ -16,7 +16,7 @@ Three Vercel env vars on the `rise-and-shine` project:
 |---|---|---|
 | `MCP_JWT_SECRET` | HMAC key used to sign access + refresh tokens | `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"` |
 | `MCP_OAUTH_AUTHORIZE_PIN` | The PIN you'll enter once during the consent step in each Claude surface | Pick something memorable. 6–10 chars. Store in your password manager. |
-| `MCP_OAUTH_ISSUER` | `https://rise-and-shine.vercel.app` (or whatever your prod URL is) | Just the URL |
+| `MCP_OAUTH_ISSUER` | `https://rise-and-shine-hazel.vercel.app` (or whatever your prod URL is) | Just the URL |
 
 `RISE_USER_ID` is already set (used by the stdio MCP server too).
 
@@ -29,7 +29,7 @@ Three Vercel env vars on the `rise-and-shine` project:
 The URL is the same everywhere:
 
 ```
-https://rise-and-shine.vercel.app/api/mcp
+https://rise-and-shine-hazel.vercel.app/api/mcp
 ```
 
 The Claude UI will discover the OAuth endpoints automatically by hitting
@@ -38,7 +38,7 @@ consent page, asked for the PIN, then bounced back to Claude.
 
 ### Cowork (Mac)
 1. Cowork → Settings → Connectors → Add Custom Connector
-2. URL: `https://rise-and-shine.vercel.app/api/mcp`
+2. URL: `https://rise-and-shine-hazel.vercel.app/api/mcp`
 3. Click connect → consent page opens in your browser → enter the PIN → "Approve & connect"
 4. Back in Cowork, the connector shows "Connected." Tools labeled `rise.*` are now available.
 
