@@ -12,7 +12,6 @@
     "verify:planner": "node scripts/verify-planner-apply.mjs && node scripts/verify-planner-rollback.mjs && node scripts/verify-planner-rpc.mjs && node scripts/verify-planner-policy.mjs",
     "verify:refinement-events": "node scripts/verify-refinement-events.mjs",
     "verify:task-enrichment": "node scripts/verify-task-enrichment.mjs",
-    "verify:local-inference": "node scripts/verify-local-inference.mjs",
     "verify:memory-layer": "node --env-file=.env.local scripts/verify-memory-layer.mjs",
     "mcp:server": "node --env-file=.env.local mcp/server.mjs",
     "mcp:list-tools": "node --env-file=.env.local mcp/list-tools.mjs",

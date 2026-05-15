@@ -92,9 +92,8 @@ JWTs are signed with `MCP_JWT_SECRET`. Auth codes live in
   surface. Custom Connectors don't add per-message API charges.
 - Tool execution: most `rise.*` tools are pure Supabase CRUD — zero cost.
   The few that invoke AI (`analyze_project_plan`, `weekly_review_summary`,
-  `check_nudges`) route through `lib/ai-provider.js` and use whichever
-  provider your policy selects (Anthropic API for cloud-only,
-  Ollama if reachable via Tailscale).
+  `check_nudges`) route through `lib/ai-provider.js` — Anthropic by default,
+  OpenAI when `AI_PROVIDER=openai`.
 
 ## Troubleshooting
 
