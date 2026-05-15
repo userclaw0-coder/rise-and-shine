@@ -39,8 +39,8 @@ What it doesn't unlock yet:
 
 2. **Confirm `.env.local` has everything the server needs.** It needs
    `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `RISE_USER_ID`,
-   plus the Ollama/AI env vars if you call any tool that does AI work.
-   The repo's `.env.local` already has these from earlier PRs.
+   plus `ANTHROPIC_API_KEY` + `OPENAI_API_KEY` if you call any tool that
+   does AI work. The repo's `.env.local` already has these from earlier PRs.
 
 3. **Smoke the server boots:**
    ```bash
