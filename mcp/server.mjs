@@ -93,6 +93,12 @@ const server = new Server(
     instructions:
       "Rise-and-Shine personal life-OS tools (tasks, projects, memories, ISCs, Reorient). " +
       "All tools operate as the user pinned by RISE_USER_ID (single-tenant). " +
+      "\n\nBOOTSTRAP — call FIRST at session start: `get_session_context` returns the user's " +
+      "profile basics, top high-importance global memories (family composition, key " +
+      "constraints, durable preferences), recent jarvis-feed and [session]-prefixed " +
+      "notes (prior-session continuity), and active projects with mantras. Do this " +
+      "BEFORE asserting any facts about the user — it closes the failure mode where " +
+      "session memory doesn't transfer between new agent sessions.\n\n" +
       "Read tools (get_*) are safe; write tools (create_*, update_*, complete_task, " +
       "bulk_triage_tasks, write_memory, etc.) mutate live data — prefer the user's " +
       "approval before applying. Use this MCP when you want to drive Rise-and-Shine " +
