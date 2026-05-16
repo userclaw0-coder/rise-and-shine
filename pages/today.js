@@ -86,6 +86,17 @@ export default function TodayPage() {
   const [busyTask, setBusyTask] = useState(null);
   const [refilling, setRefilling] = useState(false);
   const [autoRefillTried, setAutoRefillTried] = useState(false);
+  // PR-D morning check-in + reflection state
+  const [morningState, setMorningState] = useState(null);
+  const [checkInOpen, setCheckInOpen] = useState(false);
+  const [checkInEnergy, setCheckInEnergy] = useState("");
+  const [checkInFocus, setCheckInFocus] = useState("");
+  const [checkInSaving, setCheckInSaving] = useState(false);
+  const [reflection, setReflection] = useState(null);
+  const [reflectionOpen, setReflectionOpen] = useState(false);
+  const [reflectionDraft, setReflectionDraft] = useState({});
+  const [reflectionSaving, setReflectionSaving] = useState(false);
+  const [promoting, setPromoting] = useState(null);
   // Cycles Pick's replace-slot when queue is full so consecutive picks
   // don't all land on slot 3.
   const [replaceIdx, setReplaceIdx] = useState(0);
@@ -129,6 +140,23 @@ export default function TodayPage() {
 
       if (planRes.error) throw new Error(planRes.error.message);
       setPlan(planRes.data);
+      const ms = planRes.data?.morning_state || null;
+      setMorningState(ms);
+      setCheckInEnergy(ms?.energy || "");
+      setCheckInFocus(ms?.focus_text || "");
+      const refl = planRes.data?.reflection || null;
+      setReflection(refl);
+      // Pre-fill the reflection draft from saved entries (or blanks).
+      const draft = {};
+      for (const slotIdx of [0, 1, 2]) {
+        const saved = refl?.entries?.find((e) => e.slot === slotIdx + 1);
+        draft[slotIdx] = {
+          landed: saved ? !!saved.landed : null,
+          felt: saved?.felt || null,
+          note: saved?.note || "",
+        };
+      }
+      setReflectionDraft(draft);
 
       const profileData = profileRes?.data?.profile || {};
       setProfile(profileRes?.data || null);
@@ -148,31 +176,48 @@ export default function TodayPage() {
         colorMap[c.id] = CATEGORY_COLORS[i % CATEGORY_COLORS.length];
       });
 
-      // Only trust queue entries with an actual task_id — the old app
-      // sometimes stored 3-entry queues with nulls, which confused our
-      // "is it full?" checks elsewhere.
-      const validSlots = (planRes.data?.queue || []).filter(
-        (s) => s && s.task_id
+      // Trust queue entries that either have a real task_id OR an
+      // `invented` payload (PR-D system-designed ephemeral actions).
+      // Other shapes (legacy nulls, stale 3-entry queues with empties)
+      // are filtered out.
+      const rawSlots = (planRes.data?.queue || []).filter(
+        (s) => s && (s.task_id || s.invented)
       );
-      const taskIds = validSlots.map((s) => s.task_id);
-      let queueDetails = [];
-      if (taskIds.length > 0) {
+      const realTaskIds = rawSlots
+        .filter((s) => s.task_id)
+        .map((s) => s.task_id);
+      let taskMap = new Map();
+      if (realTaskIds.length > 0) {
         const { data: queueRows } = await supabase
           .from("tasks")
           .select(
             "id, title, status, category_id, priority, effort_hours, outcome_ids, primary_life_domain, life_domains"
           )
-          .in("id", taskIds);
-        const map = new Map((queueRows || []).map((t) => [t.id, t]));
-        queueDetails = validSlots
-          .map((slot) => ({
+          .in("id", realTaskIds);
+        taskMap = new Map((queueRows || []).map((t) => [t.id, t]));
+      }
+      const queueDetails = rawSlots
+        .map((slot) => {
+          if (slot.task_id) {
+            const task = taskMap.get(slot.task_id);
+            if (!task) return null;
+            return {
+              slot: slot.slot,
+              type: slot.type,
+              why: slot.why || "",
+              task,
+              invented: null,
+            };
+          }
+          return {
             slot: slot.slot,
             type: slot.type,
-            why: slot.why || "",
-            task: map.get(slot.task_id) || null,
-          }))
-          .filter((q) => q.task);
-      }
+            why: slot.why || slot.invented?.why || "",
+            task: null,
+            invented: slot.invented,
+          };
+        })
+        .filter(Boolean);
       setQueueTasks(queueDetails);
 
       const { data: activeTasks } = await supabase
@@ -527,6 +572,113 @@ export default function TodayPage() {
     [user, dateStr, refilling, load]
   );
 
+  const submitCheckIn = useCallback(async () => {
+    if (!user || !checkInEnergy || checkInSaving) return;
+    setCheckInSaving(true);
+    setError("");
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      const res = await fetch("/api/today/check-in", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          date: dateStr,
+          energy: checkInEnergy,
+          focus_text: checkInFocus || null,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || "Check-in failed");
+      }
+      const body = await res.json();
+      setMorningState(body.morning_state);
+      setCheckInOpen(false);
+    } catch (err) {
+      setError(err.message || "Failed to save check-in.");
+    } finally {
+      setCheckInSaving(false);
+    }
+  }, [user, dateStr, checkInEnergy, checkInFocus, checkInSaving]);
+
+  const submitReflection = useCallback(async () => {
+    if (!user || reflectionSaving) return;
+    const entries = [0, 1, 2]
+      .map((i) => {
+        const d = reflectionDraft[i] || {};
+        if (d.landed == null && !d.felt && !d.note) return null;
+        return {
+          slot: i + 1,
+          landed: !!d.landed,
+          felt: d.felt || null,
+          note: d.note || null,
+        };
+      })
+      .filter(Boolean);
+    if (entries.length === 0) return;
+    setReflectionSaving(true);
+    setError("");
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      const res = await fetch("/api/today/reflection", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ date: dateStr, entries }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || "Reflection save failed");
+      }
+      const body = await res.json();
+      setReflection(body.reflection);
+      setReflectionOpen(false);
+    } catch (err) {
+      setError(err.message || "Failed to save reflection.");
+    } finally {
+      setReflectionSaving(false);
+    }
+  }, [user, dateStr, reflectionDraft, reflectionSaving]);
+
+  const promoteInventedSlot = useCallback(
+    async (slotIdx) => {
+      if (!user || promoting !== null) return null;
+      setPromoting(slotIdx);
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        const res = await fetch("/api/today/promote-slot", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ date: dateStr, slot_index: slotIdx }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body?.error || "Promote failed");
+        }
+        const body = await res.json();
+        await load();
+        return body.task?.id || null;
+      } catch (err) {
+        setError(err.message || "Failed to promote slot.");
+        return null;
+      } finally {
+        setPromoting(null);
+      }
+    },
+    [user, dateStr, promoting, load]
+  );
+
   const [regenSlotIdx, setRegenSlotIdx] = useState(null);
   const regenerateSlot = useCallback(
     async (slotIdx) => {
@@ -746,6 +898,81 @@ export default function TodayPage() {
           )}
 
           <div className="today-hero">
+            {!morningState && !checkInOpen ? (
+              <button
+                type="button"
+                className="today-checkin today-checkin--prompt"
+                onClick={() => setCheckInOpen(true)}
+              >
+                <span className="today-checkin__cap">Good morning</span>
+                <span className="today-checkin__sub">
+                  60-second check-in shapes the day&apos;s 3 actions →
+                </span>
+              </button>
+            ) : null}
+            {morningState && !checkInOpen ? (
+              <div className="today-checkin today-checkin--summary">
+                <span className="today-checkin__cap">Checked in</span>
+                <span className="today-checkin__sub">
+                  Energy: <strong>{morningState.energy}</strong>
+                  {morningState.focus_text
+                    ? ` · ${morningState.focus_text}`
+                    : ""}
+                </span>
+                <button
+                  type="button"
+                  className="today-checkin__edit"
+                  onClick={() => setCheckInOpen(true)}
+                >
+                  Edit
+                </button>
+              </div>
+            ) : null}
+            {checkInOpen ? (
+              <div className="today-checkin today-checkin--form">
+                <div className="today-checkin__cap">Morning check-in</div>
+                <div className="today-checkin__energy">
+                  {["low", "medium", "high"].map((lvl) => (
+                    <button
+                      key={lvl}
+                      type="button"
+                      className={
+                        "today-checkin__energy-btn" +
+                        (checkInEnergy === lvl ? " today-checkin__energy-btn--on" : "")
+                      }
+                      onClick={() => setCheckInEnergy(lvl)}
+                    >
+                      {lvl} energy
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  className="today-checkin__focus"
+                  placeholder="What&apos;s on your mind? (optional, ≤480 chars)"
+                  value={checkInFocus}
+                  onChange={(e) => setCheckInFocus(e.target.value.slice(0, 480))}
+                  maxLength={480}
+                />
+                <div className="today-checkin__actions">
+                  <button
+                    type="button"
+                    className="today-checkin__save"
+                    onClick={submitCheckIn}
+                    disabled={!checkInEnergy || checkInSaving}
+                  >
+                    {checkInSaving ? "Saving…" : "Save check-in"}
+                  </button>
+                  <button
+                    type="button"
+                    className="today-checkin__cancel"
+                    onClick={() => setCheckInOpen(false)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : null}
             <div className="today-hero__head">
               <div>
                 <div className="today-hero__eyebrow">Today&apos;s commitment</div>
@@ -778,47 +1005,80 @@ export default function TodayPage() {
               {[0, 1, 2].map((i) => {
                 const entry = queueTasks[i];
                 const task = entry?.task;
+                const invented = entry?.invented;
+                const filled = !!(task || invented);
                 const type = entry?.type || "Progress";
                 const done = task ? !!completed[task.id] : false;
+                const promotingThis = promoting === i;
+                const minutes = task
+                  ? task.effort_hours
+                    ? Math.round(task.effort_hours * 60)
+                    : 0
+                  : invented?.minutes || 0;
                 return (
                   <div
                     key={i}
                     className={
                       "today-slot" +
-                      (task ? " today-slot--filled" : "") +
+                      (filled ? " today-slot--filled" : "") +
+                      (invented ? " today-slot--invented" : "") +
                       (done ? " today-slot--done" : "")
                     }
                   >
                     <div className="today-slot__meta">
-                      {task && (
+                      {filled && (
                         <button
                           type="button"
                           className={
                             "today-slot__check" +
                             (done ? " today-slot__check--on" : "")
                           }
-                          onClick={() => toggleComplete(task)}
-                          disabled={busyTask === task.id}
-                          aria-label={done ? "Mark incomplete" : "Mark complete"}
+                          onClick={() =>
+                            invented
+                              ? promoteInventedSlot(i)
+                              : toggleComplete(task)
+                          }
+                          disabled={
+                            invented
+                              ? promotingThis || promoting !== null
+                              : busyTask === task?.id
+                          }
+                          aria-label={
+                            invented
+                              ? "Mark this proposal complete (promotes to real task)"
+                              : done
+                              ? "Mark incomplete"
+                              : "Mark complete"
+                          }
+                          title={
+                            invented
+                              ? "Marking complete creates a real task in the suggested category and logs the completion."
+                              : undefined
+                          }
                         >
-                          {done ? "✓" : ""}
+                          {promotingThis ? "…" : done ? "✓" : ""}
                         </button>
                       )}
                       <span className="today-slot__idx">0{i + 1}</span>
                       <span className="today-slot__type">
-                        {task ? type : "Empty"}
+                        {filled ? type : "Empty"}
                       </span>
+                      {invented ? (
+                        <span className="today-slot__proposal">proposal</span>
+                      ) : null}
                     </div>
-                    {task ? (
+                    {filled ? (
                       <>
-                        <div className="today-slot__title">{task.title}</div>
+                        <div className="today-slot__title">
+                          {task ? task.title : invented.title}
+                        </div>
                         {entry?.why ? (
                           <div className="today-slot__why">{entry.why}</div>
                         ) : null}
                         <div className="today-slot__foot">
-                          {task.effort_hours > 0 && (
+                          {minutes > 0 && (
                             <span className="today-slot__mins">
-                              ~{Math.round(task.effort_hours * 60)} min
+                              ~{minutes} min
                             </span>
                           )}
                           <button
@@ -830,13 +1090,15 @@ export default function TodayPage() {
                           >
                             {regenSlotIdx === i ? "Regen…" : "Regenerate"}
                           </button>
-                          <button
-                            type="button"
-                            className="today-slot__remove"
-                            onClick={() => removeFromTop3(task.id)}
-                          >
-                            Remove
-                          </button>
+                          {task ? (
+                            <button
+                              type="button"
+                              className="today-slot__remove"
+                              onClick={() => removeFromTop3(task.id)}
+                            >
+                              Remove
+                            </button>
+                          ) : null}
                         </div>
                       </>
                     ) : (
@@ -878,6 +1140,101 @@ export default function TodayPage() {
                 hand-pick from scratch.
               </div>
             </div>
+
+            {totalChosen > 0 ? (
+              <div className="today-reflect">
+                {!reflectionOpen && !reflection ? (
+                  <button
+                    type="button"
+                    className="today-reflect__open"
+                    onClick={() => setReflectionOpen(true)}
+                  >
+                    End-of-day reflection →
+                  </button>
+                ) : null}
+                {!reflectionOpen && reflection ? (
+                  <div className="today-reflect__saved">
+                    <span className="today-reflect__cap">Reflection saved</span>
+                    <button
+                      type="button"
+                      className="today-reflect__edit"
+                      onClick={() => setReflectionOpen(true)}
+                    >
+                      Edit
+                    </button>
+                  </div>
+                ) : null}
+                {reflectionOpen ? (
+                  <div className="today-reflect__form">
+                    <div className="today-reflect__head">
+                      How did today land? Quick honest pass —
+                      activation-energy estimates learn from this.
+                    </div>
+                    {[0, 1, 2].map((i) => {
+                      const entry = queueTasks[i];
+                      const labelTask = entry?.task?.title || entry?.invented?.title;
+                      if (!labelTask) return null;
+                      const d = reflectionDraft[i] || {};
+                      const set = (patch) =>
+                        setReflectionDraft((prev) => ({
+                          ...prev,
+                          [i]: { ...prev[i], ...patch },
+                        }));
+                      return (
+                        <div key={i} className="today-reflect__row">
+                          <div className="today-reflect__row-title">
+                            <span className="today-reflect__row-idx">0{i + 1}</span>
+                            <span className="today-reflect__row-label">{labelTask}</span>
+                          </div>
+                          <div className="today-reflect__row-controls">
+                            <label className="today-reflect__chk">
+                              <input
+                                type="checkbox"
+                                checked={!!d.landed}
+                                onChange={(e) => set({ landed: e.target.checked })}
+                              />
+                              <span>Landed</span>
+                            </label>
+                            {["easy", "neutral", "hard"].map((felt) => (
+                              <button
+                                key={felt}
+                                type="button"
+                                className={
+                                  "today-reflect__felt" +
+                                  (d.felt === felt ? " today-reflect__felt--on" : "")
+                                }
+                                onClick={() =>
+                                  set({ felt: d.felt === felt ? null : felt })
+                                }
+                              >
+                                {felt}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div className="today-reflect__actions">
+                      <button
+                        type="button"
+                        className="today-reflect__save"
+                        onClick={submitReflection}
+                        disabled={reflectionSaving}
+                      >
+                        {reflectionSaving ? "Saving…" : "Save reflection"}
+                      </button>
+                      <button
+                        type="button"
+                        className="today-reflect__cancel"
+                        onClick={() => setReflectionOpen(false)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           <section className="today-context">
@@ -1546,6 +1903,265 @@ export default function TodayPage() {
           align-items: center;
           gap: 14px;
           flex-wrap: wrap;
+        }
+        /* PR-D: morning check-in card (renders above today-hero__head) */
+        .today-checkin {
+          margin-bottom: 18px;
+          padding: 12px 16px;
+          border-radius: 10px;
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          flex-wrap: wrap;
+        }
+        .today-checkin--prompt {
+          cursor: pointer;
+          appearance: none;
+          width: 100%;
+          text-align: left;
+          color: rgba(250, 247, 242, 0.85);
+        }
+        .today-checkin--prompt:hover {
+          background: rgba(255, 255, 255, 0.07);
+        }
+        .today-checkin--form {
+          flex-direction: column;
+          align-items: stretch;
+        }
+        .today-checkin__cap {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: rgba(250, 247, 242, 0.55);
+        }
+        .today-checkin__sub {
+          font-size: 13px;
+          color: rgba(250, 247, 242, 0.75);
+          flex: 1;
+        }
+        .today-checkin__edit {
+          appearance: none;
+          border: 1px solid rgba(255, 255, 255, 0.18);
+          background: transparent;
+          color: rgba(250, 247, 242, 0.7);
+          padding: 4px 10px;
+          border-radius: 4px;
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          cursor: pointer;
+        }
+        .today-checkin__energy {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+        .today-checkin__energy-btn {
+          appearance: none;
+          border: 1px solid rgba(255, 255, 255, 0.18);
+          background: transparent;
+          color: rgba(250, 247, 242, 0.8);
+          padding: 6px 14px;
+          border-radius: 999px;
+          font-family: var(--ps-mono);
+          font-size: 11px;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          cursor: pointer;
+        }
+        .today-checkin__energy-btn--on {
+          border-color: var(--ps-accent);
+          background: var(--ps-accent);
+          color: #fff;
+        }
+        .today-checkin__focus {
+          appearance: none;
+          width: 100%;
+          background: rgba(0, 0, 0, 0.25);
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          color: var(--ps-paper);
+          padding: 8px 10px;
+          border-radius: 6px;
+          font-size: 13px;
+          font-family: var(--ps-sans);
+        }
+        .today-checkin__actions {
+          display: flex;
+          gap: 10px;
+        }
+        .today-checkin__save {
+          appearance: none;
+          border: 1px solid var(--ps-accent);
+          background: var(--ps-accent);
+          color: #fff;
+          padding: 6px 14px;
+          border-radius: 6px;
+          font-family: var(--ps-mono);
+          font-size: 10.5px;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          cursor: pointer;
+        }
+        .today-checkin__save:disabled { opacity: 0.5; cursor: not-allowed; }
+        .today-checkin__cancel {
+          appearance: none;
+          border: 1px solid rgba(255, 255, 255, 0.18);
+          background: transparent;
+          color: rgba(250, 247, 242, 0.7);
+          padding: 6px 14px;
+          border-radius: 6px;
+          font-family: var(--ps-mono);
+          font-size: 10.5px;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          cursor: pointer;
+        }
+        /* PR-D: invented-slot marker (one-of-three is system-proposed) */
+        .today-slot--invented .today-slot__title { font-style: italic; }
+        .today-slot__proposal {
+          font-family: var(--ps-mono);
+          font-size: 9.5px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          background: rgba(255, 255, 255, 0.12);
+          color: rgba(250, 247, 242, 0.85);
+          padding: 2px 6px;
+          border-radius: 999px;
+          margin-left: 6px;
+        }
+        /* PR-D: end-of-day reflection card */
+        .today-reflect {
+          margin-top: 18px;
+          padding-top: 14px;
+          border-top: 1px dashed rgba(255, 255, 255, 0.12);
+        }
+        .today-reflect__open,
+        .today-reflect__edit {
+          appearance: none;
+          border: 1px solid rgba(255, 255, 255, 0.18);
+          background: transparent;
+          color: rgba(250, 247, 242, 0.75);
+          padding: 6px 12px;
+          border-radius: 6px;
+          font-family: var(--ps-mono);
+          font-size: 11px;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          cursor: pointer;
+        }
+        .today-reflect__open:hover,
+        .today-reflect__edit:hover {
+          border-color: var(--ps-accent);
+          color: var(--ps-accent);
+        }
+        .today-reflect__saved {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+        .today-reflect__cap {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: rgba(250, 247, 242, 0.5);
+        }
+        .today-reflect__form {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        .today-reflect__head {
+          font-size: 12px;
+          color: rgba(250, 247, 242, 0.65);
+          line-height: 1.5;
+        }
+        .today-reflect__row {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          padding: 8px 10px;
+          background: rgba(255, 255, 255, 0.03);
+          border-radius: 6px;
+        }
+        .today-reflect__row-title {
+          display: flex;
+          gap: 8px;
+          align-items: baseline;
+        }
+        .today-reflect__row-idx {
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          color: rgba(250, 247, 242, 0.5);
+        }
+        .today-reflect__row-label {
+          font-size: 13px;
+          color: rgba(250, 247, 242, 0.85);
+        }
+        .today-reflect__row-controls {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+          align-items: center;
+        }
+        .today-reflect__chk {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          font-family: var(--ps-mono);
+          font-size: 10.5px;
+          color: rgba(250, 247, 242, 0.75);
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          cursor: pointer;
+        }
+        .today-reflect__felt {
+          appearance: none;
+          border: 1px solid rgba(255, 255, 255, 0.18);
+          background: transparent;
+          color: rgba(250, 247, 242, 0.75);
+          padding: 3px 10px;
+          border-radius: 999px;
+          font-family: var(--ps-mono);
+          font-size: 10px;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          cursor: pointer;
+        }
+        .today-reflect__felt--on {
+          border-color: var(--ps-accent);
+          background: var(--ps-accent);
+          color: #fff;
+        }
+        .today-reflect__actions {
+          display: flex;
+          gap: 10px;
+        }
+        .today-reflect__save,
+        .today-reflect__cancel {
+          appearance: none;
+          padding: 6px 14px;
+          border-radius: 6px;
+          font-family: var(--ps-mono);
+          font-size: 10.5px;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          cursor: pointer;
+        }
+        .today-reflect__save {
+          border: 1px solid var(--ps-accent);
+          background: var(--ps-accent);
+          color: #fff;
+        }
+        .today-reflect__save:disabled { opacity: 0.5; cursor: not-allowed; }
+        .today-reflect__cancel {
+          border: 1px solid rgba(255, 255, 255, 0.18);
+          background: transparent;
+          color: rgba(250, 247, 242, 0.7);
         }
         .today-refill {
           appearance: none;
