@@ -495,6 +495,47 @@ export default function ProjectPage() {
     return base;
   }, [filteredTasks, nextAction]);
 
+  // Top-3 surface: slot 1 is the committed nextAction (if any), slots 2-3
+  // walk the phased groups in order. Read-only view of existing data — the
+  // real auto-decompose / vector ranker lands in a follow-up PR.
+  const topThree = useMemo(() => {
+    const slots = [];
+    if (nextAction?.task_id) {
+      slots.push({
+        kind: "next_action",
+        task_id: nextAction.task_id,
+        title: nextAction.title,
+        minutes: nextAction.minutes,
+        why: nextAction.why,
+        source: nextAction.source,
+        needs_breakdown: !!nextAction.needs_breakdown,
+        phase: null,
+      });
+    }
+    for (const g of groups) {
+      for (const t of g.items) {
+        if (slots.length >= 3) break;
+        if (t.status === "done") continue;
+        if (slots.some((s) => s.task_id === t.id)) continue;
+        slots.push({
+          kind: "ladder",
+          task_id: t.id,
+          title: t.title,
+          minutes:
+            t.effort_hours != null
+              ? Math.round(Number(t.effort_hours) * 60)
+              : null,
+          why: null,
+          source: null,
+          needs_breakdown: false,
+          phase: g.key,
+        });
+      }
+      if (slots.length >= 3) break;
+    }
+    return slots;
+  }, [nextAction, groups]);
+
   // Pre-compute which workstreams / locations / gates actually exist in this
   // project's open tasks — only render chips that match real data.
   const availableFilters = useMemo(() => {
@@ -905,6 +946,57 @@ export default function ProjectPage() {
             onSaved={() => load()}
           />
 
+          {topThree.length > 0 ? (
+            <div className="pj-top3">
+              <div className="pj-top3-cap">Next 3 actions</div>
+              <ol className="pj-top3-list">
+                {topThree.map((s, i) => (
+                  <li
+                    key={s.task_id}
+                    className={
+                      "pj-top3-item" +
+                      (s.kind === "next_action" ? " pj-top3-item--first" : "")
+                    }
+                  >
+                    <span className="pj-top3-num">{i + 1}</span>
+                    <div className="pj-top3-body">
+                      <div className="pj-top3-title">{s.title}</div>
+                      <div className="pj-top3-meta">
+                        {s.minutes != null ? <span>~{s.minutes}m</span> : null}
+                        {s.kind === "next_action" ? (
+                          <span className="pj-top3-tag">committed</span>
+                        ) : s.phase ? (
+                          <span className="pj-top3-tag">
+                            {PHASE_LABELS[s.phase] || s.phase}
+                          </span>
+                        ) : null}
+                        {s.source ? (
+                          <span className="pj-top3-src">
+                            {s.source.replace("_", " ")}
+                          </span>
+                        ) : null}
+                        {s.needs_breakdown ? (
+                          <span className="pj-top3-warn">
+                            Too big for 30m — break it down.
+                          </span>
+                        ) : null}
+                      </div>
+                      {s.why ? <div className="pj-top3-why">{s.why}</div> : null}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ) : daysSinceAligned != null ? (
+            <div className="pj-top3 pj-top3--empty">
+              <div className="pj-top3-cap">Next 3 actions</div>
+              <div className="pj-top3-empty">
+                Nothing queued. Run a Refresh to commit a next action,
+                or add a task and the coach will auto-refill it.
+              </div>
+            </div>
+          ) : null}
+
           <div className="pj-ladder">
             <div className="pj-ladder-head">
               <div>
@@ -1216,35 +1308,6 @@ export default function ProjectPage() {
             })}
           </div>
 
-          {nextAction ? (
-            <div className="pj-next">
-              <div className="pj-next-cap">Next best ≤30-minute action</div>
-              <div className="pj-next-title">{nextAction.title}</div>
-              <div className="pj-next-meta">
-                {nextAction.minutes ? <span>~{nextAction.minutes}m</span> : null}
-                {nextAction.source ? (
-                  <span className="pj-next-src">{nextAction.source.replace("_", " ")}</span>
-                ) : null}
-                {nextAction.needs_breakdown ? (
-                  <span className="pj-next-warn">
-                    Too big for 30m — break it down in tomorrow&apos;s morning check-in.
-                  </span>
-                ) : null}
-              </div>
-              {nextAction.why ? (
-                <div className="pj-next-why">{nextAction.why}</div>
-              ) : null}
-            </div>
-          ) : daysSinceAligned != null ? (
-            <div className="pj-next pj-next--empty">
-              <div className="pj-next-cap">Next best ≤30-minute action</div>
-              <div className="pj-next-empty">
-                Nothing queued. Run a Refresh to commit a next action,
-                or add a task and the coach will auto-refill it.
-              </div>
-            </div>
-          ) : null}
-
           <ProjectPartsPanel categoryId={categoryId} supabase={supabase} />
 
           <div className="pj-kb-wrap">
@@ -1393,7 +1456,7 @@ export default function ProjectPage() {
           padding: 4px 10px;
           border-radius: 999px;
         }
-        .pj-next {
+        .pj-top3 {
           margin-top: 16px;
           padding: 16px 18px;
           background: var(--ps-paper-soft);
@@ -1401,25 +1464,65 @@ export default function ProjectPage() {
           border-left: 3px solid var(--ps-accent);
           border-radius: 12px;
         }
-        .pj-next--empty {
+        .pj-top3--empty {
           border-left-color: var(--ps-ink-15);
         }
-        .pj-next-cap {
+        .pj-top3-cap {
           font-family: var(--ps-mono);
           font-size: 10px;
           letter-spacing: 0.12em;
           text-transform: uppercase;
           color: var(--ps-ink-50);
-          margin-bottom: 6px;
+          margin-bottom: 10px;
         }
-        .pj-next-title {
+        .pj-top3-list {
+          list-style: none;
+          margin: 0;
+          padding: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        .pj-top3-item {
+          display: flex;
+          gap: 12px;
+          align-items: flex-start;
+        }
+        .pj-top3-item--first .pj-top3-num {
+          background: var(--ps-accent);
+          color: var(--ps-paper);
+          border-color: var(--ps-accent);
+        }
+        .pj-top3-num {
+          flex: 0 0 auto;
+          width: 22px;
+          height: 22px;
+          border-radius: 50%;
+          border: 1px solid var(--ps-ink-15);
+          background: var(--ps-paper);
+          color: var(--ps-ink-60);
+          font-family: var(--ps-mono);
+          font-size: 11px;
+          line-height: 22px;
+          text-align: center;
+          margin-top: 3px;
+        }
+        .pj-top3-body {
+          flex: 1 1 auto;
+          min-width: 0;
+        }
+        .pj-top3-title {
           font-family: var(--ps-serif);
-          font-size: 20px;
-          letter-spacing: -0.01em;
+          font-size: 17px;
+          letter-spacing: -0.005em;
           color: var(--ps-ink);
+          line-height: 1.35;
+        }
+        .pj-top3-item--first .pj-top3-title {
+          font-size: 20px;
           line-height: 1.3;
         }
-        .pj-next-meta {
+        .pj-top3-meta {
           display: flex;
           gap: 10px;
           align-items: center;
@@ -1427,24 +1530,31 @@ export default function ProjectPage() {
           font-family: var(--ps-mono);
           font-size: 11px;
           color: var(--ps-ink-60);
-          margin-top: 6px;
+          margin-top: 4px;
         }
-        .pj-next-src {
+        .pj-top3-tag {
+          background: var(--ps-accent-soft);
+          color: var(--ps-ink-70);
+          padding: 2px 8px;
+          border-radius: 999px;
+          text-transform: lowercase;
+        }
+        .pj-top3-src {
           text-transform: lowercase;
           color: var(--ps-ink-50);
         }
-        .pj-next-warn {
+        .pj-top3-warn {
           color: var(--ps-clay);
           font-family: var(--ps-sans);
           font-size: 12px;
         }
-        .pj-next-why {
-          margin-top: 8px;
+        .pj-top3-why {
+          margin-top: 6px;
           font-size: 13px;
           color: var(--ps-ink-70);
           line-height: 1.5;
         }
-        .pj-next-empty {
+        .pj-top3-empty {
           font-size: 13px;
           color: var(--ps-ink-60);
           line-height: 1.5;

@@ -201,9 +201,17 @@ export default function VisionPage() {
       quarter_focus: quarterFocus.split(",").map((s) => s.trim()).filter(Boolean),
       immediate_step: immediateStep || "",
       thrive_goals: thriveGoals.split("\n").map((s) => s.trim()).filter(Boolean),
-      photo_url: photoUrl || undefined,
-      vision_board_image_url: boardUrl || undefined,
-      vision_field_images: fieldImages,
+      // Image fields: preserve previously-saved values when local state is
+      // empty. The page has no "clear image" UI, so empty state means "I
+      // haven't loaded/changed this," not "wipe it." `key: undefined` would
+      // let JSON.stringify drop the key and the upsert would erase the
+      // column — that was the bug.
+      ...(photoUrl ? { photo_url: photoUrl } : {}),
+      ...(boardUrl ? { vision_board_image_url: boardUrl } : {}),
+      vision_field_images: {
+        ...(profile?.vision_field_images || {}),
+        ...fieldImages,
+      },
       human_needs_strategies: { ...needsStrategies },
       needs_risk_patterns: { ...needsRisks },
     };
