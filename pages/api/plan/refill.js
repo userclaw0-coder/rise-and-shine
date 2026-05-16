@@ -1,6 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 import { chooseKeyOutcomes } from "../../../lib/scoring";
-import { reduceParentsToBestSubtask } from "../../../lib/today-queue";
+import {
+  buildQueueFromChosen,
+  reduceParentsToBestSubtask,
+} from "../../../lib/today-queue";
 import { getAuthenticatedUserId } from "../../../lib/api-auth";
 import {
   listAccessibleCategoriesWithMeta,
@@ -12,13 +15,21 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-function buildQueueFromChosen(chosen) {
-  const types = ["Quick Win", "High Leverage", "Progress"];
-  return (chosen || []).slice(0, 3).map((entry, idx) => ({
-    slot: idx + 1,
-    type: types[idx] || "Progress",
-    task_id: entry.task.id,
-  }));
+// Build the Map<outcome_id, {unmetCount, totalCount}> that ISC-pull scoring
+// reads. Kept tolerant of legacy outcome shapes that lack a criteria array.
+function buildOutcomeIscState(profile) {
+  const map = new Map();
+  const outcomes = Array.isArray(profile?.desired_outcomes)
+    ? profile.desired_outcomes
+    : [];
+  for (const o of outcomes) {
+    if (!o?.id) continue;
+    const criteria = Array.isArray(o.criteria) ? o.criteria : [];
+    const totalCount = criteria.length;
+    const unmetCount = criteria.filter((c) => !c?.met).length;
+    map.set(String(o.id), { unmetCount, totalCount });
+  }
+  return map;
 }
 
 export default async function handler(req, res) {
@@ -166,6 +177,7 @@ export default async function handler(req, res) {
       capacity,
       lifeSituationKeywords,
       staleProjectCategoryIds,
+      outcomeIscState: buildOutcomeIscState(profile),
     };
 
     const reduced = reduceParentsToBestSubtask(filtered, {
@@ -187,7 +199,7 @@ export default async function handler(req, res) {
       ...arbiterOptions,
     });
 
-    const newQueue = buildQueueFromChosen(chosen);
+    const newQueue = buildQueueFromChosen(chosen, chosenMode);
     const payload = {
       user_id: userId,
       date: today,
