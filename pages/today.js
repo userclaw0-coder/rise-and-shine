@@ -168,6 +168,7 @@ export default function TodayPage() {
           .map((slot) => ({
             slot: slot.slot,
             type: slot.type,
+            why: slot.why || "",
             task: map.get(slot.task_id) || null,
           }))
           .filter((q) => q.task);
@@ -526,6 +527,37 @@ export default function TodayPage() {
     [user, dateStr, refilling, load]
   );
 
+  const [regenSlotIdx, setRegenSlotIdx] = useState(null);
+  const regenerateSlot = useCallback(
+    async (slotIdx) => {
+      if (!user || regenSlotIdx !== null) return;
+      setRegenSlotIdx(slotIdx);
+      setError("");
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        const res = await fetch("/api/today/regenerate-slot", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ date: dateStr, slot_index: slotIdx }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body?.error || "Regenerate failed");
+        }
+        await load();
+      } catch (err) {
+        setError(err.message || "Failed to regenerate slot.");
+      } finally {
+        setRegenSlotIdx(null);
+      }
+    },
+    [user, dateStr, regenSlotIdx, load]
+  );
+
   // Auto-refill the queue on first load if it has no real entries.
   // "Real" means an actual task_id — legacy plans sometimes store 3
   // empty slot objects, which a naive length check would treat as full.
@@ -780,12 +812,24 @@ export default function TodayPage() {
                     {task ? (
                       <>
                         <div className="today-slot__title">{task.title}</div>
+                        {entry?.why ? (
+                          <div className="today-slot__why">{entry.why}</div>
+                        ) : null}
                         <div className="today-slot__foot">
                           {task.effort_hours > 0 && (
                             <span className="today-slot__mins">
                               ~{Math.round(task.effort_hours * 60)} min
                             </span>
                           )}
+                          <button
+                            type="button"
+                            className="today-slot__regen"
+                            onClick={() => regenerateSlot(i)}
+                            disabled={regenSlotIdx !== null}
+                            title="Swap this slot for the next-best candidate from a different project"
+                          >
+                            {regenSlotIdx === i ? "Regen…" : "Regenerate"}
+                          </button>
                           <button
                             type="button"
                             className="today-slot__remove"
@@ -1447,14 +1491,25 @@ export default function TodayPage() {
           flex: 1;
           color: var(--ps-bg);
         }
+        .today-slot__why {
+          font-size: 11.5px;
+          color: rgba(250, 247, 242, 0.55);
+          line-height: 1.45;
+          margin-top: 4px;
+          margin-bottom: 8px;
+          font-style: italic;
+        }
         .today-slot__foot {
           display: flex;
           justify-content: space-between;
           align-items: center;
+          gap: 6px;
+          flex-wrap: wrap;
           font-family: var(--ps-mono);
           font-size: 10px;
           color: rgba(250, 247, 242, 0.55);
         }
+        .today-slot__regen,
         .today-slot__remove {
           appearance: none;
           border: 1px solid rgba(255, 255, 255, 0.18);
@@ -1467,6 +1522,14 @@ export default function TodayPage() {
           letter-spacing: 0.06em;
           text-transform: uppercase;
           cursor: pointer;
+        }
+        .today-slot__regen:hover:not(:disabled) {
+          border-color: var(--ps-accent);
+          color: var(--ps-accent);
+        }
+        .today-slot__regen:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
         }
         .today-slot__remove:hover {
           border-color: var(--ps-clay);
