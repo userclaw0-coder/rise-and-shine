@@ -83,3 +83,35 @@ tasks,parent_task_id,uuid,uuid,YES,null
 tasks,created_at,timestamp with time zone,timestamptz,NO,now()
 tasks,updated_at,timestamp with time zone,timestamptz,NO,now()
 tasks,archived_at,timestamp with time zone,timestamptz,YES,null
+tasks,recurring_template_id,uuid,uuid,YES,null
+recurring_task_templates,id,uuid,uuid,NO,gen_random_uuid()
+recurring_task_templates,user_id,uuid,uuid,NO,null
+recurring_task_templates,title,text,text,NO,null
+recurring_task_templates,category_id,uuid,uuid,YES,null
+recurring_task_templates,subcategory_id,uuid,uuid,YES,null
+recurring_task_templates,priority,text,text,NO,'Medium'::text
+recurring_task_templates,effort_hours,numeric,numeric,YES,null
+recurring_task_templates,phase,text,text,YES,null
+recurring_task_templates,notes,text,text,YES,null
+recurring_task_templates,tags,jsonb,jsonb,NO,'[]'::jsonb
+recurring_task_templates,recurrence_type,text,text,NO,null
+recurring_task_templates,interval_days,integer,int4,YES,null
+recurring_task_templates,calendar_rule,jsonb,jsonb,YES,null
+recurring_task_templates,usage_counter_id,uuid,uuid,YES,null
+recurring_task_templates,usage_interval,numeric,numeric,YES,null
+recurring_task_templates,usage_at_last_spawn,numeric,numeric,YES,null
+recurring_task_templates,active,boolean,bool,NO,true
+recurring_task_templates,next_spawn_at,timestamp with time zone,timestamptz,YES,null
+recurring_task_templates,last_spawned_at,timestamp with time zone,timestamptz,YES,null
+recurring_task_templates,last_completed_task_id,uuid,uuid,YES,null
+recurring_task_templates,created_at,timestamp with time zone,timestamptz,NO,now()
+recurring_task_templates,updated_at,timestamp with time zone,timestamptz,NO,now()
+recurring_task_templates,archived_at,timestamp with time zone,timestamptz,YES,null
+usage_counters,id,uuid,uuid,NO,gen_random_uuid()
+usage_counters,user_id,uuid,uuid,NO,null
+usage_counters,asset_label,text,text,NO,null
+usage_counters,unit,text,text,NO,null
+usage_counters,current_value,numeric,numeric,NO,0
+usage_counters,notes,text,text,YES,null
+usage_counters,created_at,timestamp with time zone,timestamptz,NO,now()
+usage_counters,updated_at,timestamp with time zone,timestamptz,NO,now()
