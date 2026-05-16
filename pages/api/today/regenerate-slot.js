@@ -15,6 +15,7 @@ import {
   listAccessibleCategoriesWithMeta,
   listBacklogTasksForActor,
 } from "../../../lib/projectCollaboration";
+import { buildAeAdjustments } from "../../../lib/dailyReflection";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -72,12 +73,15 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: "Slot is empty." });
     }
 
+    const morningState = plan?.morning_state || null;
+
     const [
       tasks,
       categories,
       { data: completedEvents },
       { data: profileRow },
       { data: workspaceRows },
+      aeAdjustments,
     ] = await Promise.all([
       listBacklogTasksForActor(userId, { includeArchived: false }),
       listAccessibleCategoriesWithMeta(userId),
@@ -96,6 +100,7 @@ export default async function handler(req, res) {
         .from("shared_project_workspaces")
         .select("category_id, workspace")
         .eq("owner_user_id", userId),
+      buildAeAdjustments(userId, today),
     ]);
 
     const profile = profileRow?.profile || {};
@@ -186,6 +191,8 @@ export default async function handler(req, res) {
       lifeSituationKeywords,
       staleProjectCategoryIds,
       outcomeIscState: buildOutcomeIscState(profile),
+      morningEnergy: morningState?.energy || null,
+      aeAdjustments,
     };
 
     const reduced = reduceParentsToBestSubtask(baseFiltered, {
