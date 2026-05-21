@@ -5219,6 +5219,34 @@ body.rs-drawer-open {
   font-size: 20px;
 }
 
+.jarvis-mic {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid var(--rs-border, #e5e1d8);
+  background: var(--rs-bg, #fff);
+  color: var(--rs-text, #3e3a33);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s, transform 0.15s;
+}
+.jarvis-mic:hover { background: var(--rs-card-bg, #faf9f6); }
+.jarvis-mic:disabled { opacity: 0.35; cursor: default; }
+.jarvis-mic .material-symbols-outlined { font-size: 22px; }
+.jarvis-mic--on {
+  background: #c0392b;
+  border-color: #c0392b;
+  color: #fff;
+  animation: jarvis-mic-pulse 1.2s ease-in-out infinite;
+}
+@keyframes jarvis-mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(192, 57, 43, 0.5); }
+  50%      { box-shadow: 0 0 0 8px rgba(192, 57, 43, 0); }
+}
+
 /* FAB - Floating Action Button */
 .jarvis-fab {
   position: fixed;
