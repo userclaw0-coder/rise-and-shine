@@ -665,7 +665,7 @@ export default function BacklogPage() {
             )}
           </main>
 
-          {view !== "matrix" && selected && (
+          {selected && (
             <aside className="act-inspect">
               <div className="act-inspect-head">
                 <div className="act-inspect-breadcrumb">
