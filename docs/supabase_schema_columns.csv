@@ -132,3 +132,11 @@ usage_counters,current_value,numeric,numeric,NO,0
 usage_counters,notes,text,text,YES,null
 usage_counters,created_at,timestamp with time zone,timestamptz,NO,now()
 usage_counters,updated_at,timestamp with time zone,timestamptz,NO,now()
+wellness_sessions,id,uuid,uuid,NO,gen_random_uuid()
+wellness_sessions,user_id,uuid,uuid,NO,null
+wellness_sessions,session_date,date,date,NO,CURRENT_DATE
+wellness_sessions,kind,text,text,NO,null
+wellness_sessions,duration_min,numeric,numeric,YES,null
+wellness_sessions,partner,text,text,YES,null
+wellness_sessions,note,text,text,YES,null
+wellness_sessions,created_at,timestamp with time zone,timestamptz,NO,now()
