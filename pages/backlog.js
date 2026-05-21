@@ -258,7 +258,13 @@ export default function BacklogPage() {
     const q1 = [], q2 = [], q3 = [], q4 = [];
     for (const t of visible) {
       const code = toCode(t.priority);
-      const urgent = t.due_date && new Date(t.due_date + "T00:00:00") <= new Date(Date.now() + 3 * 86400000);
+      // Urgent = due within 3 days OR explicitly Critical priority.
+      // "Critical" semantically means "drop everything" — treating it as
+      // urgent even without a due_date matches how Jarvis-added tasks land
+      // (priority='Critical' is set, due_date is often left null).
+      const dueSoon =
+        t.due_date && new Date(t.due_date + "T00:00:00") <= new Date(Date.now() + 3 * 86400000);
+      const urgent = dueSoon || code === "P0";
       const important = code === "P0" || code === "P1";
       if (urgent && important) q1.push(t);
       else if (!urgent && important) q2.push(t);
