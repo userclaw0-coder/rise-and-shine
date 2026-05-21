@@ -98,6 +98,7 @@ export default function VisionPage() {
   const [uploading, setUploading] = useState("");
   const [imIdx, setImIdx] = useState(0);
   const [imPlaying, setImPlaying] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState(null);
   const [upgradeInput, setUpgradeInput] = useState("");
   const [upgrades, setUpgrades] = useState(null);
   const [upgradeLoading, setUpgradeLoading] = useState(false);
@@ -349,6 +350,15 @@ export default function VisionPage() {
     return () => clearTimeout(t);
   }, [imPlaying, imIdx, scenes.length, mode]);
 
+  useEffect(() => {
+    if (!lightboxUrl) return;
+    function onKey(e) {
+      if (e.key === "Escape") setLightboxUrl(null);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightboxUrl]);
+
   async function runUpgrade() {
     if (!user || !upgradeInput.trim() || upgradeLoading) return;
     setUpgradeLoading(true);
@@ -550,8 +560,15 @@ export default function VisionPage() {
                 </label>
               </div>
               {boardUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={boardUrl} alt="Vision board" className="vis-board-hero" />
+                <button
+                  type="button"
+                  className="vis-img-trigger vis-img-trigger--hero"
+                  onClick={() => setLightboxUrl(boardUrl)}
+                  aria-label="View full vision board image"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={boardUrl} alt="Vision board" className="vis-board-hero" />
+                </button>
               ) : (
                 <div className="vis-board-empty">
                   Upload a hero image that represents where you&apos;re headed.
@@ -566,10 +583,15 @@ export default function VisionPage() {
                   return (
                     <div key={key} className="vis-tile">
                       {img ? (
-                        <div className="vis-tile-img-wrap">
+                        <button
+                          type="button"
+                          className="vis-img-trigger vis-tile-img-wrap"
+                          onClick={() => setLightboxUrl(img)}
+                          aria-label={`View ${o.title || "tile"} image`}
+                        >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={img} alt={o.title} />
-                        </div>
+                        </button>
                       ) : (
                         <div className="vis-tile-empty">+</div>
                       )}
@@ -1044,6 +1066,31 @@ export default function VisionPage() {
         </div>
       </div>
 
+      {lightboxUrl ? (
+        <div
+          className="vis-lightbox"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <button
+            type="button"
+            className="vis-lightbox__close"
+            onClick={() => setLightboxUrl(null)}
+            aria-label="Close"
+          >
+            ×
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={lightboxUrl}
+            alt=""
+            className="vis-lightbox__img"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      ) : null}
+
       <style jsx global>{`
         .vis-immerse-shell {
           background: #0b0908;
@@ -1282,6 +1329,42 @@ export default function VisionPage() {
           justify-content: center;
           overflow: hidden;
         }
+        .vis-img-trigger {
+          appearance: none; border: 0; background: none; padding: 0; margin: 0;
+          cursor: zoom-in; display: block; width: 100%;
+        }
+        .vis-img-trigger:focus-visible {
+          outline: 2px solid var(--ps-accent, #8a6db8);
+          outline-offset: 2px; border-radius: 8px;
+        }
+        .vis-img-trigger--hero { border-radius: 12px; overflow: hidden; }
+
+        .vis-lightbox {
+          position: fixed; inset: 0; z-index: 1000;
+          background: rgba(8, 6, 6, 0.92);
+          display: flex; align-items: center; justify-content: center;
+          padding: 24px;
+          animation: vis-lightbox-fade 0.15s ease-out;
+        }
+        @keyframes vis-lightbox-fade {
+          from { opacity: 0; } to { opacity: 1; }
+        }
+        .vis-lightbox__img {
+          max-width: 100%; max-height: 100%;
+          object-fit: contain;
+          border-radius: 8px;
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+          cursor: default;
+        }
+        .vis-lightbox__close {
+          position: absolute; top: 16px; right: 20px;
+          appearance: none; background: rgba(255, 255, 255, 0.08);
+          color: #fff; border: 1px solid rgba(255, 255, 255, 0.18);
+          width: 40px; height: 40px; border-radius: 50%;
+          font-size: 24px; line-height: 1; cursor: pointer;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .vis-lightbox__close:hover { background: rgba(255, 255, 255, 0.16); }
         .vis-tile-img-wrap img {
           max-width: 100%;
           max-height: 100%;
