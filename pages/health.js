@@ -7,11 +7,37 @@ import { getUserProfile } from "../lib/db";
 import {
   getBodyWeightLogs,
   insertBodyWeightLog,
+  getBodyMeasurements,
+  insertBodyMeasurement,
   getLiftingSessions,
   getLiftingSetsWithSession,
   createLiftingSession,
   addLiftingSet,
 } from "../lib/db";
+
+// Outcome vision-0: 15% body fat, bench 1RM >= bodyweight, squat 1RM >= 2x bodyweight.
+const GOALS = { bodyfatPct: 15, benchXbw: 1.0, squatXbw: 2.0 };
+
+// Canonical A/B split (matches OCCAM_LIFTS workout tags + the real logged sessions).
+const WORKOUTS = {
+  A: { label: "Workout A", sub: "Yates row + barbell press", liftIds: ["yates-row", "barbell-press"] },
+  B: { label: "Workout B", sub: "Incline bench + squat", liftIds: ["incline-bench", "squat"] },
+};
+
+// US Navy body-fat estimate for men (inches). Returns % or null if inputs incomplete.
+function navyBodyFatMale(neck, waist, height) {
+  const n = Number(neck), w = Number(waist), h = Number(height);
+  if (!n || !w || !h || w - n <= 0) return null;
+  return 86.01 * Math.log10(w - n) - 70.041 * Math.log10(h) + 36.76;
+}
+
+// Epley estimated 1-rep max.
+function epley1RM(weight, reps) {
+  const w = Number(weight) || 0;
+  const r = Number(reps);
+  if (!w) return 0;
+  return r && r > 1 ? w * (1 + r / 30) : w;
+}
 
 const OCCAM_LIFTS = [
   {
@@ -43,8 +69,6 @@ const OCCAM_LIFTS = [
     color: "var(--ps-accent)",
   },
 ];
-
-const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 function matchLift(exercise) {
   const lower = (exercise || "").toLowerCase();
@@ -91,6 +115,12 @@ export default function HealthPage() {
   const [weights, setWeights] = useState([]);
   const [addWeight, setAddWeight] = useState("");
   const [addingWeight, setAddingWeight] = useState(false);
+  const [measurements, setMeasurements] = useState([]);
+  const [mNeck, setMNeck] = useState("");
+  const [mWaist, setMWaist] = useState("");
+  const [mHeight, setMHeight] = useState("");
+  const [mWeight, setMWeight] = useState("");
+  const [savingMeasure, setSavingMeasure] = useState(false);
   const [quickLift, setQuickLift] = useState("yates-row");
   const [quickWeight, setQuickWeight] = useState("");
   const [quickReps, setQuickReps] = useState("");
@@ -105,18 +135,22 @@ export default function HealthPage() {
     setLoading(true);
     setError("");
     try {
-      const [sessRes, setsRes, wtRes, profileRes] = await Promise.all([
+      const [sessRes, setsRes, wtRes, measRes, profileRes] = await Promise.all([
         getLiftingSessions(user.id, 30),
         getLiftingSetsWithSession(user.id, 600),
         getBodyWeightLogs(user.id, 120),
+        getBodyMeasurements(user.id, 120),
         getUserProfile(user.id),
       ]);
       if (sessRes.error) throw new Error(sessRes.error.message);
       if (setsRes.error) throw new Error(setsRes.error.message);
       if (wtRes.error) throw new Error(wtRes.error.message);
+      // body_measurements is newer — tolerate its absence rather than blanking the page.
+      if (measRes?.error) console.warn("[health] getBodyMeasurements:", measRes.error.message);
       setSessions(sessRes.data || []);
       setAllSets(setsRes.data || []);
       setWeights(wtRes.data || []);
+      setMeasurements(measRes?.data || []);
       setProfile(profileRes?.data?.profile || null);
     } catch (err) {
       setError(err.message || "Failed to load.");
@@ -175,40 +209,122 @@ export default function HealthPage() {
     return avg;
   }, [bodyweightSeries]);
 
-  const weekPlan = useMemo(() => {
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
-    const dayIdx = (now.getDay() + 6) % 7;
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - dayIdx);
-    const slots = [
-      { kind: "occam-a", label: "Occam A", sub: "Yates row + barbell press", color: "var(--ps-accent)" },
-      { kind: "sprints", label: "Sprints", sub: "Hill · O'Mara", color: "var(--ps-clay)" },
-      { kind: "recovery", label: "Recovery", sub: "Walk · mobility", color: "var(--ps-ink-30)" },
-      { kind: "occam-b", label: "Occam B", sub: "Incline bench + squat", color: "var(--ps-accent)" },
-      { kind: "row", label: "Rower", sub: "Sprint intervals", color: "var(--ps-indigo)" },
-      { kind: "rest", label: "Rest", sub: "Adventure day", color: "var(--ps-ink-30)" },
-      { kind: "rest", label: "Rest", sub: "Prep for week", color: "var(--ps-ink-30)" },
-    ];
-    return slots.map((s, i) => {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + i);
-      const dateStr = d.toISOString().slice(0, 10);
-      const done = sessions.some((sess) => sess.session_date === dateStr);
-      return {
-        ...s,
-        day: DAYS[i],
-        date: d.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
-        done,
-        today: i === dayIdx,
-      };
-    });
-  }, [sessions]);
-
-  const nextSession = useMemo(
-    () => weekPlan.find((w) => w.today),
-    [weekPlan]
+  const knownHeight = useMemo(
+    () => measurements.find((m) => m.height_in)?.height_in || null,
+    [measurements]
   );
+
+  const bodyFatSeries = useMemo(() => {
+    return [...measurements]
+      .sort((a, b) => new Date(a.measured_at) - new Date(b.measured_at))
+      .map((m) => {
+        const bf =
+          m.bodyfat_pct != null
+            ? Number(m.bodyfat_pct)
+            : navyBodyFatMale(m.neck_in, m.waist_in, m.height_in || knownHeight);
+        return bf == null ? null : { d: m.measured_at, w: Number(bf.toFixed(1)) };
+      })
+      .filter(Boolean);
+  }, [measurements, knownHeight]);
+
+  const latestMeasurement = useMemo(
+    () =>
+      measurements.length
+        ? [...measurements].sort(
+            (a, b) => new Date(b.measured_at) - new Date(a.measured_at)
+          )[0]
+        : null,
+    [measurements]
+  );
+
+  const latestBodyFat = bodyFatSeries.length
+    ? bodyFatSeries[bodyFatSeries.length - 1].w
+    : null;
+
+  const measurementDue = useMemo(() => {
+    if (!latestMeasurement) return true;
+    return (
+      Date.now() - new Date(latestMeasurement.measured_at).getTime() >
+      7 * 86400000
+    );
+  }, [latestMeasurement]);
+
+  const strengthStats = useMemo(() => {
+    let bench = 0,
+      squat = 0;
+    for (const s of allSets) {
+      const lift = matchLift(s.exercise);
+      if (!lift) continue;
+      const e = epley1RM(s.weight, s.reps);
+      if (lift.id === "incline-bench") bench = Math.max(bench, e);
+      if (lift.id === "squat") squat = Math.max(squat, e);
+    }
+    return { bench: Math.round(bench), squat: Math.round(squat) };
+  }, [allSets]);
+
+  // Sticky next workout: flip from the last logged A/B; if it's already been
+  // logged today, advance to the other one. Stays put until logged.
+  const nextWorkout = useMemo(() => {
+    const ts = new Date().toISOString().slice(0, 10);
+    const setsOnDay = (day) =>
+      allSets.filter(
+        (st) => (st.session?.session_date || st.created_at?.slice(0, 10)) === day
+      );
+    const workoutDoneOn = (label, day) => {
+      const lifts = setsOnDay(day).map((st) => matchLift(st.exercise)).filter(Boolean);
+      return WORKOUTS[label].liftIds.some((id) => lifts.some((l) => l.id === id));
+    };
+    const days = [
+      ...new Set(
+        allSets
+          .map((st) => st.session?.session_date || st.created_at?.slice(0, 10))
+          .filter(Boolean)
+      ),
+    ].sort();
+    let lastLabel = null;
+    for (let i = days.length - 1; i >= 0; i--) {
+      const a = workoutDoneOn("A", days[i]);
+      const b = workoutDoneOn("B", days[i]);
+      if (a && !b) { lastLabel = "A"; break; }
+      if (b && !a) { lastLabel = "B"; break; }
+    }
+    let label = lastLabel === "A" ? "B" : lastLabel === "B" ? "A" : "A";
+    const advancedFrom = workoutDoneOn(label, ts) ? label : null;
+    if (advancedFrom) label = label === "A" ? "B" : "A";
+    return { label, ...WORKOUTS[label], advancedFrom };
+  }, [allSets]);
+
+  const goalProgress = useMemo(() => {
+    const bw = latestWeight?.w || null;
+    const benchGoal = bw ? Math.round(bw * GOALS.benchXbw) : null;
+    const squatGoal = bw ? Math.round(bw * GOALS.squatXbw) : null;
+    const items = [];
+    if (latestBodyFat != null) {
+      const start = bodyFatSeries[0]?.w ?? latestBodyFat;
+      const pct =
+        start > GOALS.bodyfatPct
+          ? Math.max(0, Math.min(100, ((start - latestBodyFat) / (start - GOALS.bodyfatPct)) * 100))
+          : 100;
+      items.push({ key: "bf", label: `Body fat → ${GOALS.bodyfatPct}%`, value: `${latestBodyFat}%`, pct, hit: latestBodyFat <= GOALS.bodyfatPct });
+    } else {
+      items.push({ key: "bf", label: `Body fat → ${GOALS.bodyfatPct}%`, value: "measure below", pct: 0, hit: false });
+    }
+    items.push({
+      key: "bench",
+      label: `Bench → 1× BW${benchGoal ? ` (${benchGoal} lb)` : ""}`,
+      value: strengthStats.bench ? `${strengthStats.bench} lb 1RM` : "—",
+      pct: benchGoal ? Math.min(100, (strengthStats.bench / benchGoal) * 100) : 0,
+      hit: !!(benchGoal && strengthStats.bench >= benchGoal),
+    });
+    items.push({
+      key: "squat",
+      label: `Squat → 2× BW${squatGoal ? ` (${squatGoal} lb)` : ""}`,
+      value: strengthStats.squat ? `${strengthStats.squat} lb 1RM` : "—",
+      pct: squatGoal ? Math.min(100, (strengthStats.squat / squatGoal) * 100) : 0,
+      hit: !!(squatGoal && strengthStats.squat >= squatGoal),
+    });
+    return items;
+  }, [latestWeight, latestBodyFat, bodyFatSeries, strengthStats]);
 
   const setsByDate = useMemo(() => {
     const map = new Map();
@@ -301,17 +417,56 @@ export default function HealthPage() {
     }
   }
 
+  async function handleMeasurementLog(e) {
+    e.preventDefault();
+    if (!user) return;
+    const height = mHeight || knownHeight;
+    if (!mNeck && !mWaist && !mWeight) return;
+    setSavingMeasure(true);
+    setError("");
+    try {
+      const bf = navyBodyFatMale(mNeck, mWaist, height);
+      const res = await insertBodyMeasurement(user.id, {
+        neck_in: mNeck,
+        waist_in: mWaist,
+        height_in: height,
+        bodyfat_pct: bf != null ? Number(bf.toFixed(2)) : null,
+        bf_method: "navy",
+      });
+      if (res?.error) throw new Error(res.error.message);
+      // Keep the body-weight chart in sync if a weight was entered.
+      if (mWeight) {
+        await insertBodyWeightLog(user.id, todayStr, Number(mWeight), "lb");
+      }
+      setMNeck("");
+      setMWaist("");
+      setMWeight("");
+      load();
+    } catch (err) {
+      setError(err.message || "Failed to save measurement.");
+    } finally {
+      setSavingMeasure(false);
+    }
+  }
+
   if (!user) return null;
 
+  const liveBodyFat = navyBodyFatMale(mNeck, mWaist, mHeight || knownHeight);
+
   const coachPayload = {
-    week_plan: weekPlan.map((w) => ({
-      day: w.day,
-      date: w.date,
-      kind: w.kind,
-      label: w.label,
-      done: w.done,
-      today: w.today,
-    })),
+    next_workout: {
+      label: nextWorkout.label,
+      name: nextWorkout.sub,
+      lifts: nextWorkout.liftIds.map((id) => {
+        const lp = liftProgress.find((l) => l.id === id);
+        return {
+          lift: lp?.label || id,
+          last_weight: lp?.currentWeight ?? null,
+          last_reps: lp?.currentReps ?? null,
+        };
+      }),
+      just_completed_today: !!nextWorkout.advancedFrom,
+    },
     recent_sessions: sessions.slice(0, 6).map((s) => ({
       date: s.session_date,
       sets: allSets
@@ -326,6 +481,15 @@ export default function HealthPage() {
     })),
     latest_bodyweight: latestWeight?.w || null,
     last_7_avg: last7 || null,
+    body_fat_pct: latestBodyFat,
+    measurement_due: measurementDue,
+    goals: {
+      target_bodyfat_pct: GOALS.bodyfatPct,
+      bench_est_1rm: strengthStats.bench,
+      squat_est_1rm: strengthStats.squat,
+      bench_goal_lb: latestWeight?.w ? Math.round(latestWeight.w * GOALS.benchXbw) : null,
+      squat_goal_lb: latestWeight?.w ? Math.round(latestWeight.w * GOALS.squatXbw) : null,
+    },
   };
 
   return (
@@ -341,41 +505,67 @@ export default function HealthPage() {
 
           {error && <div className="today-error">{error}</div>}
 
-          <div className="fit-week">
-            {weekPlan.map((w, i) => (
-              <div
-                key={i}
-                className={
-                  "fit-week-day" +
-                  (w.today ? " today" : "") +
-                  (w.done ? " done" : "")
-                }
-              >
-                <div className="fit-week-dow">{w.day}</div>
-                <div className="fit-week-date">{w.date}</div>
-                <div className="fit-week-block" style={{ background: w.color }}>
-                  <div className="fit-week-label">{w.label}</div>
-                  <div className="fit-week-sub">{w.sub}</div>
+          {/* Sticky next workout — stays here until it's logged, then flips A↔B. */}
+          <div className="fit-next-card">
+            <div className="fit-next-head">
+              <span className="fit-next-badge">{nextWorkout.label}</span>
+              <div>
+                <div className="fit-next-name">
+                  Next workout ·{" "}
+                  {nextWorkout.label === "A" ? "Workout A" : "Workout B"}
                 </div>
-                {w.done && <div className="fit-week-done">✓</div>}
+                <div className="fit-next-sub">{nextWorkout.sub}</div>
+              </div>
+            </div>
+            {nextWorkout.advancedFrom && (
+              <div className="fit-next-flag">
+                Logged Workout {nextWorkout.advancedFrom} today — up next is{" "}
+                {nextWorkout.label}.
+              </div>
+            )}
+            <div className="fit-next-lifts">
+              {nextWorkout.liftIds.map((id) => {
+                const lp = liftProgress.find((l) => l.id === id);
+                return (
+                  <div key={id} className="fit-next-lift">
+                    <span
+                      className="fit-next-lift-dot"
+                      style={{ background: lp?.color || "var(--ps-ink-30)" }}
+                    />
+                    <span className="fit-next-lift-name">{lp?.label || id}</span>
+                    <span className="fit-next-lift-last">
+                      {lp?.currentWeight
+                        ? `last: ${lp.currentWeight} lb × ${lp.currentReps || "—"}`
+                        : "no history yet"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="fit-next-note">
+              5s up / 5s down · 1×7+ on the top set. Stays here until you log it —
+              then it flips to the other day.
+            </div>
+          </div>
+
+          {/* Progress to the outcome: 15% body fat · 1× bench · 2× squat. */}
+          <div className="fit-goals">
+            <div className="fit-goals-title">Progress to your outcome</div>
+            {goalProgress.map((g) => (
+              <div key={g.key} className="fit-goal">
+                <div className="fit-goal-top">
+                  <span className="fit-goal-label">{g.label}</span>
+                  <span className={"fit-goal-val" + (g.hit ? " hit" : "")}>
+                    {g.hit ? "✓ " : ""}
+                    {g.value}
+                  </span>
+                </div>
+                <div className="fit-goal-bar">
+                  <i style={{ width: `${Math.round(g.pct)}%` }} />
+                </div>
               </div>
             ))}
           </div>
-
-          {nextSession && (
-            <div className="fit-next">
-              <div className="fit-next-cap">
-                Next session · today {nextSession.date}
-              </div>
-              <div className="fit-next-title">
-                {nextSession.label} · {nextSession.sub}
-              </div>
-              <div className="fit-next-note">
-                5s up / 5s down · 1×7+ on the top set · 48h minimum recovery
-                before the next heavy day.
-              </div>
-            </div>
-          )}
 
           <div className="ps-section-title">Month at a glance</div>
           <div className="ps-section-sub">
@@ -524,6 +714,119 @@ export default function HealthPage() {
               </button>
             </form>
           </div>
+
+          <div className="ps-section-title">
+            Body fat · Navy tape method
+            {measurementDue && <span className="fit-due"> · due</span>}
+          </div>
+          <div className="ps-section-sub">
+            Neck + waist + height → body-fat %. Two-minute tape check; the trend
+            matters more than any single reading.
+          </div>
+          <div className="fit-bw">
+            <div className="fit-bw-now">
+              <div className="fit-bw-big">
+                {latestBodyFat != null ? (
+                  <>
+                    {latestBodyFat.toFixed(1)}
+                    <span>%</span>
+                  </>
+                ) : (
+                  "—"
+                )}
+              </div>
+              <div className="fit-bw-cap">Latest body fat</div>
+              <div className="fit-bw-sub">Goal: {GOALS.bodyfatPct}%</div>
+            </div>
+            <div className="fit-bw-chart">
+              {bodyFatSeries.length >= 2 ? (
+                <Sparkline points={bodyFatSeries} color="var(--ps-sage)" />
+              ) : (
+                <div className="fit-empty">
+                  Log a couple of tape measurements to see the trend.
+                </div>
+              )}
+            </div>
+          </div>
+          <form className="fit-measure-form" onSubmit={handleMeasurementLog}>
+              <div className="fit-measure-grid">
+                <input
+                  type="number"
+                  step="0.1"
+                  placeholder="Neck (in)"
+                  value={mNeck}
+                  onChange={(e) => setMNeck(e.target.value)}
+                />
+                <input
+                  type="number"
+                  step="0.1"
+                  placeholder="Waist (in)"
+                  value={mWaist}
+                  onChange={(e) => setMWaist(e.target.value)}
+                />
+                <input
+                  type="number"
+                  step="0.1"
+                  placeholder={knownHeight ? `Height (${knownHeight} in)` : "Height (in)"}
+                  value={mHeight}
+                  onChange={(e) => setMHeight(e.target.value)}
+                />
+                <input
+                  type="number"
+                  step="0.1"
+                  placeholder="Weight (lb)"
+                  value={mWeight}
+                  onChange={(e) => setMWeight(e.target.value)}
+                />
+              </div>
+              <div className="fit-measure-foot">
+                <span className="fit-measure-live">
+                  {liveBodyFat != null
+                    ? `→ ${liveBodyFat.toFixed(1)}% body fat`
+                    : "neck + waist + height → live estimate"}
+                </span>
+                <button
+                  type="submit"
+                  className="ps-btn ps-btn--primary"
+                  disabled={savingMeasure || (!mNeck && !mWaist && !mWeight)}
+                >
+                  {savingMeasure ? "…" : "Save measurement"}
+                </button>
+              </div>
+          </form>
+          {measurements.length > 0 && (
+            <div className="fit-measure-log">
+              {[...measurements]
+                .sort(
+                  (a, b) => new Date(b.measured_at) - new Date(a.measured_at)
+                )
+                .slice(0, 8)
+                .map((m) => {
+                  const bf =
+                    m.bodyfat_pct != null
+                      ? Number(m.bodyfat_pct)
+                      : navyBodyFatMale(m.neck_in, m.waist_in, m.height_in || knownHeight);
+                  return (
+                    <div key={m.id} className="fit-measure-row">
+                      <span className="fit-measure-date">
+                        {new Date(m.measured_at).toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </span>
+                      <span className="fit-measure-bf">
+                        {bf != null ? `${bf.toFixed(1)}%` : "—"}
+                      </span>
+                      <span className="fit-measure-meta">
+                        {m.neck_in ? `neck ${m.neck_in}"` : ""}
+                        {m.neck_in && m.waist_in ? " · " : ""}
+                        {m.waist_in ? `waist ${m.waist_in}"` : ""}
+                      </span>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
 
           <div className="ps-section-title">Session log</div>
           <div className="fit-log">
@@ -851,11 +1154,104 @@ export default function HealthPage() {
           font-style: italic;
           padding: 14px 0;
         }
+        .fit-due { color: var(--ps-clay); font-weight: 600; }
+
+        .fit-next-card {
+          margin-top: 24px;
+          background: #fff;
+          border: 1px solid var(--ps-ink-08);
+          border-left: 3px solid var(--ps-accent);
+          border-radius: 14px;
+          padding: 18px 20px;
+        }
+        .fit-next-head { display: flex; align-items: center; gap: 14px; }
+        .fit-next-badge {
+          width: 40px; height: 40px; border-radius: 10px; flex: none;
+          background: var(--ps-accent); color: #fff;
+          font-family: var(--ps-mono); font-weight: 700; font-size: 18px;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .fit-next-name {
+          font-family: var(--ps-mono); font-size: 11px; letter-spacing: 0.1em;
+          text-transform: uppercase; color: var(--ps-ink-60);
+        }
+        .fit-next-sub { font-family: var(--ps-serif); font-size: 18px; color: var(--ps-ink); }
+        .fit-next-flag {
+          margin-top: 12px; font-size: 12.5px; color: var(--ps-sage);
+          background: var(--ps-sage-soft); border-radius: 8px; padding: 7px 10px;
+        }
+        .fit-next-lifts { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+        .fit-next-lift { display: flex; align-items: center; gap: 10px; }
+        .fit-next-lift-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+        .fit-next-lift-name { font-weight: 600; font-size: 14px; }
+        .fit-next-lift-last {
+          margin-left: auto; font-family: var(--ps-mono);
+          font-size: 11.5px; color: var(--ps-ink-60);
+        }
+        .fit-next-card .fit-next-note { margin-top: 14px; }
+
+        .fit-goals {
+          margin-top: 16px; background: #fff; border: 1px solid var(--ps-ink-08);
+          border-radius: 14px; padding: 16px 20px;
+        }
+        .fit-goals-title {
+          font-family: var(--ps-serif); font-size: 15px;
+          color: var(--ps-ink); margin-bottom: 12px;
+        }
+        .fit-goal { margin-bottom: 14px; }
+        .fit-goal:last-child { margin-bottom: 0; }
+        .fit-goal-top {
+          display: flex; justify-content: space-between;
+          align-items: baseline; font-size: 13px;
+        }
+        .fit-goal-label { color: var(--ps-ink-80); }
+        .fit-goal-val { font-family: var(--ps-mono); font-size: 12px; color: var(--ps-ink-60); }
+        .fit-goal-val.hit { color: var(--ps-sage); font-weight: 600; }
+        .fit-goal-bar {
+          height: 8px; border-radius: 6px; background: var(--ps-ink-08);
+          overflow: hidden; margin-top: 6px;
+        }
+        .fit-goal-bar > i {
+          display: block; height: 100%; border-radius: 6px;
+          background: var(--ps-accent); transition: width 0.4s ease;
+        }
+
+        .fit-measure-form {
+          margin-top: 12px; display: flex; flex-direction: column; gap: 10px;
+        }
+        .fit-measure-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+        .fit-measure-grid input {
+          width: 100%; padding: 8px 10px; border-radius: 8px;
+          border: 1px solid var(--ps-ink-10); background: var(--ps-paper);
+          font-family: inherit; font-size: 13px;
+        }
+        .fit-measure-foot {
+          display: flex; align-items: center; justify-content: space-between;
+          gap: 10px; flex-wrap: wrap;
+        }
+        .fit-measure-live { font-family: var(--ps-mono); font-size: 12px; color: var(--ps-sage); }
+        .fit-measure-log {
+          margin-top: 12px; border: 1px solid var(--ps-ink-08);
+          border-radius: 12px; overflow: hidden; background: #fff;
+        }
+        .fit-measure-row {
+          display: flex; align-items: center; gap: 12px; padding: 9px 14px;
+          border-bottom: 1px solid var(--ps-ink-05); font-size: 13px;
+        }
+        .fit-measure-row:last-child { border-bottom: none; }
+        .fit-measure-date {
+          font-family: var(--ps-mono); font-size: 11px;
+          color: var(--ps-ink-60); width: 56px; flex: none;
+        }
+        .fit-measure-bf { font-weight: 700; color: var(--ps-sage); width: 56px; flex: none; }
+        .fit-measure-meta { color: var(--ps-ink-60); font-family: var(--ps-mono); font-size: 11px; }
+
         @media (max-width: 900px) {
           .fit-week { grid-template-columns: repeat(7, 90px); overflow-x: auto; }
           .fit-lifts { grid-template-columns: 1fr 1fr; }
           .fit-bw { grid-template-columns: 1fr; }
           .fit-quick { grid-template-columns: 1fr 1fr; }
+          .fit-measure-grid { grid-template-columns: 1fr 1fr; }
         }
       `}</style>
     </PSShell>
