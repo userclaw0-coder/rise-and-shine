@@ -29,6 +29,28 @@ function toCode(pri) {
   return "P3";
 }
 
+// Numeric rank used for "always sort P0→P3 across every listing on this page."
+// Lower is more important. DB-side ORDER BY priority is alphabetical on the
+// "Critical/High/Medium/Low" string column, which puts Medium ahead of Critical
+// — sort here in JS instead so every list/group/quadrant shares one ordering.
+const PRI_RANK = { P0: 0, P1: 1, P2: 2, P3: 3 };
+
+function comparePriority(a, b) {
+  const ra = PRI_RANK[toCode(a.priority)];
+  const rb = PRI_RANK[toCode(b.priority)];
+  if (ra !== rb) return ra - rb;
+  // Within a priority bucket: earliest due date first (null due dates last),
+  // then oldest-created first (FIFO for ties).
+  const da = a.due_date || null;
+  const db = b.due_date || null;
+  if (da !== db) {
+    if (da === null) return 1;
+    if (db === null) return -1;
+    return da < db ? -1 : 1;
+  }
+  return (a.created_at || "").localeCompare(b.created_at || "");
+}
+
 function fmtDue(d) {
   if (!d) return null;
   const date = new Date(d + "T00:00:00");
@@ -80,7 +102,9 @@ export default function BacklogPage() {
           )
           .eq("user_id", user.id)
           .is("archived_at", null)
-          .order("priority", { ascending: false })
+          // Final ordering is done client-side in `visible` via comparePriority
+          // because the DB column is a "Critical/High/Medium/Low" string —
+          // ORDER BY priority would sort alphabetically (Medium > Critical).
           .order("due_date", { ascending: true, nullsFirst: false })
           .order("created_at", { ascending: true }),
         supabase
@@ -161,12 +185,13 @@ export default function BacklogPage() {
       list = list.filter((t) => priorityFilter.includes(toCode(t.priority)));
     if (projectFilter.length > 0)
       list = list.filter((t) => projectFilter.includes(t.category_id));
-    // Next-action tasks first
+    // Next-action tasks first, then strict P0→P3 priority. Every downstream
+    // view (matrix quadrants, list groups, "all") inherits this ordering.
     list.sort((a, b) => {
       const aNext = nextActionIds.has(a.id) ? 1 : 0;
       const bNext = nextActionIds.has(b.id) ? 1 : 0;
       if (aNext !== bNext) return bNext - aNext;
-      return 0;
+      return comparePriority(a, b);
     });
     return list;
   }, [tasks, priorityFilter, projectFilter, hideDone, nextActionIds]);
@@ -301,7 +326,12 @@ export default function BacklogPage() {
         groups.set(key, { key, label, items: [], color: colorMap[t.category_id] || "var(--ps-ink-30)" });
       groups.get(key).items.push(t);
     }
-    return [...groups.values()];
+    const out = [...groups.values()];
+    // When grouping by priority, the groups themselves must run P0 → P3.
+    if (groupBy === "priority") {
+      out.sort((a, b) => (PRI_RANK[a.key] ?? 99) - (PRI_RANK[b.key] ?? 99));
+    }
+    return out;
   }, [visible, groupBy, catMap, colorMap]);
 
   function TaskRow({ t }) {
