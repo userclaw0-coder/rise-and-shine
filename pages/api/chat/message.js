@@ -22,16 +22,16 @@ import {
 } from "../../../lib/jarvis-context";
 
 const MAX_TOOL_ROUNDS = 5;
-const REQUEST_TIMEOUT_MS = 90000;
+const REQUEST_TIMEOUT_MS = 280_000;
 
 export const config = {
   api: {
     responseLimit: false,
   },
-  // Lift the platform function timeout above the default so the agentic
-  // loop doesn't get killed mid-stream (which leaves orphan tool side-effects
-  // and tempts the user to resubmit, creating duplicate tasks).
-  maxDuration: 60,
+  // Vercel Pro caps function duration at 300s. Long agentic flows that call
+  // get_backlog (which can return 600+ tasks) need the headroom — the previous
+  // 60s budget got killed mid-stream and the user never saw a reply.
+  maxDuration: 300,
 };
 
 function sendEvent(res, data) {
@@ -86,6 +86,47 @@ export default async function handler(req, res) {
     if (!res.writableEnded) res.end();
   }, REQUEST_TIMEOUT_MS);
 
+  // --- State the finally block reads to persist a final assistant row --------
+  // streamedText accumulates everything we've sent via SSE 'text' events; this
+  // is the source of truth on interruption (function killed, error thrown,
+  // model timed out). toolsRun is a summary fallback when no text exists at all.
+  let streamedText = "";
+  let finalContent = "";
+  const toolsRun = []; // [{name, ok, error?}]
+  let assistantPersisted = false;
+  let messageId = null;
+
+  async function persistAssistantOnce(reason) {
+    if (assistantPersisted) return;
+    assistantPersisted = true;
+    let body = (finalContent && finalContent.trim()) || streamedText.trim();
+    if (!body) {
+      // Last-resort fallback so the user ALWAYS sees something in their chat
+      // history. Without this, an interrupted flow leaves only orphan tool
+      // rows in the DB and the user reasonably thinks "did anything happen?"
+      // and resubmits — which is exactly the bug we're fixing.
+      if (toolsRun.length > 0) {
+        const summary = toolsRun
+          .map((t) => (t.ok ? `✓ ${t.name}` : `✗ ${t.name}${t.error ? ` (${t.error})` : ""}`))
+          .join(", ");
+        body = `(I ran these tools but didn't finish writing a reply — ${reason}: ${summary}. Ask me to continue or check the result.)`;
+      } else {
+        body = `(I didn't finish — ${reason}. Please try again.)`;
+      }
+    }
+    try {
+      const persisted = await persistMessage(userId, {
+        role: "assistant",
+        content: body,
+        client_request_id: clientRequestId,
+      });
+      messageId = persisted?.id || null;
+    } catch (persistErr) {
+      console.warn("[jarvis] Failed to persist assistant message:", persistErr.message);
+    }
+  }
+  // --------------------------------------------------------------------------
+
   try {
     // Idempotency: if the client retries with the same client_request_id and
     // we've already processed (or are processing) it, replay the previously
@@ -103,14 +144,13 @@ export default async function handler(req, res) {
           message_id: prior.assistantRow?.id || null,
           replayed: true,
         });
-        return; // finally{} cleans up
+        assistantPersisted = true; // don't double-persist in finally{}
+        return;
       }
     }
 
     // Persist the user message FIRST so the conversation history stays
     // coherent even if the stream drops or the function gets killed mid-loop.
-    // (Old order: persisted last, which orphaned tool_call rows when things
-    // failed and made the user retype.)
     try {
       await persistMessage(userId, {
         role: "user",
@@ -126,7 +166,6 @@ export default async function handler(req, res) {
     const messages = formatForProvider(history);
 
     // 2. Build system prompt with live context + memory retrieval
-    //    (timeout-protected; memory retrieval is best-effort).
     let system;
     try {
       system = await buildSystemPrompt(userId, { query: userMessage });
@@ -135,12 +174,10 @@ export default async function handler(req, res) {
       system = "You are Jarvis, the Rise & Shine execution coach. Help the user with their tasks and projects. Use your tools to look up data before answering.";
     }
 
-    // 3. Get tool definitions
     const tools = getToolDefinitions();
 
-    // 4. Run the agentic loop (streaming with tool calls)
-    let currentMessages = [...messages];
-    let finalContent = "";
+    // 3. Agentic loop with streaming
+    const currentMessages = [...messages];
     let rounds = 0;
 
     while (rounds < MAX_TOOL_ROUNDS) {
@@ -153,6 +190,10 @@ export default async function handler(req, res) {
         tools,
         onChunk: (chunk) => {
           if (chunk.type === "text") {
+            // Capture every streamed delta — the finally block uses this to
+            // persist whatever the user already saw, even if the function is
+            // killed before result.content lands.
+            streamedText += chunk.content;
             sendEvent(res, { type: "text", content: chunk.content });
           }
           if (chunk.type === "tool_call_start") {
@@ -167,34 +208,36 @@ export default async function handler(req, res) {
       const roundContent = result.content;
       const roundToolCalls = result.toolCalls;
 
-      // If no tool calls, we're done
       if (!roundToolCalls || roundToolCalls.length === 0) {
         finalContent = roundContent;
         break;
       }
 
-      // If the client gave up between rounds, stop before invoking any more
-      // tools — those tools have side effects (create_task etc.) and running
-      // them after disconnect is what creates the duplicate-task problem.
       if (clientAborted) break;
 
-      // Process tool calls
-      const assistantMsg = {
+      currentMessages.push({
         role: "assistant",
         content: roundContent,
         tool_calls: roundToolCalls,
-      };
-      currentMessages.push(assistantMsg);
+      });
 
-      // Execute each tool — wrapped in try-catch so a tool failure doesn't crash the request
       const toolMessages = [];
       for (const tc of roundToolCalls) {
         let toolResult;
+        let ok = true;
+        let errMsg = null;
         try {
           toolResult = await executeTool(tc.name, tc.args, userId);
+          if (toolResult && toolResult.error) {
+            ok = false;
+            errMsg = String(toolResult.error).slice(0, 80);
+          }
         } catch (toolErr) {
-          toolResult = { error: `Tool execution failed: ${toolErr.message || toolErr}` };
+          ok = false;
+          errMsg = (toolErr.message || String(toolErr)).slice(0, 80);
+          toolResult = { error: `Tool execution failed: ${errMsg}` };
         }
+        toolsRun.push({ name: tc.name, ok, error: errMsg });
 
         sendEvent(res, {
           type: "tool_result",
@@ -211,7 +254,6 @@ export default async function handler(req, res) {
         toolMessages.push(toolResultMsg);
       }
 
-      // Persist tool call + result messages (non-critical — don't crash on failure)
       try {
         await persistMessages(userId, [
           { role: "tool_call", tool_calls: roundToolCalls },
@@ -225,33 +267,32 @@ export default async function handler(req, res) {
         console.warn("[jarvis] Failed to persist tool messages:", persistErr.message);
       }
 
-      // If the model says end_turn with tool calls, continue to get the text response
       if (result.stopReason === "end_turn") {
         finalContent = roundContent;
         break;
       }
     }
 
-    // 5. Persist final assistant message (user message was persisted at the top).
-    let messageId = null;
-    try {
-      const persisted = await persistMessage(userId, {
-        role: "assistant",
-        content: finalContent || "",
-        client_request_id: clientRequestId,
-      });
-      messageId = persisted?.id || null;
-    } catch (persistErr) {
-      console.warn("[jarvis] Failed to persist assistant message:", persistErr.message);
-    }
-
-    // 6. Send done event
+    // Loop ended cleanly — persist the assistant row and signal done.
+    await persistAssistantOnce(
+      clientAborted ? "client disconnected" : "completed normally"
+    );
     sendEvent(res, { type: "done", message_id: messageId });
   } catch (err) {
     console.error("[jarvis chat error]", err);
+    // Surface the error inline AND save whatever the user already saw streamed.
+    // (Previously: error was sent but assistant text was never persisted, so
+    // refreshing the page erased the partial reply and the user thought
+    // nothing had happened.)
     sendEvent(res, { type: "error", message: err.message || "An unexpected error occurred." });
-    sendEvent(res, { type: "done", message_id: null });
+    await persistAssistantOnce(`error: ${err.message || "unknown"}`);
+    sendEvent(res, { type: "done", message_id: messageId });
   } finally {
+    // Belt-and-braces: if a control path forgot to call persistAssistantOnce
+    // (e.g. an unexpected throw inside the catch), still save what we have.
+    if (!assistantPersisted) {
+      await persistAssistantOnce("stream ended unexpectedly");
+    }
     clearTimeout(requestTimer);
     if (!res.writableEnded) res.end();
   }
