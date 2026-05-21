@@ -140,9 +140,10 @@ export default function HealthPage() {
   const [measurements, setMeasurements] = useState([]);
   const [mNeck, setMNeck] = useState("");
   const [mWaist, setMWaist] = useState("");
+  // (mWeight removed — weight is logged in the dedicated "Add weight" form;
+  //  Navy tape method doesn't use body weight as an input.)
   const [mHeightFt, setMHeightFt] = useState("");
   const [mHeightIn, setMHeightIn] = useState("");
-  const [mWeight, setMWeight] = useState("");
   const [savingMeasure, setSavingMeasure] = useState(false);
   const [quickLift, setQuickLift] = useState("yates-row");
   const [quickWeight, setQuickWeight] = useState("");
@@ -274,6 +275,17 @@ export default function HealthPage() {
   const latestBodyFat = bodyFatSeries.length
     ? bodyFatSeries[bodyFatSeries.length - 1].w
     : null;
+
+  // Derived mass split: bf% × current body weight. Front-and-centre on the
+  // Body composition card so the weight number visibly drives a body-comp metric.
+  const fatLb =
+    latestWeight?.w && latestBodyFat != null
+      ? latestWeight.w * (latestBodyFat / 100)
+      : null;
+  const leanLb =
+    latestWeight?.w && latestBodyFat != null ? latestWeight.w - fatLb : null;
+  const fatLbGoal =
+    latestWeight?.w ? latestWeight.w * (GOALS.bodyfatPct / 100) : null;
 
   const measurementDue = useMemo(() => {
     if (!latestMeasurement) return true;
@@ -526,7 +538,7 @@ export default function HealthPage() {
         ? Number(mHeightFt || 0) * 12 + Number(mHeightIn || 0)
         : null;
     const height = enteredHeight || knownHeight;
-    if (!mNeck && !mWaist && !mWeight) return;
+    if (!mNeck && !mWaist) return;
     setSavingMeasure(true);
     setError("");
     try {
@@ -539,13 +551,8 @@ export default function HealthPage() {
         bf_method: "navy",
       });
       if (res?.error) throw new Error(res.error.message);
-      // Keep the body-weight chart in sync if a weight was entered.
-      if (mWeight) {
-        await insertBodyWeightLog(user.id, todayStr, Number(mWeight), "lb");
-      }
       setMNeck("");
       setMWaist("");
-      setMWeight("");
       load();
     } catch (err) {
       setError(err.message || "Failed to save measurement.");
@@ -902,7 +909,24 @@ export default function HealthPage() {
                 )}
               </div>
               <div className="fit-bw-cap">Latest body fat</div>
-              <div className="fit-bw-sub">Goal: {GOALS.bodyfatPct}%</div>
+              {fatLb != null && leanLb != null ? (
+                <div className="fit-comp-mass">
+                  <div className="fit-comp-pill fit-comp-pill--fat">
+                    <span className="fit-comp-pill__num">{fatLb.toFixed(1)}</span>
+                    <span className="fit-comp-pill__unit">lb fat</span>
+                  </div>
+                  <div className="fit-comp-pill fit-comp-pill--lean">
+                    <span className="fit-comp-pill__num">{leanLb.toFixed(1)}</span>
+                    <span className="fit-comp-pill__unit">lb lean</span>
+                  </div>
+                </div>
+              ) : null}
+              <div className="fit-bw-sub">
+                Goal: {GOALS.bodyfatPct}%
+                {fatLbGoal != null && fatLb != null
+                  ? ` · drop ${Math.max(0, fatLb - fatLbGoal).toFixed(1)} lb fat`
+                  : ""}
+              </div>
             </div>
             <div className="fit-bw-chart">
               {bodyFatSeries.length >= 2 ? (
@@ -964,16 +988,6 @@ export default function HealthPage() {
                     />
                   </div>
                 </label>
-                <label className="fit-measure-field">
-                  <span>Weight (lb)</span>
-                  <input
-                    type="number"
-                    step="0.1"
-                    placeholder="e.g. 175"
-                    value={mWeight}
-                    onChange={(e) => setMWeight(e.target.value)}
-                  />
-                </label>
               </div>
               <div className="fit-measure-foot">
                 <span className="fit-measure-live">
@@ -984,7 +998,7 @@ export default function HealthPage() {
                 <button
                   type="submit"
                   className="ps-btn ps-btn--primary"
-                  disabled={savingMeasure || (!mNeck && !mWaist && !mWeight)}
+                  disabled={savingMeasure || (!mNeck && !mWaist)}
                 >
                   {savingMeasure ? "…" : "Save measurement"}
                 </button>
@@ -1292,6 +1306,27 @@ export default function HealthPage() {
           font-size: 12px;
           color: var(--ps-ink-70);
           margin-top: 6px;
+        }
+        .fit-comp-mass {
+          display: flex; gap: 10px; margin-top: 10px;
+        }
+        .fit-comp-pill {
+          flex: 1 1 0; padding: 10px 12px; border-radius: 10px;
+          display: flex; flex-direction: column; gap: 2px;
+          background: var(--ps-paper); border: 1px solid var(--ps-ink-08);
+        }
+        .fit-comp-pill--fat { border-color: rgba(180, 100, 80, 0.28); }
+        .fit-comp-pill--lean { border-color: rgba(110, 140, 90, 0.32); }
+        .fit-comp-pill__num {
+          font-family: var(--ps-mono); font-size: 22px; font-weight: 700;
+          line-height: 1; color: var(--ps-ink-90);
+        }
+        .fit-comp-pill--fat .fit-comp-pill__num { color: var(--ps-clay, #b46450); }
+        .fit-comp-pill--lean .fit-comp-pill__num { color: var(--ps-sage, #6e8c5a); }
+        .fit-comp-pill__unit {
+          font-family: var(--ps-mono); font-size: 10px;
+          letter-spacing: 0.12em; text-transform: uppercase;
+          color: var(--ps-ink-50);
         }
         .fit-bw-chart {
           display: flex;
