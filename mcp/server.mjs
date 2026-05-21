@@ -49,17 +49,55 @@ if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_
   process.exit(2);
 }
 
-const TOOL_NAME_PREFIX = process.env.RISE_MCP_TOOL_PREFIX ?? "rise.";
+// Claude's MCP bridge already namespaces tools as `mcp__<server-uuid>__<tool>`
+// and the API caps the full prefixed name at 64 chars (regex
+// ^[a-zA-Z0-9_-]{1,64}$). The historical default of "rise." also failed the
+// regex (dots not allowed) and chewed 5 chars off the tool-name budget for
+// no benefit. Default is now no server-side prefix; opt back in via env.
+const TOOL_NAME_PREFIX = process.env.RISE_MCP_TOOL_PREFIX ?? "";
+
+// Claude's MCP bridge wraps each tool name as `mcp__<server-uuid>__<tool>`
+// before the Anthropic API sees it. The UUID is always 36 chars + `mcp__` (5)
+// + `__` (2) = 43 chars of overhead. The API regex caps the full name at
+// 64 chars, so the budget for our `${TOOL_NAME_PREFIX}${tool.name}` payload
+// is 64 - 43 = 21 chars. Anything longer breaks tool registration silently
+// (the whole tools array gets rejected and you lose all MCP tools at once).
+const CLAUDE_BRIDGE_OVERHEAD = 43;
+const MCP_NAME_BUDGET = 64 - CLAUDE_BRIDGE_OVERHEAD;
 
 // Build the MCP-shaped tool list once at startup. Jarvis tools use
-// `input_schema`; MCP wants `inputSchema`. Names are prefixed so they
-// don't collide with other MCP servers in the same client.
+// `input_schema`; MCP wants `inputSchema`.
 function buildMcpTools() {
   return getToolDefinitions().map((t) => ({
     name: `${TOOL_NAME_PREFIX}${t.name}`,
     description: t.description,
     inputSchema: t.input_schema || { type: "object", properties: {} },
   }));
+}
+
+function auditToolNames() {
+  const tools = buildMcpTools();
+  const oversized = tools.filter((t) => t.name.length > MCP_NAME_BUDGET);
+  if (oversized.length) {
+    console.error(
+      `[rise-mcp] WARNING: ${oversized.length} tool name(s) exceed the ` +
+        `${MCP_NAME_BUDGET}-char budget that Claude's MCP bridge leaves after ` +
+        `prepending mcp__<server-uuid>__. These tools will silently fail to ` +
+        `register and you'll lose ALL MCP tools, not just the long ones:`
+    );
+    for (const t of oversized) {
+      console.error(
+        `[rise-mcp]   ${t.name}  (${t.name.length} chars, over by ${t.name.length - MCP_NAME_BUDGET})`
+      );
+    }
+    if (TOOL_NAME_PREFIX) {
+      console.error(
+        `[rise-mcp] HINT: server-side prefix is "${TOOL_NAME_PREFIX}" (${TOOL_NAME_PREFIX.length} chars). ` +
+          `Unset RISE_MCP_TOOL_PREFIX to recover ${TOOL_NAME_PREFIX.length} chars of budget — ` +
+          `Claude's mcp__<uuid>__ already namespaces, so the extra prefix is redundant.`
+      );
+    }
+  }
 }
 
 function stripPrefix(name) {
@@ -130,6 +168,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 async function main() {
+  auditToolNames();
   const transport = new StdioServerTransport();
   await server.connect(transport);
   // stdio servers are silent on success — anything we write to stdout would

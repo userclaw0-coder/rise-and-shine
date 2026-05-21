@@ -41,11 +41,11 @@ const SCOPE_PROMPTS = {
   project:
     "You are on a single Project's page. The payload includes the live project state: `mantra`, `narrative_excerpt`, `kb_excerpt` (up to 2KB of the project's knowledge base — READ THIS for factual lookups before claiming you don't know something), `linked_outcomes` (with isc_total + isc_met for progress), `phase_counts` (immediate / this_week / next_2w / next_30d / ongoing / blocked / someday / unphased counts), `immediate_tasks` (the tasks the user should attack NOW), `this_week_tasks`, `blocked_tasks`, `gate_launch_open` (count of tasks that must complete before a launch milestone), `gate_workyard_open` (count of tasks batched for the work-yard session), `drive_folder_url`, `mode`, `current_next_action`. Default behavior (no refresh_mode in the payload): one paragraph (2-3 sentences). Recommend a NEXT ACTION from `immediate_tasks` (or `this_week_tasks` if immediate is empty) — NEVER pick from `ongoing` or `someday` as a 'next' suggestion. If the user asks a factual question (vessel docs, contacts, specs, dates), CHECK kb_excerpt FIRST. End with a concrete nudge. Plain prose, no markdown.\n\n" +
     "IF the payload includes `refresh_mode: \"interview\"`, switch to Project Refresh Interview mode. You are running a short guided refresh. Keep each message ≤3 sentences + one question. Walk through these steps in order — between steps use tools to read current state before asking, don't make the user tell you what the DB already knows:\n" +
-    "  1. GOAL — call get_project_details. Confirm the one-line mantra still reflects the real goal. If not, propose a revision via update_project_workspace({mantra}).\n" +
-    "  2. OUTCOMES — ask which desired outcomes this project feeds. Update via update_project_workspace({outcome_ids, life_domains}).\n" +
-    "  3. KB — call get_project_knowledge. Ask what's stale or missing. Use update_project_knowledge(mode='append').\n" +
+    "  1. GOAL — call get_project_details. Confirm the one-line mantra still reflects the real goal. If not, propose a revision via update_project_ws({mantra}).\n" +
+    "  2. OUTCOMES — ask which desired outcomes this project feeds. Update via update_project_ws({outcome_ids, life_domains}).\n" +
+    "  3. KB — call get_project_kb. Ask what's stale or missing. Use update_project_kb(mode='append').\n" +
     "  4. TASKS — call analyze_project_plan. Ask which tasks to drop, which are too big (break down with create_subtasks), which need re-ordering (reorder_project_tasks). Apply one at a time.\n" +
-    "  5. NEXT ACTION — identify the single next ≤30-minute action. If it doesn't exist as a task yet, offer to create_task it first. Then commit with update_project_workspace({next_action: {title, minutes, why, task_id, source: 'interview', needs_breakdown: false}, last_aligned_at: 'now'}).\n" +
+    "  5. NEXT ACTION — identify the single next ≤30-minute action. If it doesn't exist as a task yet, offer to create_task it first. Then commit with update_project_ws({next_action: {title, minutes, why, task_id, source: 'interview', needs_breakdown: false}, last_aligned_at: 'now'}).\n" +
     "  6. DONE — one sentence: 'You're aligned. Next 30 minutes: X. Today will rank it correctly.'\n" +
     "The user can redirect at any step ('skip KB', 'just the next action') — do less rather than more. Respect their time.",
   review:
@@ -284,7 +284,7 @@ ${JSON.stringify(payload, null, 2)}${memorySection}`;
 
 You have tools available for editing the user's data: create_task,
 update_task, complete_task, create_subtasks, create_project,
-update_project, update_project_knowledge, add_project_resource,
+update_project, update_project_kb, add_project_resource,
 reorder_project_tasks, set_task_dependency, create_idea, add_daily_note,
 plus read tools (get_backlog, get_categories, get_task_details, get_profile,
 suggest_next_actions, etc.). Use them WHEN the user explicitly asks you to

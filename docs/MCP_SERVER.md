@@ -5,9 +5,13 @@ Exposes the same toolset the in-app Jarvis agent uses (`create_task`,
 Model Context Protocol, so external MCP clients can drive Rise-and-Shine
 directly.
 
-37 tools available. All prefixed `rise.` when called via MCP (e.g.
-`rise.get_todays_queue`, `rise.create_task`) so they don't collide with
-other servers in the same client.
+37 tools available. Claude's MCP bridge already namespaces them as
+`mcp__<server-uuid>__<tool>`, so the server emits the bare names
+(`get_todays_queue`, `create_task`, …). The Claude API caps the full
+prefixed name at 64 chars — leaving ~21 chars for the raw tool name —
+so the names in `lib/jarvis-tools.js` are kept short. Set
+`RISE_MCP_TOOL_PREFIX=rise_` if you need an extra server-side prefix
+(but watch the length budget: it eats 5 chars).
 
 ## What you get
 
@@ -15,13 +19,13 @@ Use cases this unlocks today:
 
 - **Claude Code, from the terminal:** "Do a Reorient pass on Mom and Dad —
   read the project state, propose triage decisions, then apply." Claude
-  Code chains the right `rise.*` tools and walks you through it.
+  Code chains the right `rise_*` tools and walks you through it.
 - **Drive-context-aware sessions** (like the Hawkswood walkthrough): mix
   this server with the Drive MCP and Claude can read PDFs, synthesize KB,
   write memories, and update workspace fields in one session.
 - **Quick captures:** "Add three tasks to Vehicles: cutlass bearing
   inspection, Ram alignment quote, Tesla AC diagnostic. All medium
-  priority." Claude calls `rise.create_task` three times.
+  priority." Claude calls `create_task` three times.
 
 What it doesn't unlock yet:
 
@@ -67,10 +71,11 @@ What it doesn't unlock yet:
    }
    ```
 
-5. **Restart Claude Code.** When you start a new session, the `rise.*`
-   tools should be available via ToolSearch. Try:
+5. **Restart Claude Code.** When you start a new session, the tools
+   should be available via ToolSearch (the client surfaces them as
+   `mcp__<server-uuid>__<tool>`). Try:
 
-   > "Use rise.get_todays_queue to show me my Next-3 for today."
+   > "Use get_todays_queue to show me my Next-3 for today."
 
 ## Tool surface (37 tools)
 
@@ -79,18 +84,20 @@ The list is generated from `lib/jarvis-tools.js` at startup. Categories:
 **Read (safe — call freely):**
 `get_todays_queue`, `get_backlog`, `get_profile`, `get_task_details`,
 `get_analytics`, `get_categories`, `get_weekly_review`, `get_ideas`,
-`get_recent_notes`, `get_project_details`, `get_project_knowledge`,
-`get_recent_import_summary`, `search_memories`, `analyze_project_plan`,
-`check_nudges`, `suggest_next_actions`, `weekly_review_summary`
+`get_recent_notes`, `get_project_details`, `get_project_kb`,
+`recent_imports`, `search_memories`, `analyze_project_plan`,
+`check_nudges`, `suggest_next_actions`, `weekly_review_summary`,
+`list_recurring`
 
 **Mutating — prefer user approval first:**
 `create_task`, `update_task`, `complete_task`, `create_subtasks`,
 `create_project`, `create_idea`, `add_daily_note`, `update_project`,
-`update_project_knowledge`, `add_project_resource`,
-`update_project_workspace`, `update_human_needs_strategy`,
+`update_project_kb`, `add_project_resource`,
+`update_project_ws`, `update_human_needs_strategy`,
 `save_session_summary`, `reorder_project_tasks`, `reorder_subtasks`,
 `set_task_dependency`, `bulk_triage_tasks`,
-`write_memory`, `add_isc`, `set_isc_met`, `remove_isc`
+`write_memory`, `add_isc`, `set_isc_met`, `remove_isc`,
+`create_recurring`, `update_recurring`, `archive_recurring`
 
 Run `npm run mcp:list-tools` for the exact input schemas.
 
