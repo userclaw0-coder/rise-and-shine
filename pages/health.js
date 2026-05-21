@@ -26,11 +26,24 @@ const WORKOUTS = {
   B: { label: "Workout B", sub: "Incline bench + squat", liftIds: ["incline-bench", "squat"] },
 };
 
-// US Navy body-fat estimate for men (inches). Returns % or null if inputs incomplete.
+// US Navy body-fat estimate for men. All inputs in INCHES.
+// Returns % or null if inputs incomplete / out of plausible range.
 function navyBodyFatMale(neck, waist, height) {
   const n = Number(neck), w = Number(waist), h = Number(height);
   if (!n || !w || !h || w - n <= 0) return null;
+  // Reject heights that are obviously not in inches (e.g. someone typed feet)
+  // — log10 on a tiny h blows up the result. Adult range is ~48–84 in.
+  if (h < 36) return null;
   return 86.01 * Math.log10(w - n) - 70.041 * Math.log10(h) + 36.76;
+}
+
+// Format total inches as e.g. 5'10".
+function formatFtIn(totalInches) {
+  const t = Number(totalInches);
+  if (!t || t < 36) return null;
+  const ft = Math.floor(t / 12);
+  const inch = Math.round(t - ft * 12);
+  return `${ft}'${inch}"`;
 }
 
 // Epley estimated 1-rep max.
@@ -127,7 +140,8 @@ export default function HealthPage() {
   const [measurements, setMeasurements] = useState([]);
   const [mNeck, setMNeck] = useState("");
   const [mWaist, setMWaist] = useState("");
-  const [mHeight, setMHeight] = useState("");
+  const [mHeightFt, setMHeightFt] = useState("");
+  const [mHeightIn, setMHeightIn] = useState("");
   const [mWeight, setMWeight] = useState("");
   const [savingMeasure, setSavingMeasure] = useState(false);
   const [quickLift, setQuickLift] = useState("yates-row");
@@ -226,8 +240,11 @@ export default function HealthPage() {
     return avg;
   }, [bodyweightSeries]);
 
+  // Most recent stored height in inches — skip implausibly small values that
+  // came from an older bug where feet were stored in this column.
   const knownHeight = useMemo(
-    () => measurements.find((m) => m.height_in)?.height_in || null,
+    () =>
+      measurements.find((m) => Number(m.height_in) >= 36)?.height_in || null,
     [measurements]
   );
 
@@ -504,7 +521,11 @@ export default function HealthPage() {
   async function handleMeasurementLog(e) {
     e.preventDefault();
     if (!user) return;
-    const height = mHeight || knownHeight;
+    const enteredHeight =
+      mHeightFt || mHeightIn
+        ? Number(mHeightFt || 0) * 12 + Number(mHeightIn || 0)
+        : null;
+    const height = enteredHeight || knownHeight;
     if (!mNeck && !mWaist && !mWeight) return;
     setSavingMeasure(true);
     setError("");
@@ -535,7 +556,11 @@ export default function HealthPage() {
 
   if (!user) return null;
 
-  const liveBodyFat = navyBodyFatMale(mNeck, mWaist, mHeight || knownHeight);
+  const liveHeight =
+    mHeightFt || mHeightIn
+      ? Number(mHeightFt || 0) * 12 + Number(mHeightIn || 0)
+      : knownHeight;
+  const liveBodyFat = navyBodyFatMale(mNeck, mWaist, liveHeight);
 
   const coachPayload = {
     next_workout: {
@@ -891,34 +916,64 @@ export default function HealthPage() {
           </div>
           <form className="fit-measure-form" onSubmit={handleMeasurementLog}>
               <div className="fit-measure-grid">
-                <input
-                  type="number"
-                  step="0.1"
-                  placeholder="Neck (in)"
-                  value={mNeck}
-                  onChange={(e) => setMNeck(e.target.value)}
-                />
-                <input
-                  type="number"
-                  step="0.1"
-                  placeholder="Waist (in)"
-                  value={mWaist}
-                  onChange={(e) => setMWaist(e.target.value)}
-                />
-                <input
-                  type="number"
-                  step="0.1"
-                  placeholder={knownHeight ? `Height (${knownHeight} in)` : "Height (in)"}
-                  value={mHeight}
-                  onChange={(e) => setMHeight(e.target.value)}
-                />
-                <input
-                  type="number"
-                  step="0.1"
-                  placeholder="Weight (lb)"
-                  value={mWeight}
-                  onChange={(e) => setMWeight(e.target.value)}
-                />
+                <label className="fit-measure-field">
+                  <span>Neck (in)</span>
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="e.g. 15"
+                    value={mNeck}
+                    onChange={(e) => setMNeck(e.target.value)}
+                  />
+                </label>
+                <label className="fit-measure-field">
+                  <span>Waist (in)</span>
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="e.g. 34"
+                    value={mWaist}
+                    onChange={(e) => setMWaist(e.target.value)}
+                  />
+                </label>
+                <label className="fit-measure-field fit-measure-field--height">
+                  <span>
+                    Height
+                    {knownHeight && !mHeightFt && !mHeightIn
+                      ? ` (saved: ${formatFtIn(knownHeight) || `${knownHeight} in`})`
+                      : ""}
+                  </span>
+                  <div className="fit-measure-height-row">
+                    <input
+                      type="number"
+                      min="3"
+                      max="8"
+                      step="1"
+                      placeholder="ft"
+                      value={mHeightFt}
+                      onChange={(e) => setMHeightFt(e.target.value)}
+                    />
+                    <input
+                      type="number"
+                      min="0"
+                      max="11"
+                      step="0.1"
+                      placeholder="in"
+                      value={mHeightIn}
+                      onChange={(e) => setMHeightIn(e.target.value)}
+                    />
+                  </div>
+                </label>
+                <label className="fit-measure-field">
+                  <span>Weight (lb)</span>
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="e.g. 175"
+                    value={mWeight}
+                    onChange={(e) => setMWeight(e.target.value)}
+                  />
+                </label>
               </div>
               <div className="fit-measure-foot">
                 <span className="fit-measure-live">
@@ -1392,6 +1447,14 @@ export default function HealthPage() {
           border: 1px solid var(--ps-ink-10); background: var(--ps-paper);
           font-family: inherit; font-size: 13px;
         }
+        .fit-measure-field {
+          display: flex; flex-direction: column; gap: 4px; min-width: 0;
+        }
+        .fit-measure-field > span {
+          font-family: var(--ps-mono); font-size: 11px; color: var(--ps-ink-60);
+        }
+        .fit-measure-height-row { display: flex; gap: 6px; }
+        .fit-measure-height-row input { min-width: 0; }
         .fit-measure-foot {
           display: flex; align-items: center; justify-content: space-between;
           gap: 10px; flex-wrap: wrap;
