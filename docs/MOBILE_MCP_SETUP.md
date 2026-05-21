@@ -1,7 +1,7 @@
 # Mobile / Cowork / Desktop MCP Setup
 
 Hook the **Rise & Shine MCP server** up to your Claude surfaces (Cowork, Claude
-Desktop, claude.ai web, mobile browser) so the same 42 `rise.*` tools that
+Desktop, claude.ai web, mobile browser) so the same 42 `rise_*` tools that
 power Claude Code work everywhere you're signed into Claude.
 
 State (memories, tasks, parts, KB) is shared via Supabase, so each surface
@@ -40,7 +40,7 @@ consent page, asked for the PIN, then bounced back to Claude.
 1. Cowork → Settings → Connectors → Add Custom Connector
 2. URL: `https://rise-and-shine-hazel.vercel.app/api/mcp`
 3. Click connect → consent page opens in your browser → enter the PIN → "Approve & connect"
-4. Back in Cowork, the connector shows "Connected." Tools labeled `rise.*` are now available.
+4. Back in Cowork, the connector shows "Connected." Tools labeled `rise_*` are now available.
 
 ### Claude Desktop (Mac/Windows)
 1. Settings → Connectors → Add Custom Connector
@@ -63,7 +63,7 @@ remote endpoint. No change needed — it's already configured per
 - Dynamic Client Registration (RFC 7591)
 - PKCE-protected authorization code flow
 - Refresh tokens (180-day expiry; access tokens 30-day)
-- All 42 `rise.*` tools list + call cleanly
+- All 42 `rise_*` tools list + call cleanly
 - Unauthenticated requests rejected with proper `WWW-Authenticate` header
 
 ## Architecture quick map
@@ -90,7 +90,7 @@ JWTs are signed with `MCP_JWT_SECRET`. Auth codes live in
 
 - Conversation tokens: covered by your Claude Pro/Max subscription on each
   surface. Custom Connectors don't add per-message API charges.
-- Tool execution: most `rise.*` tools are pure Supabase CRUD — zero cost.
+- Tool execution: most `rise_*` tools are pure Supabase CRUD — zero cost.
   The few that invoke AI (`analyze_project_plan`, `weekly_review_summary`,
   `check_nudges`) route through `lib/ai-provider.js` — Anthropic by default,
   OpenAI when `AI_PROVIDER=openai`.

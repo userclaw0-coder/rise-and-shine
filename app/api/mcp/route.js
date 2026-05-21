@@ -21,7 +21,13 @@ import { verifyAccessToken } from "../../../lib/mcp-oauth.js";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60; // Vercel: allow up to 60s for tool execution
 
-const TOOL_NAME_PREFIX = process.env.RISE_MCP_TOOL_PREFIX ?? "rise.";
+// See mcp/server.mjs for rationale: the dot prefix fails Claude's MCP tool-name
+// regex and burns 5 chars off the 64-char budget for no benefit.
+const TOOL_NAME_PREFIX = process.env.RISE_MCP_TOOL_PREFIX ?? "";
+
+// Claude's MCP bridge prepends `mcp__<server-uuid>__` (43 chars). API caps the
+// full name at 64 chars → 21-char budget for our emitted name.
+const MCP_NAME_BUDGET = 64 - 43;
 
 function buildMcpTools() {
   return getToolDefinitions().map((t) => ({
@@ -30,6 +36,30 @@ function buildMcpTools() {
     inputSchema: t.input_schema || { type: "object", properties: {} },
   }));
 }
+
+// Audit on cold start so misconfigurations show up in Vercel logs immediately.
+(function auditToolNames() {
+  const oversized = buildMcpTools().filter((t) => t.name.length > MCP_NAME_BUDGET);
+  if (oversized.length) {
+    console.warn(
+      `[mcp-route] WARNING: ${oversized.length} tool name(s) exceed the ${MCP_NAME_BUDGET}-char ` +
+        `budget Claude's MCP bridge leaves after prepending mcp__<server-uuid>__. ` +
+        `These tools will silently fail to register and you'll lose ALL MCP tools, ` +
+        `not just the long ones. Overflowing names:`
+    );
+    for (const t of oversized) {
+      console.warn(
+        `[mcp-route]   ${t.name}  (${t.name.length} chars, over by ${t.name.length - MCP_NAME_BUDGET})`
+      );
+    }
+    if (TOOL_NAME_PREFIX) {
+      console.warn(
+        `[mcp-route] HINT: server-side prefix is "${TOOL_NAME_PREFIX}" (${TOOL_NAME_PREFIX.length} chars). ` +
+          `Unset RISE_MCP_TOOL_PREFIX to recover ${TOOL_NAME_PREFIX.length} chars of budget.`
+      );
+    }
+  }
+})();
 
 function stripPrefix(name) {
   return TOOL_NAME_PREFIX && name.startsWith(TOOL_NAME_PREFIX)

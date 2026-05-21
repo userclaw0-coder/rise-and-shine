@@ -220,7 +220,7 @@ async function applyProposal(userId, proposal) {
       // letting the stored next_action be auto-refreshed later OR
       // setting the title so the user sees something immediately.
       await executeTool(
-        "update_project_workspace",
+        "update_project_ws",
         {
           category_id: proposal.category_id,
           next_action: {
@@ -254,7 +254,7 @@ async function applyProposal(userId, proposal) {
       taskId = created?.task?.id || null;
     }
     await executeTool(
-      "update_project_workspace",
+      "update_project_ws",
       {
         category_id: proposal.category_id,
         next_action: {
