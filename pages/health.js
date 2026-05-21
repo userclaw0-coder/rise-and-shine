@@ -13,6 +13,8 @@ import {
   getLiftingSetsWithSession,
   createLiftingSession,
   addLiftingSet,
+  getWellnessSessions,
+  insertWellnessSession,
 } from "../lib/db";
 
 // Outcome vision-0: 15% body fat, bench 1RM >= bodyweight, squat 1RM >= 2x bodyweight.
@@ -67,6 +69,13 @@ const OCCAM_LIFTS = [
     workout: "B",
     aliases: ["squat", "back squat"],
     color: "var(--ps-accent)",
+  },
+  {
+    id: "kettlebell-swing",
+    label: "Kettlebell swing",
+    workout: "Acc",
+    aliases: ["kettlebell swing", "kb swing", "swings", "kettlebell"],
+    color: "#b88a3a",
   },
 ];
 
@@ -125,6 +134,11 @@ export default function HealthPage() {
   const [quickWeight, setQuickWeight] = useState("");
   const [quickReps, setQuickReps] = useState("");
   const [logging, setLogging] = useState(false);
+  const [wellnessSessions, setWellnessSessions] = useState([]);
+  const [yogaDuration, setYogaDuration] = useState("");
+  const [yogaWithWife, setYogaWithWife] = useState(true);
+  const [yogaNote, setYogaNote] = useState("");
+  const [savingYoga, setSavingYoga] = useState(false);
   const [profile, setProfile] = useState(null);
   const today = new Date();
   const [calYear, setCalYear] = useState(today.getFullYear());
@@ -135,22 +149,25 @@ export default function HealthPage() {
     setLoading(true);
     setError("");
     try {
-      const [sessRes, setsRes, wtRes, measRes, profileRes] = await Promise.all([
+      const [sessRes, setsRes, wtRes, measRes, wellRes, profileRes] = await Promise.all([
         getLiftingSessions(user.id, 30),
         getLiftingSetsWithSession(user.id, 600),
         getBodyWeightLogs(user.id, 120),
         getBodyMeasurements(user.id, 120),
+        getWellnessSessions(user.id, 365),
         getUserProfile(user.id),
       ]);
       if (sessRes.error) throw new Error(sessRes.error.message);
       if (setsRes.error) throw new Error(setsRes.error.message);
       if (wtRes.error) throw new Error(wtRes.error.message);
-      // body_measurements is newer — tolerate its absence rather than blanking the page.
+      // body_measurements + wellness_sessions are newer — tolerate their absence rather than blanking the page.
       if (measRes?.error) console.warn("[health] getBodyMeasurements:", measRes.error.message);
+      if (wellRes?.error) console.warn("[health] getWellnessSessions:", wellRes.error.message);
       setSessions(sessRes.data || []);
       setAllSets(setsRes.data || []);
       setWeights(wtRes.data || []);
       setMeasurements(measRes?.data || []);
+      setWellnessSessions(wellRes?.data || []);
       setProfile(profileRes?.data?.profile || null);
     } catch (err) {
       setError(err.message || "Failed to load.");
@@ -334,8 +351,50 @@ export default function HealthPage() {
       if (!map.has(d)) map.set(d, []);
       map.get(d).push(s);
     }
+    // Surface wellness sessions in the calendar grid alongside lift sets.
+    for (const w of wellnessSessions) {
+      const d = w.session_date;
+      if (!d) continue;
+      if (!map.has(d)) map.set(d, []);
+      const label = w.kind === "yoga" ? "Yoga" : w.kind.charAt(0).toUpperCase() + w.kind.slice(1);
+      map.get(d).push({ exercise: label, isWellness: true });
+    }
     return map;
-  }, [allSets]);
+  }, [allSets, wellnessSessions]);
+
+  // Weekly yoga frequency for the trend sparkline (last 12 ISO-ish weeks, sun-based).
+  const yogaWeeklySeries = useMemo(() => {
+    const weeks = 12;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const startOfThisWeek = new Date(today);
+    startOfThisWeek.setDate(today.getDate() - today.getDay());
+    const buckets = [];
+    for (let i = weeks - 1; i >= 0; i--) {
+      const start = new Date(startOfThisWeek);
+      start.setDate(startOfThisWeek.getDate() - i * 7);
+      const end = new Date(start);
+      end.setDate(start.getDate() + 7);
+      buckets.push({ start, end, count: 0 });
+    }
+    for (const w of wellnessSessions) {
+      if (w.kind !== "yoga") continue;
+      const d = new Date(w.session_date + "T00:00:00");
+      for (const b of buckets) {
+        if (d >= b.start && d < b.end) {
+          b.count += 1;
+          break;
+        }
+      }
+    }
+    return buckets.map((b) => ({ w: b.count, d: b.start.toISOString().slice(0, 10) }));
+  }, [wellnessSessions]);
+
+  const yogaThisWeekCount = yogaWeeklySeries[yogaWeeklySeries.length - 1]?.w || 0;
+  const yogaTotalCount = useMemo(
+    () => wellnessSessions.filter((w) => w.kind === "yoga").length,
+    [wellnessSessions]
+  );
 
   const occamSchedule = useMemo(() => {
     try {
@@ -414,6 +473,31 @@ export default function HealthPage() {
       setError(err.message || "Log failed.");
     } finally {
       setLogging(false);
+    }
+  }
+
+  async function handleYogaLog(e) {
+    e.preventDefault();
+    if (!user) return;
+    setSavingYoga(true);
+    setError("");
+    try {
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const res = await insertWellnessSession(user.id, {
+        kind: "yoga",
+        session_date: dateStr,
+        duration_min: yogaDuration || null,
+        partner: yogaWithWife ? "wife" : null,
+        note: yogaNote || null,
+      });
+      if (res?.error) throw new Error(res.error.message);
+      setYogaDuration("");
+      setYogaNote("");
+      load();
+    } catch (err) {
+      setError(err.message || "Yoga log failed.");
+    } finally {
+      setSavingYoga(false);
     }
   }
 
@@ -663,6 +747,63 @@ export default function HealthPage() {
             >
               {logging ? "Logging…" : "Log set"}
             </button>
+          </form>
+
+          <div className="ps-section-title">Yoga · movement practice</div>
+          <div className="ps-section-sub">
+            Yoga with wife (and any other non-strength sessions). Frequency over the last 12 weeks.
+          </div>
+          <div className="fit-yoga">
+            <div className="fit-yoga-stats">
+              <div>
+                <div className="fit-yoga-big">{yogaThisWeekCount}</div>
+                <div className="fit-yoga-meta">this week</div>
+              </div>
+              <div>
+                <div className="fit-yoga-big">{yogaTotalCount}</div>
+                <div className="fit-yoga-meta">total logged</div>
+              </div>
+            </div>
+            <div className="fit-yoga-chart">
+              {yogaTotalCount > 0 ? (
+                <Sparkline points={yogaWeeklySeries} color="#8a6db8" />
+              ) : (
+                <div className="fit-empty">No yoga sessions yet — log your first below.</div>
+              )}
+            </div>
+          </div>
+          <form className="fit-yoga-form" onSubmit={handleYogaLog}>
+            <div className="fit-yoga-grid">
+              <input
+                type="number"
+                step="5"
+                min="0"
+                placeholder="Minutes (optional)"
+                value={yogaDuration}
+                onChange={(e) => setYogaDuration(e.target.value)}
+              />
+              <label className="fit-yoga-check">
+                <input
+                  type="checkbox"
+                  checked={yogaWithWife}
+                  onChange={(e) => setYogaWithWife(e.target.checked)}
+                />
+                <span>With wife</span>
+              </label>
+              <input
+                type="text"
+                placeholder="Note (optional)"
+                value={yogaNote}
+                onChange={(e) => setYogaNote(e.target.value)}
+              />
+              <button
+                type="submit"
+                className="ps-btn ps-btn--primary"
+                disabled={savingYoga}
+              >
+                {savingYoga ? "…" : "Log yoga"}
+              </button>
+            </div>
           </form>
 
           <div className="ps-section-title">Body composition</div>
@@ -1216,6 +1357,32 @@ export default function HealthPage() {
           background: var(--ps-accent); transition: width 0.4s ease;
         }
 
+        .fit-yoga {
+          display: grid; grid-template-columns: 200px 1fr; gap: 16px;
+          align-items: center; padding: 14px;
+          border: 1px solid var(--ps-ink-08); border-radius: 12px; background: #fff;
+        }
+        .fit-yoga-stats { display: flex; gap: 24px; }
+        .fit-yoga-big { font-family: var(--ps-mono); font-size: 28px; font-weight: 700; color: #8a6db8; }
+        .fit-yoga-meta { font-family: var(--ps-mono); font-size: 11px; color: var(--ps-ink-60); }
+        .fit-yoga-chart { min-height: 48px; }
+        .fit-yoga-form { margin-top: 10px; }
+        .fit-yoga-grid {
+          display: grid; grid-template-columns: 160px auto 1fr auto; gap: 8px;
+          align-items: center;
+        }
+        .fit-yoga-grid input[type="number"],
+        .fit-yoga-grid input[type="text"] {
+          padding: 8px 10px; border-radius: 8px;
+          border: 1px solid var(--ps-ink-10); background: var(--ps-paper);
+          font-family: inherit; font-size: 13px; width: 100%;
+        }
+        .fit-yoga-check {
+          display: flex; align-items: center; gap: 6px;
+          font-family: var(--ps-mono); font-size: 12px; color: var(--ps-ink-60);
+          white-space: nowrap;
+        }
+
         .fit-measure-form {
           margin-top: 12px; display: flex; flex-direction: column; gap: 10px;
         }
@@ -1252,6 +1419,8 @@ export default function HealthPage() {
           .fit-bw { grid-template-columns: 1fr; }
           .fit-quick { grid-template-columns: 1fr 1fr; }
           .fit-measure-grid { grid-template-columns: 1fr 1fr; }
+          .fit-yoga { grid-template-columns: 1fr; }
+          .fit-yoga-grid { grid-template-columns: 1fr 1fr; }
         }
       `}</style>
     </PSShell>
