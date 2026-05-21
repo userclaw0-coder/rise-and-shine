@@ -1,7 +1,7 @@
 // POST /api/chat/message
 // SSE streaming chat endpoint for Jarvis
 //
-// Request: { message: string }
+// Request: { message: string, client_request_id?: string }
 // Response: text/event-stream with events:
 //   { type: "text", content: "..." }
 //   { type: "tool_call", name: "...", args: {...} }
@@ -18,6 +18,7 @@ import {
   formatForProvider,
   persistMessage,
   persistMessages,
+  findRecentRequest,
 } from "../../../lib/jarvis-context";
 
 const MAX_TOOL_ROUNDS = 5;
@@ -27,6 +28,10 @@ export const config = {
   api: {
     responseLimit: false,
   },
+  // Lift the platform function timeout above the default so the agentic
+  // loop doesn't get killed mid-stream (which leaves orphan tool side-effects
+  // and tempts the user to resubmit, creating duplicate tasks).
+  maxDuration: 60,
 };
 
 function sendEvent(res, data) {
@@ -55,6 +60,9 @@ export default async function handler(req, res) {
   if (!userMessage) {
     return res.status(400).json({ error: "message is required" });
   }
+  const clientRequestId = req.body?.client_request_id
+    ? String(req.body.client_request_id).slice(0, 80)
+    : null;
 
   // Set up SSE headers
   res.writeHead(200, {
@@ -62,6 +70,13 @@ export default async function handler(req, res) {
     "Cache-Control": "no-cache, no-transform",
     Connection: "keep-alive",
     "X-Accel-Buffering": "no",
+  });
+
+  // Track client disconnect — stop the agentic loop instead of running more tools
+  // after the browser has given up (e.g. user navigated away or tab closed).
+  let clientAborted = false;
+  req.on("close", () => {
+    clientAborted = true;
   });
 
   // Request-level timeout
@@ -72,12 +87,43 @@ export default async function handler(req, res) {
   }, REQUEST_TIMEOUT_MS);
 
   try {
-    // 1. Load conversation history (BEFORE persisting user message)
+    // Idempotency: if the client retries with the same client_request_id and
+    // we've already processed (or are processing) it, replay the previously
+    // persisted assistant text rather than re-running the tool loop. This is
+    // the fix for "I resubmit and the task gets created again."
+    if (clientRequestId) {
+      const prior = await findRecentRequest(userId, clientRequestId, 5);
+      if (prior) {
+        const replay = prior.assistantRow?.content || "";
+        if (replay) {
+          sendEvent(res, { type: "text", content: replay });
+        }
+        sendEvent(res, {
+          type: "done",
+          message_id: prior.assistantRow?.id || null,
+          replayed: true,
+        });
+        return; // finally{} cleans up
+      }
+    }
+
+    // Persist the user message FIRST so the conversation history stays
+    // coherent even if the stream drops or the function gets killed mid-loop.
+    // (Old order: persisted last, which orphaned tool_call rows when things
+    // failed and made the user retype.)
+    try {
+      await persistMessage(userId, {
+        role: "user",
+        content: userMessage,
+        client_request_id: clientRequestId,
+      });
+    } catch (persistErr) {
+      console.warn("[jarvis] Failed to persist user message:", persistErr.message);
+    }
+
+    // 1. Load conversation history (now includes the user message we just wrote)
     const history = await getConversationWindow(userId);
     const messages = formatForProvider(history);
-
-    // Add the current user message to the conversation (not yet persisted)
-    messages.push({ role: "user", content: userMessage });
 
     // 2. Build system prompt with live context + memory retrieval
     //    (timeout-protected; memory retrieval is best-effort).
@@ -98,6 +144,7 @@ export default async function handler(req, res) {
     let rounds = 0;
 
     while (rounds < MAX_TOOL_ROUNDS) {
+      if (clientAborted) break;
       rounds++;
 
       const result = await chatCompletion({
@@ -125,6 +172,11 @@ export default async function handler(req, res) {
         finalContent = roundContent;
         break;
       }
+
+      // If the client gave up between rounds, stop before invoking any more
+      // tools — those tools have side effects (create_task etc.) and running
+      // them after disconnect is what creates the duplicate-task problem.
+      if (clientAborted) break;
 
       // Process tool calls
       const assistantMsg = {
@@ -180,16 +232,17 @@ export default async function handler(req, res) {
       }
     }
 
-    // 5. Persist user message + final assistant message TOGETHER (atomic — both or neither)
+    // 5. Persist final assistant message (user message was persisted at the top).
     let messageId = null;
     try {
-      const persisted = await persistMessages(userId, [
-        { role: "user", content: userMessage },
-        { role: "assistant", content: finalContent || "" },
-      ]);
-      messageId = persisted?.[1]?.id || null;
+      const persisted = await persistMessage(userId, {
+        role: "assistant",
+        content: finalContent || "",
+        client_request_id: clientRequestId,
+      });
+      messageId = persisted?.id || null;
     } catch (persistErr) {
-      console.warn("[jarvis] Failed to persist messages:", persistErr.message);
+      console.warn("[jarvis] Failed to persist assistant message:", persistErr.message);
     }
 
     // 6. Send done event

@@ -17,6 +17,13 @@ export default function ChatPanel({ isOverlay = false, isOpen = true, onClose })
   const historyLoadedRef = useRef(false);
   const pendingGreetRef = useRef(false);
   const lastSentTextRef = useRef(null);
+  // Reused across retries of the same message so the server can dedupe.
+  // Cleared after a successful (non-error) round.
+  const lastRequestIdRef = useRef(null);
+  // Web Speech API recognizer for the mic button (lazy-constructed).
+  const recognitionRef = useRef(null);
+  const [isListening, setIsListening] = useState(false);
+  const [micSupported, setMicSupported] = useState(false);
 
   const getToken = useCallback(async () => {
     let { data: sessionData } = await supabase.auth.getSession();
@@ -174,10 +181,95 @@ export default function ChatPanel({ isOverlay = false, isOpen = true, onClose })
     return () => window.removeEventListener("keydown", onKey);
   }, [isOverlay, isOpen, onClose]);
 
-  const sendText = useCallback(async (text, { hidden = false } = {}) => {
+  // Web Speech API mic: voice-to-text for the input field. Supported on
+  // Chrome (desktop + Android) and Safari (iOS 14.5+ via webkit prefix).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!Ctor) {
+      setMicSupported(false);
+      return;
+    }
+    setMicSupported(true);
+    const rec = new Ctor();
+    rec.continuous = false;
+    rec.interimResults = true;
+    rec.lang = "en-US";
+    let finalSoFar = "";
+    let baseInput = "";
+    rec.onstart = () => {
+      finalSoFar = "";
+      // Snapshot whatever's already typed so we append, not replace.
+      baseInput = inputRef.current?.value || "";
+    };
+    rec.onresult = (event) => {
+      let interim = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const r = event.results[i];
+        if (r.isFinal) finalSoFar += r[0].transcript;
+        else interim += r[0].transcript;
+      }
+      const combined =
+        baseInput +
+        (baseInput && (finalSoFar || interim) ? " " : "") +
+        finalSoFar +
+        interim;
+      setInput(combined.replace(/\s+/g, " ").trimStart());
+    };
+    rec.onerror = (e) => {
+      setIsListening(false);
+      if (e.error && e.error !== "no-speech" && e.error !== "aborted") {
+        setError(`Mic: ${e.error}`);
+      }
+    };
+    rec.onend = () => setIsListening(false);
+    recognitionRef.current = rec;
+    return () => {
+      try {
+        rec.onresult = null;
+        rec.onerror = null;
+        rec.onend = null;
+        rec.abort();
+      } catch {
+        /* noop */
+      }
+      recognitionRef.current = null;
+    };
+  }, []);
+
+  const toggleMic = useCallback(() => {
+    const rec = recognitionRef.current;
+    if (!rec) return;
+    if (isListening) {
+      try { rec.stop(); } catch { /* noop */ }
+      setIsListening(false);
+    } else {
+      setError(null);
+      try {
+        rec.start();
+        setIsListening(true);
+      } catch (err) {
+        // .start() throws if already started — surface as inline error.
+        setError(err.message || "Could not start mic.");
+        setIsListening(false);
+      }
+    }
+  }, [isListening]);
+
+  const sendText = useCallback(async (text, { hidden = false, retry = false } = {}) => {
     if (!text || isStreaming) return;
     setError(null);
     lastSentTextRef.current = hidden ? null : text;
+
+    // Idempotency: a retry reuses the prior request id so the server can dedupe;
+    // a fresh send mints a new one.
+    if (!retry || !lastRequestIdRef.current) {
+      lastRequestIdRef.current =
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `req-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    }
+    const clientRequestId = lastRequestIdRef.current;
 
     if (!hidden) {
       const userMsg = { role: "user", content: text };
@@ -204,7 +296,7 @@ export default function ChatPanel({ isOverlay = false, isOpen = true, onClose })
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: text, client_request_id: clientRequestId }),
         signal: controller.signal,
       });
 
@@ -297,7 +389,9 @@ export default function ChatPanel({ isOverlay = false, isOpen = true, onClose })
           }
 
           if (event.type === "done") {
-            // Clean exit — streaming will be set to false in finally
+            // Clean exit — clear the request id so the next user submit
+            // mints a fresh one. Streaming will be set to false in finally.
+            lastRequestIdRef.current = null;
           }
         }
       }
@@ -400,7 +494,7 @@ export default function ChatPanel({ isOverlay = false, isOpen = true, onClose })
                   onClick={() => {
                     const retryText = lastSentTextRef.current;
                     setError(null);
-                    if (retryText) sendText(retryText);
+                    if (retryText) sendText(retryText, { retry: true });
                   }}
                 >
                   Retry
@@ -422,6 +516,20 @@ export default function ChatPanel({ isOverlay = false, isOpen = true, onClose })
             rows={1}
             disabled={isStreaming}
           />
+          {micSupported && (
+            <button
+              type="button"
+              className={`jarvis-mic${isListening ? " jarvis-mic--on" : ""}`}
+              onClick={toggleMic}
+              disabled={isStreaming}
+              aria-label={isListening ? "Stop voice input" : "Start voice input"}
+              title={isListening ? "Stop voice input" : "Voice input"}
+            >
+              <span className="material-symbols-outlined">
+                {isListening ? "stop_circle" : "mic"}
+              </span>
+            </button>
+          )}
           <button
             type="button"
             className="jarvis-send"
