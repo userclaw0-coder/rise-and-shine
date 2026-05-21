@@ -5,6 +5,22 @@ body_weight_logs,weight,numeric,numeric,NO,null
 body_weight_logs,unit,text,text,NO,'lb'::text
 body_weight_logs,measured_at,timestamp with time zone,timestamptz,NO,now()
 body_weight_logs,note,text,text,YES,null
+body_measurements,id,uuid,uuid,NO,gen_random_uuid()
+body_measurements,user_id,uuid,uuid,NO,null
+body_measurements,measured_at,timestamp with time zone,timestamptz,NO,now()
+body_measurements,height_in,numeric,numeric,YES,null
+body_measurements,neck_in,numeric,numeric,YES,null
+body_measurements,waist_in,numeric,numeric,YES,null
+body_measurements,hip_in,numeric,numeric,YES,null
+body_measurements,chest_in,numeric,numeric,YES,null
+body_measurements,shoulders_in,numeric,numeric,YES,null
+body_measurements,upper_arm_in,numeric,numeric,YES,null
+body_measurements,forearm_in,numeric,numeric,YES,null
+body_measurements,thigh_in,numeric,numeric,YES,null
+body_measurements,calf_in,numeric,numeric,YES,null
+body_measurements,bodyfat_pct,numeric,numeric,YES,null
+body_measurements,bf_method,text,text,YES,'navy'::text
+body_measurements,note,text,text,YES,null
 categories,id,uuid,uuid,NO,gen_random_uuid()
 categories,user_id,uuid,uuid,NO,null
 categories,name,text,text,NO,null
@@ -40,6 +56,7 @@ lifting_sessions,user_id,uuid,uuid,NO,null
 lifting_sessions,session_date,date,date,NO,CURRENT_DATE
 lifting_sessions,note,text,text,YES,null
 lifting_sessions,created_at,timestamp with time zone,timestamptz,NO,now()
+lifting_sessions,workout_label,text,text,YES,null
 lifting_sets,id,uuid,uuid,NO,gen_random_uuid()
 lifting_sets,user_id,uuid,uuid,NO,null
 lifting_sets,session_id,uuid,uuid,NO,null
